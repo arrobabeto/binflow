@@ -8,6 +8,10 @@
 - Use real external pilots only for explicit acceptance stages.
 - Never run destructive tests against production content.
 - Every bug fix adds a regression test and updates the affected canonical documentation.
+- CI must enumerate every required workspace from a clean checkout; repository ignore
+  rules may exclude only the root runtime `secrets/` directory, never source packages
+  such as `packages/secrets`. `pnpm check:workspaces` compares lockfile importers with
+  tracked workspace manifests before dependency installation.
 
 ## Test layers
 

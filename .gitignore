@@ -14,7 +14,7 @@ coverage/
 *.key
 *.p12
 *.pfx
-secrets/
+/secrets/
 
 .DS_Store
 *.log

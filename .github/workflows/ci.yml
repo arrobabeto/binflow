@@ -36,6 +36,7 @@ jobs:
         with:
           node-version: 24.13.0
           cache: pnpm
+      - run: pnpm check:workspaces
       - run: pnpm install --frozen-lockfile
       - run: node scripts/check-docs.mjs
       - run: pnpm format:check
