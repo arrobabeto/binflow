@@ -1,0 +1,140 @@
+# Testing strategy
+
+## Principles
+
+- Test policy and state behavior independently from models/providers.
+- Use fakes for deterministic failure and concurrency cases.
+- Use contract tests against recorded or controlled provider fixtures.
+- Use real external pilots only for explicit acceptance stages.
+- Never run destructive tests against production content.
+- Every bug fix adds a regression test and updates the affected canonical documentation.
+
+## Test layers
+
+### Unit
+
+- Zod schemas and domain value objects.
+- Locale intersection and translation policy.
+- Capability access and approval matrices.
+- Request-state transitions and terminal-state enforcement.
+- Category normalization/classification inputs.
+- Path/field allowlists and manifest validation.
+- Budget, retention, idempotency and pairing-token rules.
+- Secret-envelope round trip and authentication failure.
+- KEK path/length/permission validation and non-echoed CLI input enforcement.
+- GitHub operation-to-token permission mapping.
+
+### Contract
+
+- OpenAI structured outputs, refusal and usage normalization.
+- Chat SDK Telegram messages, commands, buttons, files and transport modes.
+- GitHub App auth, trees/commits, PR, checks and merge response normalization.
+- GitHub installation repository restriction and permission-downscoped token issuance.
+- Vercel deployment/SHA correlation.
+- S3-compatible artifact lifecycle.
+- Better Auth session and TOTP behavior.
+- LangGraph PostgreSQL checkpointer compatibility.
+
+### Integration
+
+- Telegram event → identity → request/outbox/queue.
+- Dashboard onboarding → validation → activation → pairing.
+- Plan confirmation → graph resume.
+- Catalog sync → similarity decision.
+- Graph → fake GitHub PR → fake deployment → approval → merge.
+- Duplicate webhook/action/queue delivery.
+- Revoked credential, expired approval and budget exhaustion.
+- Attachment deletion after terminal state.
+
+### End-to-end
+
+First against a fixture Astro repository, then Webbin:
+
+```text
+client bot
+→ create_blog_draft
+→ confirmed plan
+→ ES/EN Markdown + AVIF
+→ isolated branch and PR
+→ checks + Vercel preview
+→ revision/approval
+→ merge
+→ production verification
+→ audit and notifications
+```
+
+The final Webbin E2E publishes one real owner-approved article. Test content is not temporarily published and reverted merely to prove the pipeline.
+
+## Required scenario matrix
+
+### Telegram/input
+
+- Natural-language request resolves correctly.
+- Empty `/create_blog` returns instructions/categories.
+- Incomplete request asks only for topic.
+- Unpaired or different-tenant identity is rejected.
+- Attachment MIME mismatch, oversized file and unsafe URL are rejected.
+
+### Category
+
+- Exact existing category.
+- Case/whitespace normalization.
+- Likely typo confirmed by client.
+- New category creates preview but requires admin publication approval.
+- Admin rejection returns to revision without publishing.
+
+### Content
+
+- Novel, related expansion and high-overlap decisions.
+- Concurrent draft included in similarity.
+- Claims with and without research.
+- ES/EN adaptation preserves claims and valid localized links.
+- German is rejected for Webbin by manifest.
+- Uploaded and generated image paths.
+- Similarity failure causes one deliberate regeneration or user action.
+
+### Version and approval
+
+- Preview/head SHA match.
+- New commit invalidates approval.
+- Expired/replayed callback cannot publish.
+- Bot and dashboard duplicate approval remains idempotent.
+- Client-only path for existing category.
+- Client + admin path for new category.
+
+### Failure and recovery
+
+- Worker restart during model call, preview wait and approval wait.
+- Redis loss after request commit.
+- Delayed/duplicated GitHub or Vercel event.
+- OpenAI timeout/rate limit.
+- Merge succeeds but production deployment fails.
+- External base branch changes before merge.
+
+### Security
+
+- Cross-tenant API query and object-ID guessing.
+- Prompt injection in article, README and attachment.
+- Path traversal and unexpected diff.
+- SSRF through source URL and redirects.
+- Secret scanning of logs, queue payloads, checkpoints and artifacts.
+- CLI arguments/output never contain secret values and list returns redacted metadata only.
+- Blog tokens cannot access Administration or Workflows; separately authorized onboarding tokens cannot exceed their declared operation.
+- RLS bypass attempts and platform-owner audit.
+
+## Documentation verification
+
+CI introduced with implementation must:
+
+- Validate Markdown links.
+- Require `docs/CHANGELOG.md` plus relevant canonical document changes for implementation PRs.
+- Validate code examples/contracts where practical.
+- Fail when generated API/schema references drift from committed contracts.
+
+## MVP quality gate
+
+- All unit, contract, integration and security suites pass.
+- No critical/high security finding remains open.
+- E2E evidence records exact request, PR, SHA, deployment and production URLs.
+- Local setup succeeds from an empty database and object store.
+- Documentation matches the observed behavior and acceptance evidence.

@@ -1,0 +1,182 @@
+name: binflow
+
+services:
+  postgres:
+    image: postgres:17.7-bookworm
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: binflow
+      POSTGRES_PASSWORD_FILE: /run/secrets/postgres_password
+      POSTGRES_USER: binflow
+    secrets:
+      - postgres_password
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U binflow -d binflow']
+      interval: 10s
+      timeout: 5s
+      retries: 10
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+
+  redis:
+    image: redis:8.4.0-alpine
+    command: ['redis-server', '/run/secrets/redis_config']
+    restart: unless-stopped
+    secrets:
+      - redis_config
+      - redis_url
+    healthcheck:
+      test: ['CMD-SHELL', 'redis-cli -u "$$(cat /run/secrets/redis_url)" ping']
+      interval: 10s
+      timeout: 5s
+      retries: 10
+    volumes:
+      - redis_data:/data
+
+  minio:
+    image: minio/minio:RELEASE.2025-09-07T16-13-09Z
+    command: ['server', '/data', '--console-address', ':9001']
+    restart: unless-stopped
+    environment:
+      MINIO_ROOT_PASSWORD_FILE: /run/secrets/minio_root_password
+      MINIO_ROOT_USER_FILE: /run/secrets/minio_root_user
+    secrets:
+      - minio_root_password
+      - minio_root_user
+    healthcheck:
+      test: ['CMD', 'mc', 'ready', 'local']
+      interval: 10s
+      timeout: 5s
+      retries: 10
+    volumes:
+      - minio_data:/data
+
+  clamav:
+    image: clamav/clamav:1.4.3
+    restart: unless-stopped
+    healthcheck:
+      test: ['CMD', '/usr/local/bin/clamdcheck.sh']
+      interval: 30s
+      timeout: 10s
+      retries: 20
+      start_period: 120s
+    volumes:
+      - clamav_data:/var/lib/clamav
+
+  caddy:
+    image: caddy:2.10.2-alpine
+    restart: unless-stopped
+    ports:
+      - '80:80'
+      - '443:443'
+    environment:
+      BINFLOW_DOMAIN: ${BINFLOW_DOMAIN:?Set BINFLOW_DOMAIN}
+    volumes:
+      - ../caddy/Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    depends_on:
+      api:
+        condition: service_healthy
+      dashboard:
+        condition: service_started
+
+  api:
+    image: ${BINFLOW_IMAGE_REGISTRY:?Set BINFLOW_IMAGE_REGISTRY}/binflow:${BINFLOW_VERSION:?Set BINFLOW_VERSION}
+    command: ['node', 'apps/api/dist/server.js']
+    restart: unless-stopped
+    environment:
+      BINFLOW_VERSION: ${BINFLOW_VERSION}
+      DATABASE_URL_FILE: /run/secrets/database_url
+      REDIS_URL_FILE: /run/secrets/redis_url
+      PORT: '8080'
+    secrets:
+      - database_url
+      - redis_url
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test:
+        [
+          'CMD',
+          'node',
+          '-e',
+          "fetch('http://127.0.0.1:8080/api/v1/health').then(r=>{if(!r.ok)process.exit(1)}).catch(()=>process.exit(1))",
+        ]
+      interval: 10s
+      timeout: 3s
+      retries: 10
+    security_opt:
+      - no-new-privileges:true
+
+  worker:
+    image: ${BINFLOW_IMAGE_REGISTRY}/binflow:${BINFLOW_VERSION}
+    command: ['node', 'apps/worker/dist/main.js']
+    restart: unless-stopped
+    environment:
+      BINFLOW_KEK_FILE: /run/secrets/binflow_kek
+      DATABASE_URL_FILE: /run/secrets/database_url
+      REDIS_URL_FILE: /run/secrets/redis_url
+    secrets:
+      - binflow_kek
+      - database_url
+      - redis_url
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    security_opt:
+      - no-new-privileges:true
+
+  dashboard:
+    image: ${BINFLOW_IMAGE_REGISTRY}/binflow:${BINFLOW_VERSION}
+    command: ['node', 'apps/dashboard/.output/server/index.mjs']
+    restart: unless-stopped
+    environment:
+      NITRO_HOST: 0.0.0.0
+      NITRO_PORT: '3000'
+      NUXT_PUBLIC_API_BASE_URL: https://${BINFLOW_DOMAIN}
+    security_opt:
+      - no-new-privileges:true
+
+  maintenance:
+    image: ${BINFLOW_IMAGE_REGISTRY}/binflow:${BINFLOW_VERSION}
+    command: ['node', 'apps/maintenance/dist/main.js']
+    environment:
+      BINFLOW_KEK_FILE: /run/secrets/binflow_kek
+      DATABASE_URL_FILE: /run/secrets/database_url
+      REDIS_URL_FILE: /run/secrets/redis_url
+    secrets:
+      - binflow_kek
+      - database_url
+      - redis_url
+    security_opt:
+      - no-new-privileges:true
+
+secrets:
+  binflow_kek:
+    file: ${BINFLOW_KEK_PATH:?Set BINFLOW_KEK_PATH}
+  database_url:
+    file: ${BINFLOW_DATABASE_URL_PATH:?Set BINFLOW_DATABASE_URL_PATH}
+  redis_url:
+    file: ${BINFLOW_REDIS_URL_PATH:?Set BINFLOW_REDIS_URL_PATH}
+  minio_root_password:
+    file: ${BINFLOW_MINIO_ROOT_PASSWORD_PATH:?Set BINFLOW_MINIO_ROOT_PASSWORD_PATH}
+  minio_root_user:
+    file: ${BINFLOW_MINIO_ROOT_USER_PATH:?Set BINFLOW_MINIO_ROOT_USER_PATH}
+  postgres_password:
+    file: ${BINFLOW_POSTGRES_PASSWORD_PATH:?Set BINFLOW_POSTGRES_PASSWORD_PATH}
+  redis_config:
+    file: ${BINFLOW_REDIS_CONFIG_PATH:?Set BINFLOW_REDIS_CONFIG_PATH}
+
+volumes:
+  caddy_config:
+  caddy_data:
+  clamav_data:
+  minio_data:
+  postgres_data:
+  redis_data:

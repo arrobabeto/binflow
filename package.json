@@ -1,0 +1,36 @@
+{
+  "name": "binflow",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "packageManager": "pnpm@10.28.1",
+  "engines": {
+    "node": ">=24 <25",
+    "pnpm": ">=10 <11"
+  },
+  "scripts": {
+    "binflow": "pnpm --filter @binflow/cli start",
+    "build": "turbo run build",
+    "check": "turbo run check",
+    "dev": "turbo run dev --parallel",
+    "db:generate": "pnpm --filter @binflow/db generate",
+    "db:migrate": "pnpm --filter @binflow/db migrate",
+    "format": "prettier --write .",
+    "format:check": "prettier --check .",
+    "lint": "turbo run lint",
+    "test": "turbo run test"
+  },
+  "devDependencies": {
+    "@eslint/js": "10.0.1",
+    "@types/node": "24.13.3",
+    "@vitest/coverage-v8": "4.1.10",
+    "eslint": "10.8.1",
+    "globals": "17.9.0",
+    "prettier": "3.9.6",
+    "tsx": "4.23.12",
+    "turbo": "2.10.9",
+    "typescript": "6.0.3",
+    "typescript-eslint": "8.67.0",
+    "vitest": "4.1.10"
+  }
+}

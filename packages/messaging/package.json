@@ -1,0 +1,26 @@
+{
+  "name": "@binflow/messaging",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    }
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "check": "tsc -p tsconfig.json --noEmit",
+    "lint": "eslint src --max-warnings=0",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@chat-adapter/state-redis": "4.37.0",
+    "@chat-adapter/telegram": "4.37.0",
+    "chat": "4.37.0"
+  },
+  "devDependencies": {
+    "@types/node": "24.13.3"
+  }
+}

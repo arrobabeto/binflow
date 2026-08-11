@@ -1,0 +1,25 @@
+{
+  "name": "@binflow/cli",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "check": "tsc -p tsconfig.json --noEmit",
+    "lint": "eslint src --max-warnings=0",
+    "start": "tsx src/main.ts",
+    "start:production": "node dist/main.js",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@binflow/contracts": "workspace:*",
+    "@binflow/db": "workspace:*",
+    "@binflow/secrets": "workspace:*",
+    "@inquirer/prompts": "8.5.2",
+    "commander": "15.0.0",
+    "uuid": "14.0.1"
+  },
+  "devDependencies": {
+    "@types/node": "24.13.3"
+  }
+}

@@ -1,0 +1,31 @@
+# ADR-0011: Locale and translation policy
+
+- Status: Accepted
+- Date: 2026-08-10
+- Supersedes: None
+- Superseded by: None
+
+## Context
+
+Conversation language and published website locales are different concerns. Sites vary in supported routes, source locale and whether every change must be mirrored.
+
+## Decision
+
+The dashboard is English. Client conversations support English, Spanish and German. Each manifest separately defines content, required and slug locales. Translation is an internal workflow node controlled by `always_translate` or `ask_each_action`; it is not a visible capability. Webbin requires Spanish and English with `always_translate` and a Spanish-derived shared slug.
+
+## Consequences
+
+- A client cannot select a content locale unsupported by the project manifest.
+- Required locales cannot be skipped through conversation policy.
+- Translation preserves claims but adapts idiom, SEO, FAQ, alt text and links.
+- German remains available but unvalidated until a compatible real pilot is accepted.
+
+## Alternatives considered
+
+- One locale field for UI/content: rejected because concerns differ.
+- Visible translation tool: rejected for MVP because translation is a policy step of mutations.
+- Ask every time for Webbin: rejected because its editorial contract requires both languages.
+
+## Verification
+
+Contract tests cover locale intersections; E2E confirms Webbin always produces ES/EN and rejects German publication.

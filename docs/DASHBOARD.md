@@ -1,0 +1,131 @@
+# Admin dashboard
+
+## Purpose
+
+The dashboard is the platform owner's private control plane. It configures clients and integrations, shows workflow evidence and exposes authorized administrative decisions. It is not a client-facing CMS or freeform website editor.
+
+The first-MVP dashboard UI is English.
+
+## Navigation
+
+```text
+Overview
+Clients
+Projects
+Requests
+Approvals
+Content catalog
+Usage
+Audit
+System
+Settings
+```
+
+## Authentication
+
+- `/login`: email and password.
+- `/two-factor`: TOTP or unused backup code.
+- `/security`: enable/rotate TOTP, regenerate backup codes and revoke sessions.
+- No public signup or password reset email in the first MVP; recovery follows the documented bootstrap/break-glass process.
+- Routes containing credentials, enrollment mutation or approvals require a verified two-factor session.
+
+## Overview
+
+Displays:
+
+- Active/suspended/failed enrollments.
+- Requests by current state.
+- Pending admin approvals.
+- Recent client activity and publications.
+- Queue/worker/integration health.
+- Current-day and current-month AI cost.
+- Actionable alerts only; raw log streams remain outside the primary dashboard.
+
+## Clients and projects
+
+Client list supports create, resume configuration, validate, activate, suspend and archive. Client detail includes:
+
+- Identity, contact, timezone and lifecycle state.
+- Conversation locale and content locale policy.
+- Dedicated client bot and paired user.
+- OpenAI credential health and node model bindings.
+- GitHub/Vercel connections.
+- Active manifest, rules and capability policies.
+- Content catalog/category state.
+- Validation history.
+- Usage and requests scoped to the client.
+
+Only `astro_repo` is selectable in the first MVP. Future profile names must not be shown as operational choices until their acceptance criteria pass.
+
+## Requests
+
+List filters:
+
+- Tenant/project.
+- Capability.
+- State and risk.
+- Requester.
+- Date range.
+- Approval requirement.
+- Failure class.
+
+Detail view:
+
+- Original user message and attachments metadata.
+- Structured input and confirmed plan.
+- Frozen graph/node/model/prompt/manifest/rule/policy versions.
+- State timeline and node attempts.
+- Category and similarity decisions.
+- Research evidence references.
+- Generated artifacts and before/after hashes.
+- Branch, commit, PR, checks and preview routes.
+- Required/received approvals.
+- Model usage and cost.
+- Production verification and error history.
+
+The dashboard never displays private chain-of-thought. It displays generated rationale, evidence and objective tool results.
+
+## Approval behavior
+
+- Approval view shows project, capability, risk, request version, exact preview, checks, diff summary and expiry.
+- Admin approval is available only when effective policy requires it.
+- Approve/reject uses optimistic concurrency and the same idempotent application service as Telegram.
+- A stale page, changed SHA or already-decided action refreshes current state instead of repeating the action.
+- Existing-category Webbin blogs do not ask admin approval; the admin still receives activity notifications.
+
+## Credentials
+
+- Forms accept a secret once over TLS.
+- After saving, display provider, alias, health, masked suffix, last tested/used and status.
+- Test, rotate and revoke are separate audited actions.
+- Rotation triggers project revalidation before dependent capabilities continue.
+- The browser never receives ciphertext, DEK or resolved secret values.
+
+## Content catalog
+
+- Shows synchronized articles by locale, slug, title, category, source revision and state.
+- Shows active orchestrator drafts separately.
+- Admin can start a sync and inspect failures.
+- Catalog is not a content editor.
+- Category list shows normalized usage and whether a request proposes a new category.
+
+## Usage and audit
+
+Usage groups calls/cost by tenant, project, request, capability, node, provider, model, day and month. Audit supports correlated lookup by request, graph, node, provider request, PR and deployment IDs.
+
+## Accessibility and UX
+
+- Keyboard-operable controls and visible focus.
+- Semantic labels, status text in addition to color and WCAG AA contrast.
+- Confirmation dialogs name the exact resource and consequence.
+- Long-running actions return immediately with trackable state.
+- Error messages state what failed, whether retry is automatic and who must act.
+- Responsive, desktop-first layout; critical approvals remain usable on mobile.
+
+## Forbidden dashboard behavior
+
+- No arbitrary SQL, shell or repository browser.
+- No raw secret display.
+- No capability/manifest generated and activated by a model.
+- No direct Markdown/WYSIWYG editing in the MVP.
+- No button that bypasses preview, policy or current-version validation.

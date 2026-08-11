@@ -1,0 +1,17 @@
+{
+  "name": "@binflow/dashboard",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "nuxt build",
+    "check": "nuxt prepare",
+    "dev": "nuxt dev --host 0.0.0.0",
+    "lint": "eslint nuxt.config.ts --max-warnings=0",
+    "start": "node .output/server/index.mjs",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "nuxt": "4.5.2"
+  }
+}

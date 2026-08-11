@@ -1,0 +1,717 @@
+{
+  "id": "54093dcc-c9ed-49d2-a33c-0eb6c1134e7b",
+  "prevId": "7f646a6d-26c9-44b3-bdb6-b7cecb41d850",
+  "version": "7",
+  "dialect": "postgresql",
+  "tables": {
+    "public.credential_events": {
+      "name": "credential_events",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "text",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "credential_id": {
+          "name": "credential_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "tenant_id": {
+          "name": "tenant_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "project_id": {
+          "name": "project_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "action": {
+          "name": "action",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "metadata": {
+          "name": "metadata",
+          "type": "jsonb",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'{}'::jsonb"
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {
+        "credential_events_credential_idx": {
+          "name": "credential_events_credential_idx",
+          "columns": [
+            {
+              "expression": "credential_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {
+        "credential_events_credential_id_provider_credentials_id_fk": {
+          "name": "credential_events_credential_id_provider_credentials_id_fk",
+          "tableFrom": "credential_events",
+          "tableTo": "provider_credentials",
+          "columnsFrom": ["credential_id"],
+          "columnsTo": ["id"],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
+        "credential_events_tenant_id_tenants_id_fk": {
+          "name": "credential_events_tenant_id_tenants_id_fk",
+          "tableFrom": "credential_events",
+          "tableTo": "tenants",
+          "columnsFrom": ["tenant_id"],
+          "columnsTo": ["id"],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
+        "credential_events_project_id_projects_id_fk": {
+          "name": "credential_events_project_id_projects_id_fk",
+          "tableFrom": "credential_events",
+          "tableTo": "projects",
+          "columnsFrom": ["project_id"],
+          "columnsTo": ["id"],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {
+        "credential_events_tenant_isolation": {
+          "name": "credential_events_tenant_isolation",
+          "as": "PERMISSIVE",
+          "for": "ALL",
+          "to": ["public"],
+          "using": "\"credential_events\".\"tenant_id\" = nullif(current_setting('app.tenant_id', true), '') OR current_setting('app.platform_owner', true) = 'true'",
+          "withCheck": "\"credential_events\".\"tenant_id\" = nullif(current_setting('app.tenant_id', true), '') OR current_setting('app.platform_owner', true) = 'true'"
+        }
+      },
+      "checkConstraints": {},
+      "isRLSEnabled": true
+    },
+    "public.projects": {
+      "name": "projects",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "text",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "tenant_id": {
+          "name": "tenant_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "key": {
+          "name": "key",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "display_name": {
+          "name": "display_name",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "profile": {
+          "name": "profile",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'astro_repo'"
+        },
+        "status": {
+          "name": "status",
+          "type": "project_status",
+          "typeSchema": "public",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'draft'"
+        },
+        "version": {
+          "name": "version",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "default": 1
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "updated_at": {
+          "name": "updated_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {
+        "projects_tenant_key_unique": {
+          "name": "projects_tenant_key_unique",
+          "columns": [
+            {
+              "expression": "tenant_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "key",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": true,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "projects_tenant_idx": {
+          "name": "projects_tenant_idx",
+          "columns": [
+            {
+              "expression": "tenant_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {
+        "projects_tenant_id_tenants_id_fk": {
+          "name": "projects_tenant_id_tenants_id_fk",
+          "tableFrom": "projects",
+          "tableTo": "tenants",
+          "columnsFrom": ["tenant_id"],
+          "columnsTo": ["id"],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {
+        "projects_tenant_isolation": {
+          "name": "projects_tenant_isolation",
+          "as": "PERMISSIVE",
+          "for": "ALL",
+          "to": ["public"],
+          "using": "\"projects\".\"tenant_id\" = nullif(current_setting('app.tenant_id', true), '') OR current_setting('app.platform_owner', true) = 'true'",
+          "withCheck": "\"projects\".\"tenant_id\" = nullif(current_setting('app.tenant_id', true), '') OR current_setting('app.platform_owner', true) = 'true'"
+        }
+      },
+      "checkConstraints": {},
+      "isRLSEnabled": true
+    },
+    "public.provider_credentials": {
+      "name": "provider_credentials",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "text",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "tenant_id": {
+          "name": "tenant_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "project_id": {
+          "name": "project_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "kind": {
+          "name": "kind",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "alias": {
+          "name": "alias",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "secret_reference_id": {
+          "name": "secret_reference_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "masked_suffix": {
+          "name": "masked_suffix",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "status": {
+          "name": "status",
+          "type": "integration_status",
+          "typeSchema": "public",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'unverified'"
+        },
+        "version": {
+          "name": "version",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "tested_at": {
+          "name": "tested_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "used_at": {
+          "name": "used_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "revoked_at": {
+          "name": "revoked_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {
+        "provider_credentials_tenant_idx": {
+          "name": "provider_credentials_tenant_idx",
+          "columns": [
+            {
+              "expression": "tenant_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "provider_credentials_project_idx": {
+          "name": "provider_credentials_project_idx",
+          "columns": [
+            {
+              "expression": "project_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "provider_credentials_scope_kind_version_unique": {
+          "name": "provider_credentials_scope_kind_version_unique",
+          "columns": [
+            {
+              "expression": "tenant_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "project_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "kind",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "version",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": true,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {
+        "provider_credentials_tenant_id_tenants_id_fk": {
+          "name": "provider_credentials_tenant_id_tenants_id_fk",
+          "tableFrom": "provider_credentials",
+          "tableTo": "tenants",
+          "columnsFrom": ["tenant_id"],
+          "columnsTo": ["id"],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
+        "provider_credentials_project_id_projects_id_fk": {
+          "name": "provider_credentials_project_id_projects_id_fk",
+          "tableFrom": "provider_credentials",
+          "tableTo": "projects",
+          "columnsFrom": ["project_id"],
+          "columnsTo": ["id"],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
+        "provider_credentials_secret_reference_id_secret_references_id_fk": {
+          "name": "provider_credentials_secret_reference_id_secret_references_id_fk",
+          "tableFrom": "provider_credentials",
+          "tableTo": "secret_references",
+          "columnsFrom": ["secret_reference_id"],
+          "columnsTo": ["id"],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {
+        "provider_credentials_tenant_isolation": {
+          "name": "provider_credentials_tenant_isolation",
+          "as": "PERMISSIVE",
+          "for": "ALL",
+          "to": ["public"],
+          "using": "\"provider_credentials\".\"tenant_id\" = nullif(current_setting('app.tenant_id', true), '') OR current_setting('app.platform_owner', true) = 'true'",
+          "withCheck": "\"provider_credentials\".\"tenant_id\" = nullif(current_setting('app.tenant_id', true), '') OR current_setting('app.platform_owner', true) = 'true'"
+        }
+      },
+      "checkConstraints": {},
+      "isRLSEnabled": true
+    },
+    "public.secret_references": {
+      "name": "secret_references",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "text",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "tenant_id": {
+          "name": "tenant_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "project_id": {
+          "name": "project_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "provider": {
+          "name": "provider",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "credential_version": {
+          "name": "credential_version",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "key_version": {
+          "name": "key_version",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "algorithm": {
+          "name": "algorithm",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "ciphertext": {
+          "name": "ciphertext",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "nonce": {
+          "name": "nonce",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "auth_tag": {
+          "name": "auth_tag",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "wrapped_dek": {
+          "name": "wrapped_dek",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "wrap_nonce": {
+          "name": "wrap_nonce",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "wrap_auth_tag": {
+          "name": "wrap_auth_tag",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "revoked_at": {
+          "name": "revoked_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": false
+        }
+      },
+      "indexes": {
+        "secret_references_tenant_idx": {
+          "name": "secret_references_tenant_idx",
+          "columns": [
+            {
+              "expression": "tenant_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "secret_references_project_idx": {
+          "name": "secret_references_project_idx",
+          "columns": [
+            {
+              "expression": "project_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {
+        "secret_references_tenant_id_tenants_id_fk": {
+          "name": "secret_references_tenant_id_tenants_id_fk",
+          "tableFrom": "secret_references",
+          "tableTo": "tenants",
+          "columnsFrom": ["tenant_id"],
+          "columnsTo": ["id"],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
+        "secret_references_project_id_projects_id_fk": {
+          "name": "secret_references_project_id_projects_id_fk",
+          "tableFrom": "secret_references",
+          "tableTo": "projects",
+          "columnsFrom": ["project_id"],
+          "columnsTo": ["id"],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {
+        "secret_references_tenant_isolation": {
+          "name": "secret_references_tenant_isolation",
+          "as": "PERMISSIVE",
+          "for": "ALL",
+          "to": ["public"],
+          "using": "\"secret_references\".\"tenant_id\" = nullif(current_setting('app.tenant_id', true), '') OR current_setting('app.platform_owner', true) = 'true'",
+          "withCheck": "\"secret_references\".\"tenant_id\" = nullif(current_setting('app.tenant_id', true), '') OR current_setting('app.platform_owner', true) = 'true'"
+        }
+      },
+      "checkConstraints": {},
+      "isRLSEnabled": true
+    },
+    "public.tenants": {
+      "name": "tenants",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "text",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "key": {
+          "name": "key",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "display_name": {
+          "name": "display_name",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "status": {
+          "name": "status",
+          "type": "tenant_status",
+          "typeSchema": "public",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'draft'"
+        },
+        "timezone": {
+          "name": "timezone",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'UTC'"
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "updated_at": {
+          "name": "updated_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {
+        "tenants_key_unique": {
+          "name": "tenants_key_unique",
+          "columns": [
+            {
+              "expression": "key",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": true,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {},
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {
+        "tenants_tenant_isolation": {
+          "name": "tenants_tenant_isolation",
+          "as": "PERMISSIVE",
+          "for": "ALL",
+          "to": ["public"],
+          "using": "\"tenants\".\"id\" = nullif(current_setting('app.tenant_id', true), '') OR current_setting('app.platform_owner', true) = 'true'",
+          "withCheck": "\"tenants\".\"id\" = nullif(current_setting('app.tenant_id', true), '') OR current_setting('app.platform_owner', true) = 'true'"
+        }
+      },
+      "checkConstraints": {},
+      "isRLSEnabled": true
+    }
+  },
+  "enums": {
+    "public.integration_status": {
+      "name": "integration_status",
+      "schema": "public",
+      "values": ["unverified", "active", "invalid", "revoked"]
+    },
+    "public.project_status": {
+      "name": "project_status",
+      "schema": "public",
+      "values": ["draft", "active", "suspended", "archived"]
+    },
+    "public.tenant_status": {
+      "name": "tenant_status",
+      "schema": "public",
+      "values": ["draft", "active", "suspended", "archived"]
+    }
+  },
+  "schemas": {},
+  "sequences": {},
+  "roles": {},
+  "policies": {},
+  "views": {},
+  "_meta": {
+    "columns": {},
+    "schemas": {},
+    "tables": {}
+  }
+}

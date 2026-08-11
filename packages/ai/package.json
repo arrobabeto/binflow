@@ -1,0 +1,9 @@
+{
+  "name": "@binflow/ai",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "dependencies": {
+    "ai": "7.0.59"
+  }
+}

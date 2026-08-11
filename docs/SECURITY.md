@@ -1,0 +1,141 @@
+# Security model
+
+## Security objective
+
+Allow authorized users to perform narrowly scoped website operations without turning natural language, a model, Telegram or a compromised integration into general production access.
+
+## Trust boundaries
+
+Untrusted:
+
+- Telegram messages, files, callbacks and visible profile data.
+- Repository, CMS, website and external research content.
+- Model output, rationale and proposed tool arguments.
+- External webhook delivery order and duplication.
+- User-provided URLs and document metadata.
+
+Trusted only after verification:
+
+- Dashboard sessions with completed TOTP.
+- Bot integration resolved from stored token/secret association.
+- GitHub App installation token scoped to the configured repository and downscoped to the current operation.
+- Vercel events validated and correlated to the configured project.
+- Data returned by adapters after schema and ownership checks.
+
+Never passed to the model:
+
+- Secret values, decryption keys, sessions or provider credentials.
+- Generic database, filesystem, shell, merge or publication operations.
+- Other tenant/project data.
+
+## Threats and controls
+
+| Threat                           | Required controls                                                                                                   |
+| -------------------------------- | ------------------------------------------------------------------------------------------------------------------- |
+| Unauthorized Telegram user       | One-time pairing, identity allowlist, tenant-scoped bot, RBAC                                                       |
+| Forged/replayed webhook          | HTTPS, provider signature/secret, delivery dedupe, expiration                                                       |
+| Callback replay                  | Opaque server action ID, user/project/version binding, expiration, idempotency                                      |
+| Prompt injection                 | Treat external text as data, bounded capability context, output validation outside model                            |
+| LLM proposes forbidden operation | Tool registry allowlist and deterministic policy rejection                                                          |
+| Cross-tenant disclosure          | RLS, scoped repositories, tenant artifact prefixes, isolation tests                                                 |
+| Secret leakage                   | Envelope encryption, redaction, no secrets in queue/checkpoint/log/model contexts                                   |
+| Local KEK disclosure             | Generate outside repository, regular-file and `0600` validation, no key output or database copy                     |
+| Excess GitHub App authority      | Single-repository installation, per-operation token downscoping, separate admin authorization and permission audits |
+| Approval of stale content        | Bind approval to request version, SHA and deployment/version                                                        |
+| Concurrent manual change         | Fresh source read, expected version and conflict stop                                                               |
+| Duplicate publication            | Idempotency keys, graph checkpoints, merge/publication reconciliation                                               |
+| Malicious attachment             | MIME sniffing, size limits, malware scan, safe parser, no macro execution                                           |
+| SSRF                             | URL parser, DNS/IP validation, protocol/port rules, redirect revalidation, egress policy                            |
+| Public confidential preview      | Vercel protection/share link policy and revocation                                                                  |
+| Compromised worker               | Non-root container, minimal mounted secrets, no Docker socket, scoped egress                                        |
+| Model cost abuse                 | Per-tenant budgets, call/token caps, rate limits and admin alerts                                                   |
+
+## Authentication and authorization
+
+### Dashboard
+
+- Email/password account created through an explicit bootstrap process.
+- TOTP setup and verification are mandatory before managing integrations, secrets or approvals.
+- Backup codes are shown once and stored protected.
+- Cookies are secure, HTTP-only, same-site and short-lived with server-side revocation.
+- Sensitive actions require a fresh/re-authenticated session.
+
+### Telegram
+
+- Tenant is resolved from the registered bot integration, never message text.
+- User is resolved from Telegram numeric user ID, never username/display name.
+- Pairing token is random, hashed, single-use, bot/user/tenant scoped and expires in 24 hours.
+- The first MVP accepts direct messages only.
+
+### Authorization
+
+Every command checks user, tenant, project, role, capability, project binding, request state and effective policy. Administrator cross-tenant access uses a distinct audited authorization path.
+
+## Secrets
+
+- 256-bit random KEK generated by the Phase 0 CLI outside the repository with file mode `0600` in local mode and provided as an external Docker secret in production.
+- Random DEK per credential.
+- AES-256-GCM for secret and DEK wrapping.
+- AAD contains tenant ID, credential ID, provider and key version.
+- PostgreSQL stores ciphertext, nonce, auth tag, wrapped DEK and secret metadata only.
+- KEK versions permit DEK rewrap without decrypting all secrets into application memory at once.
+- Secret values are immediately cleared from request/log objects where possible.
+- No secret value is returned after creation; UI displays alias, state and masked suffix.
+- Credential entry is an interactive, non-echoed CLI/dashboard operation; command arguments and committed environment files are forbidden.
+- KEK and decrypted credential material never enter model context, queue jobs, workflow checkpoints or provider-neutral domain values.
+
+## Prompt and model safety
+
+- Prompts clearly delimit system rules from untrusted content.
+- The model sees only schemas and capabilities available to the current request.
+- Structured output is validated with shared schemas.
+- Refusal, malformed output and policy violations are explicit domain outcomes.
+- Research URLs use a controlled fetch/search tool and claims keep evidence references.
+- A generated rationale is an auditable summary, not private chain-of-thought.
+- Stable privacy-preserving safety identifiers are sent when supported.
+
+## Attachments
+
+First-MVP accepted formats:
+
+- Documents: PDF, DOCX, TXT and Markdown.
+- Images: JPEG, PNG, WebP and AVIF.
+
+Default limits:
+
+- Maximum five attachments per request.
+- Maximum 10 MiB per document and 15 MiB per image.
+- Configurable lower per-project limits.
+
+Parsers run without macros, network access or executable extraction. Unsupported, encrypted, corrupt or image-only documents that cannot be safely extracted are rejected with a user-actionable message.
+
+Originals are deleted after terminal completion/cancellation. Derived published assets and hashes follow project/audit retention.
+
+## GitHub and deployment
+
+- GitHub App, never a personal long-lived PAT.
+- By explicit owner decision, the first app's registration ceiling is Administration read/write, Metadata read, Contents read/write, Pull requests read/write, Checks read, Commit statuses read, Deployments read and Workflows read/write.
+- The app is installed only on `arrobabeto/webbin`; Actions, Actions secrets and Dependabot secrets are not granted.
+- Every installation token is limited to Webbin and downscoped per operation. Normal blog execution omits Administration and Workflows.
+- Administration or Workflows may be requested only by a deterministic, separately admin-authorized onboarding/configuration action; never by the model or a generated content request.
+- Workflow/onboarding changes use a separately authorized PR and cannot be combined with generated content.
+- Every request owns one branch and PR.
+- No force push, shared mutable job branch or direct production-branch write.
+- Preview must not receive unnecessary production secrets or trigger real forms/payments/email.
+
+## Logging and audit redaction
+
+Structured logs may contain identifiers, states, durations, provider and error classes. They must not contain:
+
+- API/bot tokens, passwords, cookies, authorization headers or decrypted TOTP material.
+- Complete prompt payloads or attachments by default.
+- Shareable preview tokens.
+- Private provider reasoning items in readable form.
+
+Audit stores redacted structured inputs or hashes and references large artifacts through controlled storage.
+
+## Security change requirements
+
+Any trust-boundary, credential, auth, tenant, approval, tool or egress change must update this document, add security tests and create/supersede an ADR when the decision is durable.
+
+The accepted exception and compensating controls for GitHub registration authority are governed by [ADR-0013](adr/0013-github-app-administrative-registration.md).
