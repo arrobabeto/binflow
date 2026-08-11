@@ -36,3 +36,4 @@ All notable changes to product behavior, architecture, contracts, security, oper
 - Added deterministic migration revocation audit events, verified-at/external-ID backfill and composite credential/secret project ownership constraints.
 - Added strict evidence allowlists, serialized/stale-safe activation, composite tenant/project bindings and globally unique active Telegram bot identities.
 - Restricted Phase 0 Webbin bindings to the internal `webbin/webbin` project, made attempt persistence monotonic and allowed same-binding Telegram bot rotation without weakening cross-binding uniqueness.
+- Made type-aware lint depend on upstream workspace builds so clean CI checkouts resolve internal package declarations deterministically.

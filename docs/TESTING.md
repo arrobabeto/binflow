@@ -147,6 +147,7 @@ CI introduced with implementation must:
 - Require `docs/CHANGELOG.md` plus relevant canonical document changes for implementation PRs.
 - Validate code examples/contracts where practical.
 - Fail when generated API/schema references drift from committed contracts.
+- Build upstream workspace type packages before type-aware lint runs so a clean checkout cannot resolve internal imports as `any`.
 
 ## MVP quality gate
 
