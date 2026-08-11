@@ -15,6 +15,34 @@
       "when": 1786428902086,
       "tag": "0001_wet_amphibian",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1786433736287,
+      "tag": "0002_happy_sway",
+      "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "7",
+      "when": 1786434002843,
+      "tag": "0003_lowly_scalphunter",
+      "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1786436031001,
+      "tag": "0004_brave_terror",
+      "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "7",
+      "when": 1786436545774,
+      "tag": "0005_abandoned_the_order",
+      "breakpoints": true
     }
   ]
 }

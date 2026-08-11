@@ -3,7 +3,26 @@
   "version": "0.0.0",
   "private": true,
   "type": "module",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    }
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "check": "tsc -p tsconfig.json --noEmit",
+    "lint": "eslint src --max-warnings=0",
+    "test": "vitest run"
+  },
   "dependencies": {
-    "ai": "7.0.59"
+    "@binflow/domain": "workspace:*",
+    "@binflow/integrations": "workspace:*",
+    "@binflow/secrets": "workspace:*",
+    "ai": "7.0.59",
+    "zod": "4.4.3"
+  },
+  "devDependencies": {
+    "@types/node": "24.13.3"
   }
 }

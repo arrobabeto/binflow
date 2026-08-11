@@ -22,7 +22,12 @@
 - Budget, retention, idempotency and pairing-token rules.
 - Secret-envelope round trip and authentication failure.
 - KEK path/length/permission validation and non-echoed CLI input enforcement.
+- GitHub PEM import rejects repository-local, non-regular, oversized or non-`0600` files.
 - GitHub operation-to-token permission mapping.
+- Platform/tenant/project credential owner-scope and AAD isolation.
+- Candidate success/supersession, permanent invalidation, transient preservation and failed-rotation rollback.
+- Concurrent/out-of-order candidate activation cannot replace a newer active version.
+- Strict per-provider evidence schemas reject secret-bearing or extra fields before persistence/output.
 
 ### Contract
 
@@ -30,7 +35,10 @@
 - Chat SDK Telegram messages, commands, buttons, files and transport modes.
 - GitHub App auth, trees/commits, PR, checks and merge response normalization.
 - GitHub installation repository restriction and permission-downscoped token issuance.
+- Read-only OpenAI model visibility, Telegram identity/transport and GitHub App/installation verification with redacted evidence.
+- GitHub `installation_audit` token has no write permission, enumerates only for the exact audit operation and is revoked/discarded.
 - Vercel deployment/SHA correlation.
+- Vercel credential identity and exact project/team, GitHub repository and production-branch verification without project mutation.
 - S3-compatible artifact lifecycle.
 - Better Auth session and TOTP behavior.
 - LangGraph PostgreSQL checkpointer compatibility.
@@ -45,6 +53,11 @@
 - Duplicate webhook/action/queue delivery.
 - Revoked credential, expired approval and budget exhaustion.
 - Attachment deletion after terminal state.
+
+Database lifecycle tests use an isolated PostgreSQL database through
+`BINFLOW_TEST_DATABASE_URL`. CI provides `binflow_test`; local runs must point
+this variable at a disposable database and never at the normal `binflow` or a
+production database.
 
 ### End-to-end
 
@@ -119,6 +132,10 @@ The final Webbin E2E publishes one real owner-approved article. Test content is 
 - SSRF through source URL and redirects.
 - Secret scanning of logs, queue payloads, checkpoints and artifacts.
 - CLI arguments/output never contain secret values and list returns redacted metadata only.
+- Verification never persists provider bodies/native messages and does not mutate Telegram transport, chats or Webbin.
+- A failed candidate leaves the prior active credential resolvable; concurrent verify/revoke cannot reactivate a revoked version.
+- Duplicate Telegram bot IDs across bindings, tenant/project connection mismatches, project-owner/connection mismatches and unauthorized internal Webbin scopes are rejected transactionally; same-binding Telegram rotation succeeds.
+- Late verification results cannot move `tested_at` backward or overwrite newer status/evidence, and activation policy failures remain redacted per-item results under `verify --all`.
 - Blog tokens cannot access Administration or Workflows; separately authorized onboarding tokens cannot exceed their declared operation.
 - RLS bypass attempts and platform-owner audit.
 
@@ -137,4 +154,5 @@ CI introduced with implementation must:
 - No critical/high security finding remains open.
 - E2E evidence records exact request, PR, SHA, deployment and production URLs.
 - Local setup succeeds from an empty database and object store.
+- Destructive PostgreSQL integration tests refuse database names that do not end in `_test`; CI uses a disposable isolated database only.
 - Documentation matches the observed behavior and acceptance evidence.

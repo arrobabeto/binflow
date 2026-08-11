@@ -3,9 +3,12 @@ import { cwd } from 'node:process';
 import { Command, Option } from 'commander';
 import { v7 as uuidv7 } from 'uuid';
 
+import { createOpenAICredentialVerifier } from '@binflow/ai';
 import {
+  type CredentialOwnerScope,
   integrationKindSchema,
   type IntegrationKind,
+  webbinPilotBinding,
 } from '@binflow/contracts';
 import {
   createDatabase,
@@ -16,11 +19,18 @@ import {
   runMigrations,
   storeCredentialVersion,
 } from '@binflow/db';
+import { createGitHubCredentialVerifier } from '@binflow/github';
+import {
+  createDatabaseCredentialVerificationRepository,
+  CredentialVerificationService,
+} from '@binflow/integrations';
+import { createTelegramCredentialVerifier } from '@binflow/messaging';
 import {
   createMasterKeyFile,
   encryptSecret,
   loadMasterKeyFile,
 } from '@binflow/secrets';
+import { createVercelCredentialVerifier } from '@binflow/vercel';
 
 import { databaseUrl, masterKeyPath } from './config.js';
 import { promptIntegrationInput } from './integration-input.js';
@@ -119,9 +129,9 @@ integrations
       }
       if (
         (kind === 'github-app' || kind === 'vercel') &&
-        options.project === undefined
+        (options.tenant === undefined || options.project === undefined)
       ) {
-        throw new Error(`${kind} requires --project.`);
+        throw new Error(`${kind} requires --tenant and --project.`);
       }
 
       const key = await loadMasterKeyFile(masterKeyPath(), cwd());
@@ -139,20 +149,78 @@ integrations
         );
         const prompted = await promptIntegrationInput(kind);
         try {
+          let ownerScope: CredentialOwnerScope;
+          let credentialScope: typeof scope;
+          switch (kind) {
+            case 'github-app':
+            case 'telegram-admin': {
+              ownerScope = 'platform';
+              credentialScope = {};
+              break;
+            }
+            case 'openai':
+            case 'telegram-client': {
+              if (scope.tenantId === undefined) {
+                throw new Error(`${kind} requires a tenant scope.`);
+              }
+              ownerScope = 'tenant';
+              credentialScope = { tenantId: scope.tenantId };
+              break;
+            }
+            case 'vercel': {
+              if (
+                scope.tenantId === undefined ||
+                scope.projectId === undefined
+              ) {
+                throw new Error('vercel requires a project scope.');
+              }
+              ownerScope = 'project';
+              credentialScope = scope;
+              break;
+            }
+          }
           const envelope = encryptSecret(prompted.plaintext, key, {
             credentialId,
             keyVersion: 1,
             provider: kind,
-            tenantId: scope.tenantId ?? 'platform',
+            tenantId: credentialScope.tenantId ?? 'platform',
           });
           await withDatabase((db) =>
             storeCredentialVersion(db, {
               alias: prompted.alias,
+              configuration: kind === 'vercel' ? {} : prompted.configuration,
+              ...((kind === 'github-app' || kind === 'vercel') &&
+              scope.tenantId !== undefined &&
+              scope.projectId !== undefined
+                ? {
+                    connection: {
+                      configuration: {
+                        ...(kind === 'vercel' ? prompted.configuration : {}),
+                        ...(kind === 'github-app'
+                          ? {
+                              defaultBranch:
+                                webbinPilotBinding.productionBranch,
+                            }
+                          : {
+                              expectedProductionBranch:
+                                webbinPilotBinding.productionBranch,
+                            }),
+                        expectedRepository: webbinPilotBinding.repository,
+                      },
+                      kind,
+                      scope: {
+                        projectId: scope.projectId,
+                        tenantId: scope.tenantId,
+                      },
+                    },
+                  }
+                : {}),
               credentialId,
               envelope,
               kind,
               maskedSuffix: prompted.maskedSuffix,
-              scope,
+              ownerScope,
+              scope: credentialScope,
             }),
           );
         } finally {
@@ -187,11 +255,48 @@ integrations
 
 integrations
   .command('verify')
-  .option('--all', 'Verify all active credentials')
-  .action(() => {
-    throw new Error(
-      'Provider verification adapters are not enabled until the Phase 0 integration spikes are installed.',
-    );
+  .argument('[id]', 'Credential ID')
+  .option('--all', 'Verify active credentials and newest candidates')
+  .action(async (id: string | undefined, options: { all?: boolean }) => {
+    if ((id === undefined) === (options.all !== true)) {
+      throw new Error('Provide one credential ID or --all.');
+    }
+    const key = await loadMasterKeyFile(masterKeyPath(), cwd());
+    try {
+      const results = await withDatabase(async (db) => {
+        const service = new CredentialVerificationService(
+          createDatabaseCredentialVerificationRepository(db),
+          [
+            createOpenAICredentialVerifier(),
+            createTelegramCredentialVerifier(),
+            createGitHubCredentialVerifier(),
+            createVercelCredentialVerifier(),
+          ],
+        );
+        if (options.all === true) return service.verifyAll(key);
+        if (id === undefined) {
+          throw new Error('Credential ID is required without --all.');
+        }
+        return [await service.verify(id, key)];
+      });
+      console.table(
+        results.map((result) => ({
+          checkedAt: result.checkedAt,
+          credentialId: result.credentialId,
+          details:
+            result.evidence === undefined
+              ? result.errorCategory
+              : JSON.stringify(result.evidence),
+          kind: result.kind,
+          outcome: result.outcome,
+        })),
+      );
+      if (results.some((result) => result.outcome === 'failed')) {
+        process.exitCode = 1;
+      }
+    } finally {
+      key.fill(0);
+    }
   });
 
 await program.parseAsync();

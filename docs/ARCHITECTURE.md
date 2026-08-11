@@ -41,6 +41,7 @@ packages/
   domain/       entities, value objects, states and domain errors
   contracts/    Zod schemas and API/event contracts
   db/           Drizzle schema, migrations, RLS and repositories
+  integrations/ credential lifecycle and provider-verification orchestration
   auth/         Better Auth configuration and authorization helpers
   policies/     deterministic capability and approval decisions
   workflows/    coordinator graph and capability subgraphs
@@ -48,7 +49,7 @@ packages/
   ai/           provider-neutral model interfaces and OpenAI adapter
   messaging/    Chat SDK gateway and Telegram adapters
   github/       GitHub App adapter
-  vercel/       deployment adapter
+  vercel/       credential verification and deployment adapter
   artifacts/    S3-compatible artifact abstraction
   observability/ tracing, audit, usage and structured logging
   secrets/       provider-neutral envelope encryption and secret resolution

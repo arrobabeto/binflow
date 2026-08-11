@@ -19,6 +19,7 @@
     },
     "test": {
       "dependsOn": ["^build"],
+      "env": ["BINFLOW_TEST_DATABASE_URL"],
       "outputs": ["coverage/**"]
     }
   }

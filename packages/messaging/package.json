@@ -16,9 +16,14 @@
     "test": "vitest run"
   },
   "dependencies": {
+    "@binflow/domain": "workspace:*",
+    "@binflow/integrations": "workspace:*",
+    "@binflow/secrets": "workspace:*",
+    "@chat-adapter/shared": "4.37.0",
     "@chat-adapter/state-redis": "4.37.0",
     "@chat-adapter/telegram": "4.37.0",
-    "chat": "4.37.0"
+    "chat": "4.37.0",
+    "zod": "4.4.3"
   },
   "devDependencies": {
     "@types/node": "24.13.3"

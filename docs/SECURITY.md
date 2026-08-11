@@ -81,8 +81,11 @@ Every command checks user, tenant, project, role, capability, project binding, r
 - KEK versions permit DEK rewrap without decrypting all secrets into application memory at once.
 - Secret values are immediately cleared from request/log objects where possible.
 - No secret value is returned after creation; UI displays alias, state and masked suffix.
-- Credential entry is an interactive, non-echoed CLI/dashboard operation; command arguments and committed environment files are forbidden.
+- Credential entry is an interactive, non-echoed CLI/dashboard operation; command arguments and committed environment files are forbidden. The GitHub App PEM may be imported only from an interactively selected regular `0600` file outside the repository, with a bounded read size.
 - KEK and decrypted credential material never enter model context, queue jobs, workflow checkpoints or provider-neutral domain values.
+- Credential ownership is explicit: platform credentials use null tenant/project foreign keys and the reserved AAD tenant component `platform`; tenant/project credentials use the real tenant ID. `platform` is not a synthetic tenant and is accessible only through the audited platform-owner path.
+- Safe provider configuration is stored separately from the encrypted bundle. Secret parsing and plaintext lifetime remain inside the adapter and buffers are cleared in `finally` paths where possible.
+- Verification is externally read-only and persists only allowlisted evidence. Provider bodies, webhook URLs, native error messages, authorization headers, JWTs and ephemeral provider tokens are never stored or printed.
 
 ## Prompt and model safety
 
@@ -117,6 +120,7 @@ Originals are deleted after terminal completion/cancellation. Derived published 
 - By explicit owner decision, the first app's registration ceiling is Administration read/write, Metadata read, Contents read/write, Pull requests read/write, Checks read, Commit statuses read, Deployments read and Workflows read/write.
 - The app is installed only on `arrobabeto/webbin`; Actions, Actions secrets and Dependabot secrets are not granted.
 - Every installation token is limited to Webbin and downscoped per operation. Normal blog execution omits Administration and Workflows.
+- The sole exception is ADR-0014's deterministic `installation_audit`: a metadata/read-only token may enumerate the selected installation repositories to prove the Webbin-only rule, then is revoked/discarded immediately. It has no content, administration or workflow write authority and is never model-visible.
 - Administration or Workflows may be requested only by a deterministic, separately admin-authorized onboarding/configuration action; never by the model or a generated content request.
 - Workflow/onboarding changes use a separately authorized PR and cannot be combined with generated content.
 - Every request owns one branch and PR.

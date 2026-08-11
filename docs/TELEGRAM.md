@@ -12,11 +12,17 @@ Each first-MVP enrollment owns a dedicated bot. The bot resolves one tenant/proj
 
 Both bots use a shared `MessagingGateway` domain interface and independent Chat SDK instances/state namespaces.
 
+The Telegram numeric bot ID is globally unique among active credentials. The
+same bot cannot be activated as both admin and client or reused by another
+tenant; this identity is stored as a normalized external resource ID, not only
+inside JSON evidence.
+
 ## Local and production transport
 
-- Local: long polling; startup verifies that no incompatible webhook is active.
+- Local: long polling; startup verifies that no incompatible webhook is active and explicitly disables Chat SDK webhook deletion.
 - Production: HTTPS webhook with a unique secret token and restricted allowed updates.
 - A bot may use polling or webhook mode, never both simultaneously.
+- Credential verification is read-only: `getMe` confirms the expected bot identity and `getWebhookInfo` detects transport conflict. It never deletes/configures a webhook or sends a test message. Test delivery happens during onboarding after an authorized chat ID exists.
 
 ## Pairing
 
