@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 
-import type { Enrollment } from '@binflow/contracts';
+import type { Enrollment, ProjectManifest } from '@binflow/contracts';
 
 import { buildApp } from '../src/app.js';
 
@@ -19,6 +19,61 @@ const enrollment: Enrollment = {
   version: 1,
 };
 
+const manifest: ProjectManifest = {
+  budgetPolicy: {
+    maxEstimatedCostCentsPerDay: 2000,
+    maxEstimatedCostCentsPerRequest: 500,
+    maxModelCallsPerRequest: 12,
+    maxRequestsPerDay: 10,
+    maxTokensPerRequest: 120000,
+  },
+  content: {
+    blockedPaths: ['.github/**'],
+    collections: {
+      en: { directory: 'src/content/articulos', routePrefix: '/articulos' },
+      es: {
+        directory: 'src/content/articulos-es',
+        routePrefix: '/es/articulos',
+      },
+    },
+    editablePaths: ['src/content/articulos/*.md'],
+    frontmatterFields: ['titulo'],
+    imageDirectory: 'public/images/articles',
+    source: 'github',
+  },
+  contentLocales: ['es', 'en'],
+  conversationLocale: 'es',
+  defaultContentLocale: 'es',
+  deployment: {
+    previewMode: 'git_integration',
+    projectId: 'vercel-project',
+    protectionMode: 'vercel_auth',
+    provider: 'vercel',
+  },
+  enabledCapabilities: [],
+  fingerprint: 'a'.repeat(64),
+  globalProfileVersion: 'astro_repo@1',
+  graphVersion: 'workflow-kernel-pending@1',
+  id: 'manifest-1',
+  profile: 'astro_repo',
+  projectId: 'project-1',
+  repository: {
+    branchPattern: 'bot/webbin/{capability}/{request-id}-{slug}',
+    githubInstallationId: 'installation-1',
+    name: 'webbin',
+    owner: 'arrobabeto',
+    productionBranch: 'main',
+  },
+  requiredContentLocales: ['es', 'en'],
+  rulesVersion: 'webbin-editorial@1',
+  slugLocale: 'es',
+  status: 'validated',
+  translationPolicy: 'always_translate',
+  validatedAt: '2026-08-18T00:00:00.000Z',
+  validationProfileId: 'webbin-astro-repo@1',
+  version: 1,
+};
+
 const createService = () => ({
   create: vi.fn(async () => enrollment),
   createPairingLink: vi.fn(async () => ({
@@ -31,6 +86,14 @@ const createService = () => ({
     pairingUrl: 'https://t.me/binflow_client_bot?start=one-time-token',
   })),
   get: vi.fn(async () => enrollment),
+  getManifest: vi.fn(async () => ({
+    globalProfile: {
+      id: 'astro_repo' as const,
+      supportedLocales: ['en', 'es', 'de'] as const,
+      version: 'astro_repo@1',
+    },
+    manifest,
+  })),
   evaluateActivation: vi.fn(async () => ({
     blockers: ['github_reversible_probe'],
     ready: false,
@@ -67,6 +130,26 @@ describe('client enrollment API', () => {
     expect(response.statusCode).toBe(200);
     expect(response.headers.etag).toBe('"1"');
     expect(response.json()).toEqual(enrollment);
+    await app.close();
+  });
+
+  it('returns only the validated manifest and code-owned profile summary', async () => {
+    const service = createService();
+    const app = buildApp({
+      enrollmentService: service,
+      resolvePlatformOwnerSession: sessionResolver,
+    });
+
+    const response = await app.inject({
+      method: 'GET',
+      url: '/api/v1/admin/enrollments/enrollment-1/manifest',
+    });
+
+    expect(response.statusCode).toBe(200);
+    expect(response.json()).toMatchObject({
+      globalProfile: { version: 'astro_repo@1' },
+      manifest: { id: 'manifest-1', version: 1 },
+    });
     await app.close();
   });
 

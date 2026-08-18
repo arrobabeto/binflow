@@ -33,6 +33,9 @@ describeDatabase('client enrollment lifecycle', () => {
   beforeEach(async () => {
     await database.db.execute(sql`
       truncate table
+        project_budget_policies,
+        project_locales,
+        project_manifest_versions,
         pairing_tokens,
         enrollment_validation_attempts,
         client_enrollments,
@@ -55,6 +58,146 @@ describeDatabase('client enrollment lifecycle', () => {
     correlationId: `correlation-${idempotencyKey}`,
     idempotencyKey,
   });
+
+  const completeConfiguration = {
+    budgetPolicy: {
+      maxEstimatedCostCentsPerDay: 2000,
+      maxEstimatedCostCentsPerRequest: 500,
+      maxModelCallsPerRequest: 12,
+      maxRequestsPerDay: 10,
+      maxTokensPerRequest: 120000,
+    },
+    clientContactEmail: 'client@example.com',
+    clientConversationLocale: 'es' as const,
+    contentLocales: ['es', 'en'] as const,
+    defaultContentLocale: 'es' as const,
+    editorialAudience: 'Technical owners',
+    editorialVoice: 'Direct and useful',
+    productionDomain: 'https://webbin.dev',
+    prohibitedClaims: ['Unverified outcomes'],
+    requiredLocales: ['es', 'en'] as const,
+    researchPolicy: 'Use primary sources.',
+    slugLocale: 'es' as const,
+    timezone: 'America/Mexico_City',
+    translationPolicy: 'always_translate' as const,
+  };
+
+  const seedActiveCredentials = async (enrollment: {
+    projectId: string;
+    tenantId: string;
+  }) =>
+    withPlatformOwnerScope(
+      database.db,
+      {
+        actorId: 'owner-1',
+        correlationId: 'manifest-credential-fixture',
+        reason: 'Manifest credential fixture',
+      },
+      async (scoped) => {
+        const credentials = [
+          {
+            id: 'openai-active',
+            kind: 'openai',
+            ownerScope: 'tenant' as const,
+            projectId: null,
+            tenantId: enrollment.tenantId,
+          },
+          {
+            id: 'telegram-admin-active',
+            kind: 'telegram-admin',
+            ownerScope: 'platform' as const,
+            projectId: null,
+            tenantId: null,
+          },
+          {
+            id: 'telegram-client-active',
+            kind: 'telegram-client',
+            ownerScope: 'tenant' as const,
+            projectId: null,
+            tenantId: enrollment.tenantId,
+          },
+          {
+            id: 'github-active',
+            kind: 'github-app',
+            ownerScope: 'platform' as const,
+            projectId: null,
+            tenantId: null,
+          },
+          {
+            id: 'vercel-active',
+            kind: 'vercel',
+            ownerScope: 'project' as const,
+            projectId: enrollment.projectId,
+            tenantId: enrollment.tenantId,
+          },
+        ];
+        for (const credential of credentials) {
+          const secretId = `${credential.id}-secret`;
+          await scoped.insert(schema.secretReferences).values({
+            algorithm: 'aes-256-gcm',
+            authTag: 'tag',
+            ciphertext: 'ciphertext',
+            credentialVersion: 1,
+            id: secretId,
+            keyVersion: 1,
+            nonce: 'nonce',
+            projectId: credential.projectId,
+            provider: credential.kind,
+            tenantId: credential.tenantId,
+            wrapAuthTag: 'tag',
+            wrappedDek: 'dek',
+            wrapNonce: 'nonce',
+          });
+          await scoped.insert(schema.providerCredentials).values({
+            alias: credential.kind,
+            externalResourceId:
+              credential.kind === 'telegram-admin'
+                ? 'telegram-admin-id'
+                : credential.kind === 'telegram-client'
+                  ? 'telegram-client-id'
+                  : null,
+            id: credential.id,
+            kind: credential.kind,
+            maskedSuffix: '0000',
+            ownerScope: credential.ownerScope,
+            projectId: credential.projectId,
+            secretReferenceId: secretId,
+            status: 'active',
+            tenantId: credential.tenantId,
+            version: 1,
+          });
+        }
+        await scoped.insert(schema.integrationConnections).values([
+          {
+            credentialId: 'github-active',
+            id: 'github-connection',
+            kind: 'github-app',
+            projectId: enrollment.projectId,
+            status: 'active',
+            tenantId: enrollment.tenantId,
+            verificationEvidence: {
+              defaultBranch: 'main',
+              installationId: '153846942',
+              repository: 'arrobabeto/webbin',
+            },
+          },
+          {
+            credentialId: 'vercel-active',
+            id: 'vercel-connection',
+            kind: 'vercel',
+            projectId: enrollment.projectId,
+            status: 'active',
+            tenantId: enrollment.tenantId,
+            verificationEvidence: {
+              productionBranch: 'main',
+              projectId: 'prj_webbin',
+              repository: 'arrobabeto/webbin',
+              teamId: 'team_webbin',
+            },
+          },
+        ]);
+      },
+    );
 
   it('adopts a draft scope atomically and replays an identical creation', async () => {
     const input = {
@@ -246,6 +389,101 @@ describeDatabase('client enrollment lifecycle', () => {
         result: 'success',
         tenantId: second.tenantId,
       }),
+    ).rejects.toThrow();
+  });
+
+  it('materializes, reuses and supersedes immutable manifest snapshots', async () => {
+    const created = await service.create(
+      {
+        projectDisplayName: 'Webbin',
+        projectKey: 'webbin',
+        tenantDisplayName: 'Webbin',
+        tenantKey: 'webbin',
+      },
+      context('create-manifest-enrollment'),
+    );
+    await seedActiveCredentials(created);
+    const configured = await service.update(
+      created.id,
+      { configuration: completeConfiguration, currentStep: 8 },
+      created.version,
+      context('configure-manifest-enrollment'),
+    );
+    const first = await service.validate(
+      configured.id,
+      configured.version,
+      context('validate-manifest-first'),
+    );
+
+    expect(first.enrollment.state).toBe('ready_for_pairing');
+    expect(first.attempts).toContainEqual(
+      expect.objectContaining({
+        checkName: 'project_manifest',
+        result: 'success',
+      }),
+    );
+    const firstManifest = await service.getManifest(
+      created.id,
+      'owner-1',
+      'read-manifest-first',
+    );
+    expect(firstManifest.manifest).toMatchObject({
+      contentLocales: ['es', 'en'],
+      status: 'validated',
+      version: 1,
+    });
+
+    const replayed = await service.validate(
+      configured.id,
+      first.enrollment.version,
+      context('validate-manifest-unchanged'),
+    );
+    expect(replayed.enrollment.state).toBe('ready_for_pairing');
+    expect(
+      await database.db.select().from(schema.projectManifestVersions),
+    ).toHaveLength(1);
+
+    const reconfigured = await service.update(
+      configured.id,
+      {
+        configuration: {
+          ...completeConfiguration,
+          budgetPolicy: {
+            ...completeConfiguration.budgetPolicy,
+            maxRequestsPerDay: 11,
+          },
+        },
+        currentStep: 8,
+      },
+      replayed.enrollment.version,
+      context('configure-manifest-change'),
+    );
+    await service.validate(
+      configured.id,
+      reconfigured.version,
+      context('validate-manifest-change'),
+    );
+    const versions = await database.db
+      .select()
+      .from(schema.projectManifestVersions)
+      .orderBy(schema.projectManifestVersions.version);
+    expect(
+      versions.map(({ status, version }) => ({ status, version })),
+    ).toEqual([
+      { status: 'superseded', version: 1 },
+      { status: 'validated', version: 2 },
+    ]);
+    expect(await database.db.select().from(schema.projectLocales)).toHaveLength(
+      2,
+    );
+    expect(
+      await database.db.select().from(schema.projectBudgetPolicies),
+    ).toHaveLength(2);
+    await expect(
+      database.db
+        .update(schema.projectLocales)
+        .set({ slugLocale: 'en' })
+        .where(eq(schema.projectLocales.manifestVersionId, versions[1]!.id)),
     ).rejects.toThrow();
   });
 });

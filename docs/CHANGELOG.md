@@ -69,6 +69,14 @@ All notable changes to product behavior, architecture, contracts, security, oper
   includes the new workspace.
 - Added Docker/runtime KEK loading that preserves host `0600` enforcement while
   accepting only the read-only permission modes used by `/run/secrets` mounts.
+- Added ADR-0019 defining code-owned global profile narrowing, immutable project
+  manifest materialization and integer request/day budget snapshots.
+- Added the Webbin manifest contract for verified provider bindings, exact
+  bilingual article/image paths, Spanish source/slug behavior and fail-closed
+  locale or translation-policy expansion.
+- Added the `@binflow/manifests` validator, migration `0011`, immutable locale
+  and budget snapshots, manifest validation evidence, authenticated read API
+  and effective-contract/budget controls in the enrollment dashboard.
 
 ### Changed
 

@@ -5,6 +5,7 @@ import {
   apiErrorResponseSchema,
   cursorQuerySchema,
   idempotencyKeySchema,
+  projectBudgetPolicySchema,
 } from '../src/index.js';
 
 describe('control-plane contracts', () => {
@@ -57,6 +58,29 @@ describe('control-plane contracts', () => {
       adminOperationReferenceSchema.parse({
         ...reference,
         statusUrl: 'https://provider.example/operation-1',
+      }),
+    ).toThrow();
+  });
+
+  it('requires deterministic integer budget ceilings', () => {
+    const valid = {
+      maxEstimatedCostCentsPerDay: 2000,
+      maxEstimatedCostCentsPerRequest: 500,
+      maxModelCallsPerRequest: 12,
+      maxRequestsPerDay: 10,
+      maxTokensPerRequest: 120000,
+    };
+    expect(projectBudgetPolicySchema.parse(valid)).toEqual(valid);
+    expect(() =>
+      projectBudgetPolicySchema.parse({
+        ...valid,
+        maxEstimatedCostCentsPerDay: 100,
+      }),
+    ).toThrow(/Daily estimated cost/);
+    expect(() =>
+      projectBudgetPolicySchema.parse({
+        ...valid,
+        maxRequestsPerDay: 1.5,
       }),
     ).toThrow();
   });

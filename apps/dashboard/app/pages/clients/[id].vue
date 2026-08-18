@@ -2,6 +2,7 @@
 import type {
   Enrollment,
   EnrollmentValidationAttempt,
+  ProjectManifestResponse,
 } from '@binflow/contracts';
 
 const route = useRoute();
@@ -9,10 +10,15 @@ const id = String(route.params.id);
 const { data: enrollment, refresh } = await useFetch<Enrollment>(
   `/api/v1/admin/enrollments/${id}`,
 );
+const { data: manifestState, refresh: refreshManifest } =
+  await useFetch<ProjectManifestResponse>(
+    `/api/v1/admin/enrollments/${id}/manifest`,
+  );
 const form = reactive({
   clientContactEmail: '',
   clientConversationLocale: 'en',
   contentLocales: 'en, es',
+  defaultContentLocale: 'es',
   editorialAudience: '',
   editorialVoice: '',
   previewDomain: '',
@@ -23,6 +29,11 @@ const form = reactive({
   slugLocale: 'es',
   timezone: 'America/Mexico_City',
   translationPolicy: 'always_translate',
+  maxEstimatedCostCentsPerDay: 2000,
+  maxEstimatedCostCentsPerRequest: 500,
+  maxModelCallsPerRequest: 12,
+  maxRequestsPerDay: 10,
+  maxTokensPerRequest: 120000,
 });
 const attempts = ref<EnrollmentValidationAttempt[]>([]);
 const pairingUrl = ref('');
@@ -34,17 +45,26 @@ watchEffect(() => {
   if (!config) return;
   form.clientContactEmail = config.clientContactEmail ?? '';
   form.clientConversationLocale = config.clientConversationLocale ?? 'en';
-  form.contentLocales = (config.contentLocales ?? ['en', 'es']).join(', ');
+  form.contentLocales = 'es, en';
+  form.defaultContentLocale = 'es';
   form.editorialAudience = config.editorialAudience ?? '';
   form.editorialVoice = config.editorialVoice ?? '';
   form.previewDomain = config.previewDomain ?? '';
   form.productionDomain = config.productionDomain ?? '';
   form.prohibitedClaims = (config.prohibitedClaims ?? []).join('\n');
-  form.requiredLocales = (config.requiredLocales ?? ['en', 'es']).join(', ');
+  form.requiredLocales = 'es, en';
   form.researchPolicy = config.researchPolicy ?? '';
-  form.slugLocale = config.slugLocale ?? 'es';
+  form.slugLocale = 'es';
   form.timezone = config.timezone ?? 'America/Mexico_City';
-  form.translationPolicy = config.translationPolicy ?? 'always_translate';
+  form.translationPolicy = 'always_translate';
+  form.maxEstimatedCostCentsPerDay =
+    config.budgetPolicy?.maxEstimatedCostCentsPerDay ?? 2000;
+  form.maxEstimatedCostCentsPerRequest =
+    config.budgetPolicy?.maxEstimatedCostCentsPerRequest ?? 500;
+  form.maxModelCallsPerRequest =
+    config.budgetPolicy?.maxModelCallsPerRequest ?? 12;
+  form.maxRequestsPerDay = config.budgetPolicy?.maxRequestsPerDay ?? 10;
+  form.maxTokensPerRequest = config.budgetPolicy?.maxTokensPerRequest ?? 120000;
 });
 
 const locales = (value: string) =>
@@ -53,9 +73,19 @@ const locales = (value: string) =>
     .map((item) => item.trim())
     .filter(Boolean);
 const configuration = () => ({
+  budgetPolicy: {
+    maxEstimatedCostCentsPerDay: Number(form.maxEstimatedCostCentsPerDay),
+    maxEstimatedCostCentsPerRequest: Number(
+      form.maxEstimatedCostCentsPerRequest,
+    ),
+    maxModelCallsPerRequest: Number(form.maxModelCallsPerRequest),
+    maxRequestsPerDay: Number(form.maxRequestsPerDay),
+    maxTokensPerRequest: Number(form.maxTokensPerRequest),
+  },
   clientContactEmail: form.clientContactEmail,
   clientConversationLocale: form.clientConversationLocale,
   contentLocales: locales(form.contentLocales),
+  defaultContentLocale: form.defaultContentLocale,
   editorialAudience: form.editorialAudience,
   editorialVoice: form.editorialVoice,
   ...(form.previewDomain ? { previewDomain: form.previewDomain } : {}),
@@ -110,6 +140,7 @@ const validate = () =>
     });
     enrollment.value = result.enrollment;
     attempts.value = result.attempts;
+    await refreshManifest();
     message.value =
       result.enrollment.state === 'ready_for_pairing'
         ? 'Validation passed.'
@@ -186,19 +217,22 @@ const createPairing = () =>
             ><USelect
               v-model="form.translationPolicy"
               class="w-full"
-              :items="['always_translate', 'ask_each_action']"
+              :items="['always_translate']"
           /></UFormField>
           <UFormField label="Content locales"
-            ><UInput v-model="form.contentLocales" class="w-full"
+            ><UInput v-model="form.contentLocales" class="w-full" disabled
           /></UFormField>
           <UFormField label="Required locales"
-            ><UInput v-model="form.requiredLocales" class="w-full"
+            ><UInput v-model="form.requiredLocales" class="w-full" disabled
+          /></UFormField>
+          <UFormField label="Source locale"
+            ><USelect
+              v-model="form.defaultContentLocale"
+              class="w-full"
+              :items="['es']"
           /></UFormField>
           <UFormField label="Slug locale"
-            ><USelect
-              v-model="form.slugLocale"
-              class="w-full"
-              :items="['en', 'es', 'de']"
+            ><USelect v-model="form.slugLocale" class="w-full" :items="['es']"
           /></UFormField>
           <UFormField label="Production URL"
             ><UInput
@@ -225,6 +259,47 @@ const createPairing = () =>
             class="sm:col-span-2"
             label="Prohibited claims (one per line)"
             ><UTextarea v-model="form.prohibitedClaims" class="w-full"
+          /></UFormField>
+          <div class="sm:col-span-2 border-t border-default pt-5">
+            <p class="font-semibold">Budget policy</p>
+            <p class="text-sm text-muted">
+              Cost values are stored as USD cents and frozen with the manifest.
+            </p>
+          </div>
+          <UFormField label="Requests per day"
+            ><UInput
+              v-model="form.maxRequestsPerDay"
+              class="w-full"
+              min="1"
+              type="number"
+          /></UFormField>
+          <UFormField label="Model calls per request"
+            ><UInput
+              v-model="form.maxModelCallsPerRequest"
+              class="w-full"
+              min="1"
+              type="number"
+          /></UFormField>
+          <UFormField label="Tokens per request"
+            ><UInput
+              v-model="form.maxTokensPerRequest"
+              class="w-full"
+              min="1000"
+              type="number"
+          /></UFormField>
+          <UFormField label="Estimated cents per request"
+            ><UInput
+              v-model="form.maxEstimatedCostCentsPerRequest"
+              class="w-full"
+              min="1"
+              type="number"
+          /></UFormField>
+          <UFormField label="Estimated cents per day"
+            ><UInput
+              v-model="form.maxEstimatedCostCentsPerDay"
+              class="w-full"
+              min="1"
+              type="number"
           /></UFormField>
           <UButton type="submit" :loading="busy">Save draft</UButton>
         </form>
@@ -257,6 +332,51 @@ const createPairing = () =>
             >Create 24-hour link</UButton
           ></UCard
         >
+        <UCard>
+          <p class="font-semibold">Project manifest</p>
+          <template v-if="manifestState?.manifest">
+            <div class="mt-3 grid gap-2 text-sm">
+              <p>
+                Version {{ manifestState.manifest.version }} ·
+                {{ manifestState.manifest.status }}
+              </p>
+              <p class="text-muted">
+                {{ manifestState.manifest.globalProfileVersion }} ·
+                {{ manifestState.manifest.repository.owner }}/{{
+                  manifestState.manifest.repository.name
+                }}
+              </p>
+              <p class="text-muted">
+                {{ manifestState.manifest.contentLocales.join(' + ') }} · source
+                {{ manifestState.manifest.defaultContentLocale }}
+              </p>
+              <p class="text-muted">
+                {{ manifestState.manifest.budgetPolicy.maxRequestsPerDay }}
+                requests/day · USD
+                {{
+                  (
+                    manifestState.manifest.budgetPolicy
+                      .maxEstimatedCostCentsPerDay / 100
+                  ).toFixed(2)
+                }}/day
+              </p>
+              <details>
+                <summary class="cursor-pointer">Effective paths</summary>
+                <ul class="mt-2 list-disc pl-5 text-muted">
+                  <li
+                    v-for="path in manifestState.manifest.content.editablePaths"
+                    :key="path"
+                  >
+                    {{ path }}
+                  </li>
+                </ul>
+              </details>
+            </div>
+          </template>
+          <p v-else class="mt-2 text-sm text-muted">
+            Validate the complete draft to create version 1.
+          </p>
+        </UCard>
         <UAlert v-if="message" :description="message" />
         <UCard v-if="pairingUrl"
           ><p class="text-sm font-semibold">One-time pairing URL</p>

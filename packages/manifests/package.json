@@ -1,5 +1,5 @@
 {
-  "name": "@binflow/onboarding",
+  "name": "@binflow/manifests",
   "version": "0.0.0",
   "private": true,
   "type": "module",
@@ -17,11 +17,7 @@
   },
   "dependencies": {
     "@binflow/contracts": "workspace:*",
-    "@binflow/db": "workspace:*",
-    "@binflow/domain": "workspace:*",
-    "@binflow/manifests": "workspace:*",
-    "drizzle-orm": "0.45.2",
-    "uuid": "14.0.1"
+    "@binflow/domain": "workspace:*"
   },
   "devDependencies": {
     "@types/node": "24.13.3"

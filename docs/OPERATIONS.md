@@ -176,6 +176,12 @@ requires the existing SecretsProvider KEK mount (`BINFLOW_KEK_FILE`) while the
 dashboard must not receive that mount. Rollback stops credential writers and
 restores the coordinated pre-release application/database backup if required.
 
+Migration `0011` adds immutable project manifest, locale and budget snapshots
+plus the nullable active-manifest version on projects. It is additive. Rollback
+stops enrollment validation writers and preserves manifest history; an older
+application ignores the new tables and nullable project column, but a full
+release rollback still uses the coordinated pre-release backup procedure.
+
 ## Health
 
 Endpoints:

@@ -5,6 +5,25 @@ export const translationPolicySchema = z.enum([
   'always_translate',
   'ask_each_action',
 ]);
+export const projectBudgetPolicySchema = z
+  .object({
+    maxEstimatedCostCentsPerDay: z.number().int().min(1).max(1_000_000),
+    maxEstimatedCostCentsPerRequest: z.number().int().min(1).max(100_000),
+    maxModelCallsPerRequest: z.number().int().min(1).max(100),
+    maxRequestsPerDay: z.number().int().min(1).max(1_000),
+    maxTokensPerRequest: z.number().int().min(1_000).max(1_000_000),
+  })
+  .strict()
+  .refine(
+    (policy) =>
+      policy.maxEstimatedCostCentsPerDay >=
+      policy.maxEstimatedCostCentsPerRequest,
+    {
+      message:
+        'Daily estimated cost must be at least the per-request estimated cost.',
+      path: ['maxEstimatedCostCentsPerDay'],
+    },
+  );
 export const projectProfileSchema = z.enum([
   'astro_repo',
   'astro_orbitype',
@@ -246,6 +265,7 @@ export const healthResponseSchema = z.object({
 
 export type SupportedLocale = z.infer<typeof supportedLocaleSchema>;
 export type TranslationPolicy = z.infer<typeof translationPolicySchema>;
+export type ProjectBudgetPolicy = z.infer<typeof projectBudgetPolicySchema>;
 export type ProjectProfile = z.infer<typeof projectProfileSchema>;
 export type IntegrationKind = z.infer<typeof integrationKindSchema>;
 export type IntegrationStatus = z.infer<typeof integrationStatusSchema>;
@@ -306,9 +326,11 @@ const httpsUrlSchema = z.url().refine((value) => value.startsWith('https://'), {
 
 export const enrollmentConfigurationSchema = z
   .object({
+    budgetPolicy: projectBudgetPolicySchema.optional(),
     clientContactEmail: z.email().optional(),
     clientConversationLocale: supportedLocaleSchema.optional(),
     contentLocales: z.array(supportedLocaleSchema).min(1).max(3).optional(),
+    defaultContentLocale: supportedLocaleSchema.optional(),
     editorialAudience: z.string().min(1).max(2000).optional(),
     editorialVoice: z.string().min(1).max(2000).optional(),
     previewDomain: httpsUrlSchema.optional(),
@@ -404,4 +426,108 @@ export type UpdateEnrollmentInput = z.infer<typeof updateEnrollmentInputSchema>;
 export type Enrollment = z.infer<typeof enrollmentSchema>;
 export type EnrollmentValidationAttempt = z.infer<
   typeof enrollmentValidationAttemptSchema
+>;
+
+export const projectManifestStatusSchema = z.enum([
+  'draft',
+  'validated',
+  'active',
+  'superseded',
+]);
+
+export const capabilityBindingSchema = z
+  .object({
+    access: z.enum([
+      'disabled',
+      'client_publish',
+      'admin_required',
+      'admin_only',
+    ]),
+    capabilityId: z.string().min(1),
+    capabilityVersion: z.number().int().positive(),
+  })
+  .strict();
+
+const manifestCollectionSchema = z
+  .object({
+    directory: z.string().min(1),
+    routePrefix: z.string().startsWith('/'),
+  })
+  .strict();
+
+export const projectManifestSchema = z
+  .object({
+    budgetPolicy: projectBudgetPolicySchema,
+    content: z
+      .object({
+        blockedPaths: z.array(z.string().min(1)).min(1),
+        collections: z
+          .partialRecord(supportedLocaleSchema, manifestCollectionSchema)
+          .refine((collections) => Object.keys(collections).length > 0),
+        editablePaths: z.array(z.string().min(1)).min(1),
+        frontmatterFields: z.array(z.string().min(1)).min(1),
+        imageDirectory: z.string().min(1),
+        source: z.literal('github'),
+      })
+      .strict(),
+    contentLocales: z.array(supportedLocaleSchema).min(1).max(3),
+    conversationLocale: supportedLocaleSchema,
+    defaultContentLocale: supportedLocaleSchema,
+    deployment: z
+      .object({
+        previewMode: z.enum(['git_integration', 'ci', 'api']),
+        projectId: z.string().min(1),
+        protectionMode: z.enum(['vercel_auth', 'share_link', 'public']),
+        provider: z.literal('vercel'),
+        teamId: z.string().min(1).optional(),
+      })
+      .strict(),
+    enabledCapabilities: z.array(capabilityBindingSchema),
+    fingerprint: z.string().regex(/^[a-f0-9]{64}$/),
+    globalProfileVersion: z.string().min(1),
+    graphVersion: z.string().min(1),
+    id: z.string().min(1),
+    profile: z.literal('astro_repo'),
+    projectId: z.string().min(1),
+    repository: z
+      .object({
+        branchPattern: z.string().min(1),
+        githubInstallationId: z.string().min(1),
+        name: z.string().min(1),
+        owner: z.string().min(1),
+        productionBranch: z.string().min(1),
+      })
+      .strict(),
+    requiredContentLocales: z.array(supportedLocaleSchema).min(1).max(3),
+    rulesVersion: z.string().min(1),
+    slugLocale: supportedLocaleSchema,
+    status: projectManifestStatusSchema,
+    translationPolicy: translationPolicySchema,
+    validationProfileId: z.string().min(1),
+    validatedAt: z.iso.datetime(),
+    version: resourceVersionSchema,
+  })
+  .strict();
+
+export const globalProfileSummarySchema = z
+  .object({
+    id: z.literal('astro_repo'),
+    supportedLocales: z.array(supportedLocaleSchema),
+    version: z.string().min(1),
+  })
+  .strict();
+
+export const projectManifestResponseSchema = z
+  .object({
+    globalProfile: globalProfileSummarySchema,
+    manifest: projectManifestSchema.nullable(),
+  })
+  .strict();
+
+export type ProjectManifestStatus = z.infer<typeof projectManifestStatusSchema>;
+export type CapabilityBinding = z.infer<typeof capabilityBindingSchema>;
+export type ProjectManifest = z.infer<typeof projectManifestSchema>;
+export type GlobalProfileSummary = z.infer<typeof globalProfileSummarySchema>;
+export type ProjectManifestResponse = z.infer<
+  typeof projectManifestResponseSchema
 >;

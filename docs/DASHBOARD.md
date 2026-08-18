@@ -63,11 +63,20 @@ Client list supports create, resume configuration, validate, activate, suspend a
 - OpenAI credential health and node model bindings.
 - GitHub/Vercel connections.
 - Active manifest, rules and capability policies.
+- Latest validated manifest version, global profile version, effective
+  repository/path boundary and immutable locale snapshot.
+- Request/day, model-call, token and estimated USD request/day budget ceilings.
 - Content catalog/category state.
 - Validation history.
 - Usage and requests scoped to the client.
 
 Only `astro_repo` is selectable in the first MVP. Future profile names must not be shown as operational choices until their acceptance criteria pass.
+
+The enrollment form edits a draft configuration. `Validate` materializes or
+reuses the project manifest and shows its redacted effective contract. Webbin
+offers English and Spanish content only, requires both, uses Spanish as source
+and slug locale, and fixes translation to `always_translate`; globally
+supported German and `ask_each_action` remain unavailable for this pilot.
 
 ## Requests
 

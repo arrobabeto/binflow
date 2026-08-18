@@ -13,6 +13,7 @@ import {
   integrationCandidateInputSchema,
   pairingLinkResponseSchema,
   platformOwnerSessionSchema,
+  projectManifestResponseSchema,
   updateEnrollmentInputSchema,
   type HealthResponse,
   type PlatformOwnerSessionResponse,
@@ -40,6 +41,7 @@ export const buildApp = (
       | 'create'
       | 'createPairingLink'
       | 'get'
+      | 'getManifest'
       | 'evaluateActivation'
       | 'list'
       | 'update'
@@ -315,6 +317,19 @@ export const buildApp = (
       );
       void reply.header('etag', `"${String(enrollment.version)}"`);
       return enrollmentSchema.parse(enrollment);
+    },
+  );
+
+  app.get<{ Params: { id: string } }>(
+    '/api/v1/admin/enrollments/:id/manifest',
+    async (request) => {
+      const session = await requireSession(request);
+      const manifest = await requireService().getManifest(
+        request.params.id,
+        session.actorId,
+        request.id,
+      );
+      return projectManifestResponseSchema.parse(manifest);
     },
   );
 

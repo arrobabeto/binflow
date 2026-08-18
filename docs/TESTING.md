@@ -24,6 +24,8 @@
 - Category normalization/classification inputs.
 - Path/field allowlists and manifest validation.
 - Budget, retention, idempotency and pairing-token rules.
+- Global-profile narrowing, Webbin ES/EN/source/slug invariants and rejection of
+  German or `ask_each_action` for the pilot.
 - Secret-envelope round trip and authentication failure.
 - KEK path/length/permission validation and non-echoed CLI input enforcement.
 - GitHub PEM import rejects repository-local, non-regular, oversized or non-`0600` files.
@@ -62,6 +64,9 @@
 - Pairing-link tests prove 24-hour expiry, hash-only persistence, redacted
   idempotency receipts, one-time plaintext return/replay rejection and
   tenant/project binding.
+- Manifest tests cover immutable snapshots, identical-fingerprint reuse,
+  changed-fingerprint supersession, serialized project-local versions,
+  provider-derived external bindings and atomic validation/audit/outbox writes.
 - Session expiry, five-minute freshness, revocation, database-backed rate limits,
   Origin/CSRF enforcement and cookie flags are covered explicitly.
 - LangGraph PostgreSQL checkpointer compatibility.
