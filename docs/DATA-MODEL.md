@@ -19,7 +19,23 @@ Client security boundary: key, display name, status, timezone and timestamps.
 
 ### `users`
 
-Person record independent from channel identity. Better Auth owns credential/session tables.
+Person record independent from channel identity. Better Auth owns the
+`auth_users`, `auth_sessions`, `auth_accounts`, `auth_verifications`,
+`auth_two_factors` and `auth_rate_limits` tables. The first MVP permits exactly
+one auth user and maps it to the platform-owner actor; clients do not receive
+dashboard accounts.
+
+Auth sessions are server-side rows with token, user, expiry, creation/update,
+IP and user-agent metadata. Password hashes live only in the Better Auth account
+row. TOTP secrets and backup-code material live only in the plugin-owned
+two-factor row and are protected by the independent Better Auth secret. Auth
+rate-limit counters are durable PostgreSQL rows. Runtime schema migration is
+disabled.
+
+The first transition to `two_factor_enabled = true` revokes every existing
+password-only session in the same transaction. Better Auth then creates only
+the session that completed TOTP verification, preventing dormant bootstrap
+sessions from gaining assurance retroactively.
 
 ### `memberships`
 

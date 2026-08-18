@@ -32,7 +32,7 @@ export const runMigrations = async (databaseUrl: string): Promise<void> => {
   }
 };
 
-if (process.argv[1] === new URL(import.meta.url).pathname) {
+const runFromCommandLine = async (): Promise<void> => {
   const databaseUrl =
     process.env.BINFLOW_MIGRATION_DATABASE_URL ??
     (process.env.BINFLOW_MIGRATION_DATABASE_URL_FILE === undefined
@@ -44,4 +44,11 @@ if (process.argv[1] === new URL(import.meta.url).pathname) {
           )
         ).trim());
   await runMigrations(databaseUrl);
+};
+
+if (process.argv[1] === new URL(import.meta.url).pathname) {
+  void runFromCommandLine().catch(() => {
+    process.stderr.write('Database migration failed.\n');
+    process.exitCode = 1;
+  });
 }

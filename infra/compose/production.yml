@@ -79,18 +79,22 @@ services:
       api:
         condition: service_healthy
       dashboard:
-        condition: service_started
+        condition: service_healthy
 
   api:
     image: ${BINFLOW_IMAGE_REGISTRY:?Set BINFLOW_IMAGE_REGISTRY}/binflow:${BINFLOW_VERSION:?Set BINFLOW_VERSION}
     command: ['node', 'apps/api/dist/server.js']
     restart: unless-stopped
     environment:
+      BINFLOW_AUTH_SECRET_FILE: /run/secrets/auth_secret
+      BINFLOW_PUBLIC_URL: https://${BINFLOW_DOMAIN}
+      BINFLOW_SECURE_COOKIES: 'true'
       BINFLOW_VERSION: ${BINFLOW_VERSION}
       DATABASE_URL_FILE: /run/secrets/database_url
       REDIS_URL_FILE: /run/secrets/redis_url
       PORT: '8080'
     secrets:
+      - auth_secret
       - database_url
       - redis_url
     depends_on:
@@ -137,9 +141,27 @@ services:
     command: ['node', 'apps/dashboard/.output/server/index.mjs']
     restart: unless-stopped
     environment:
+      BINFLOW_AUTH_SECRET_FILE: /run/secrets/auth_secret
+      BINFLOW_INTERNAL_API_URL: http://api:8080
+      BINFLOW_PUBLIC_URL: https://${BINFLOW_DOMAIN}
+      BINFLOW_SECURE_COOKIES: 'true'
+      DATABASE_URL_FILE: /run/secrets/database_url
       NITRO_HOST: 0.0.0.0
       NITRO_PORT: '3000'
-      NUXT_PUBLIC_API_BASE_URL: https://${BINFLOW_DOMAIN}
+    secrets:
+      - auth_secret
+      - database_url
+    healthcheck:
+      test:
+        [
+          'CMD',
+          'node',
+          '-e',
+          "fetch('http://127.0.0.1:3000/login').then(r=>{if(!r.ok)process.exit(1)}).catch(()=>process.exit(1))",
+        ]
+      interval: 10s
+      timeout: 3s
+      retries: 10
     security_opt:
       - no-new-privileges:true
 
@@ -173,6 +195,8 @@ services:
       - no-new-privileges:true
 
 secrets:
+  auth_secret:
+    file: ${BINFLOW_AUTH_SECRET_PATH:?Set BINFLOW_AUTH_SECRET_PATH}
   binflow_kek:
     file: ${BINFLOW_KEK_PATH:?Set BINFLOW_KEK_PATH}
   database_url:

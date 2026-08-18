@@ -19,3 +19,4 @@ This page summarizes active decisions. The linked ADR is authoritative.
 | The pilot GitHub App has an administrative registration ceiling but repository- and operation-downscoped runtime tokens | Accepted | [ADR-0013](adr/0013-github-app-administrative-registration.md)               |
 | Provider credentials have explicit owner scope and candidates activate only after read-only verification                | Accepted | [ADR-0014](adr/0014-integration-credential-scope-and-verification.md)        |
 | Nuxt owns auth ingress while Fastify business operations use explicit audited database scopes                           | Accepted | [ADR-0015](adr/0015-administrative-ingress-and-scoped-database-execution.md) |
+| The sole platform owner is bootstrapped locally and business access requires a fresh, server-validated TOTP session     | Accepted | [ADR-0016](adr/0016-platform-owner-bootstrap-and-session-assurance.md)       |

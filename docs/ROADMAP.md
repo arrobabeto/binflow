@@ -20,7 +20,8 @@ Exit: every external dependency needed by the MVP has a verified path or an expl
 
 Deliverables:
 
-- Better Auth password/TOTP flow and platform-owner bootstrap.
+- Better Auth password/TOTP/backup-code flow, single platform-owner bootstrap,
+  database-backed rate limits and revocable session gates.
 - Tenant/project isolation, RLS, artifact store, audit and outbox.
 - Dashboard credential management backed by the Phase 0 SecretsProvider and integration application services.
 - English dashboard and resumable `astro_repo` onboarding wizard.

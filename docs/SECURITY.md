@@ -59,6 +59,18 @@ Never passed to the model:
 - Backup codes are shown once and stored protected.
 - Cookies are secure, HTTP-only, same-site and short-lived with server-side revocation.
 - Sensitive actions require a fresh/re-authenticated session.
+- Runtime HTTP sign-up and password-reset email are disabled. A single owner is
+  created by the interactive, advisory-lock-serialized local bootstrap command.
+- Password bounds are 12–128 characters. Sessions expire after 12 hours, refresh
+  at most hourly, use no cookie cache and are fresh for five minutes.
+- TOTP is the only online factor and trusted-device bypass is rejected. Backup
+  codes are single-use and disclosed only during enrollment/regeneration.
+- Completing initial TOTP enrollment revokes all earlier password-only sessions
+  before the verified session is issued.
+- Auth rate-limit counters are PostgreSQL-backed and the application trusts
+  forwarded client IP metadata only at the configured Caddy boundary.
+- The Better Auth secret is independent from the provider-credential KEK and is
+  supplied only through a direct secret value or `_FILE` indirection.
 
 ### Telegram
 

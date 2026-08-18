@@ -7,11 +7,19 @@
     "build": "nuxt build",
     "check": "nuxt prepare",
     "dev": "nuxt dev --host 0.0.0.0",
-    "lint": "eslint nuxt.config.ts --max-warnings=0",
+    "lint": "nuxt prepare && eslint app server --max-warnings=0",
     "start": "node .output/server/index.mjs",
     "test": "vitest run"
   },
   "dependencies": {
-    "nuxt": "4.5.2"
+    "@binflow/auth": "workspace:*",
+    "@binflow/domain": "workspace:*",
+    "@nuxt/ui": "4.10.0",
+    "better-auth": "1.7.0",
+    "nuxt": "4.5.2",
+    "qrcode": "1.5.4"
+  },
+  "devDependencies": {
+    "@types/qrcode": "1.5.6"
   }
 }

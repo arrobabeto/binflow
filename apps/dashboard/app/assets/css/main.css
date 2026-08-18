@@ -1,0 +1,39 @@
+@import 'tailwindcss';
+@import '@nuxt/ui';
+
+:root {
+  --ui-primary: var(--ui-color-emerald-600);
+  --ui-radius: 0.75rem;
+}
+
+body {
+  min-width: 320px;
+  background: #f4f7f5;
+  color: #17211c;
+}
+
+.auth-shell {
+  min-height: 100dvh;
+  display: grid;
+  place-items: center;
+  padding: 2rem 1rem;
+  background:
+    radial-gradient(
+      circle at 15% 10%,
+      rgb(16 185 129 / 12%),
+      transparent 34rem
+    ),
+    #f4f7f5;
+}
+
+.auth-card {
+  width: min(100%, 30rem);
+}
+
+.eyebrow {
+  color: #047857;
+  font-size: 0.75rem;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}

@@ -12,6 +12,7 @@
     "test": "vitest run"
   },
   "dependencies": {
+    "@binflow/auth": "workspace:*",
     "@binflow/contracts": "workspace:*",
     "@binflow/domain": "workspace:*",
     "fastify": "5.11.3"

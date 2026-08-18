@@ -1,6 +1,7 @@
 import { readFile } from 'node:fs/promises';
 
 import { defaultMasterKeyPath } from '@binflow/secrets';
+import { defaultAuthSecretPath } from '@binflow/auth';
 
 export const databaseUrl = async (): Promise<string> => {
   if (process.env.DATABASE_URL !== undefined) return process.env.DATABASE_URL;
@@ -24,3 +25,9 @@ export const migrationDatabaseUrl = async (): Promise<string> => {
 
 export const masterKeyPath = (): string =>
   process.env.BINFLOW_KEK_FILE ?? defaultMasterKeyPath();
+
+export const authSecretPath = (): string =>
+  process.env.BINFLOW_AUTH_SECRET_FILE ?? defaultAuthSecretPath();
+
+export const publicBaseUrl = (): string =>
+  process.env.BINFLOW_PUBLIC_URL ?? 'http://localhost:3000';

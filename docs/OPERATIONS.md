@@ -16,6 +16,9 @@
 - Real external mutations require explicit test/pilot configuration, never production secrets in committed files.
 - Schema migrations use the database owner connection. API, worker, dashboard
   auth and maintenance use a distinct non-owner runtime role so RLS is effective.
+- Dashboard readiness requests `/login`, which also proves that the auth secret
+  and PostgreSQL-backed session runtime can initialize; Caddy waits for this
+  health check in production.
 
 Start durable dependencies with `docker compose -f infra/compose/local.yml up -d postgres redis minio clamav`, then apply migrations with `pnpm db:migrate`. The same Compose file can build the current API, dashboard, worker and maintenance images; the CLI intentionally runs in the trusted host terminal so interactive secret input never traverses Compose configuration.
 
@@ -124,6 +127,43 @@ stops new writers before reverting application images. Do not remove audit or
 idempotency history during rollback.
 
 Production supplies the KEK as a Docker secret. Database records contain one random DEK and AES-256-GCM encrypted envelope per credential version; the KEK itself is never stored in PostgreSQL.
+
+### Platform-owner authentication bootstrap
+
+Generate a separate Better Auth secret outside the repository before starting
+the dashboard or API. Local development uses a regular `0600` file and exports
+only its path through `BINFLOW_AUTH_SECRET_FILE`; production mounts the same
+secret class as `/run/secrets/auth_secret`. Do not reuse the SecretsProvider KEK.
+
+```text
+pnpm binflow auth-secret init
+```
+
+After auth migrations are applied, create the sole platform owner from an
+interactive terminal:
+
+```text
+pnpm binflow admin bootstrap --email owner@example.com --name "Platform owner"
+```
+
+The password is prompted and confirmed without echo. Bootstrap takes the
+`binflow_admin_bootstrap` PostgreSQL advisory lock and fails closed if any auth
+user already exists. It does not enroll TOTP. Start the dashboard, sign in and
+complete `/security`; store the displayed backup codes before leaving.
+
+Runtime sign-up and password-reset email remain disabled. Ordinary recovery is
+an unused backup code. Break-glass recovery requires local database-owner and
+auth-secret access, a current backup, session revocation and an audit entry; it
+must never delete the owner or create a replacement account. Detailed recovery
+commands are added with the recovery implementation and are not inferred with
+manual SQL.
+
+Migration `0008` adds Better Auth user, session, account, verification,
+two-factor and rate-limit tables, the single-owner invariant and the trigger
+that revokes pre-enrollment sessions on first TOTP activation. It is additive
+but contains security state. Rollback stops dashboard/API auth traffic, restores
+the pre-release database backup and prior images together; never drop live auth
+tables merely to downgrade an application container.
 
 ## Health
 

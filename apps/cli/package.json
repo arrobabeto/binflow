@@ -13,6 +13,7 @@
   },
   "dependencies": {
     "@binflow/ai": "workspace:*",
+    "@binflow/auth": "workspace:*",
     "@binflow/contracts": "workspace:*",
     "@binflow/db": "workspace:*",
     "@binflow/github": "workspace:*",

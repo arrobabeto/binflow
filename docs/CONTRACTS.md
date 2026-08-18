@@ -79,6 +79,52 @@ Operation transitions are `pending → running|failed|cancelled` and
 Updates require the current version, success requires 100 percent progress and
 failure requires a stable error category/code.
 
+## Administrative authentication
+
+Nuxt exposes Better Auth under `/api/auth/**`. This namespace follows the
+pinned Better Auth transport contract; it does not use the `/api/v1` error
+envelope. Public sign-up, password-reset email, OTP and trusted-device bypasses
+are disabled. Supported browser actions are:
+
+```text
+POST /api/auth/sign-in/email
+POST /api/auth/two-factor/verify-totp
+POST /api/auth/two-factor/verify-backup-code
+POST /api/auth/two-factor/enable
+POST /api/auth/two-factor/generate-backup-codes
+GET  /api/auth/get-session
+GET  /api/auth/list-sessions
+POST /api/auth/revoke-session
+POST /api/auth/revoke-sessions
+POST /api/auth/sign-out
+```
+
+The sole account is created through:
+
+```text
+pnpm binflow auth-secret init
+pnpm binflow admin bootstrap --email <email> --name <display-name>
+```
+
+The command requires an interactive terminal, reads and confirms the password
+without echo, rejects a database that already contains any auth user and never
+accepts a password argument. Runtime `/sign-up/email` always rejects.
+
+`auth-secret init` creates the independent high-entropy Better Auth secret in a
+new regular `0600` file outside the repository. It prints only the path and
+refuses to overwrite an existing file.
+
+Fastify resolves the Better Auth cookie server-side for `/api/v1/**` and derives
+an actor with `role: platform_owner`. A missing/expired session is
+`401 authentication_error`; a valid account without enabled TOTP is
+`403 authorization_error` outside the security-enrollment surface; a sensitive
+mutation whose session is older than five minutes is
+`403 authorization_error` with code `fresh_session_required`.
+
+Session policy is database-backed, 12-hour expiry, one-hour refresh and
+five-minute freshness. Cookie session caching is disabled so revocation is
+immediate. Cookies are HTTP-only, same-site lax and secure in production.
+
 ## Core enums
 
 ```ts
@@ -324,6 +370,7 @@ Model-call records include provider, model, parameters, node/prompt versions, re
 
 ```text
 GET    /api/v1/health
+GET    /api/v1/session
 GET    /api/v1/projects
 GET    /api/v1/projects/:projectId
 GET    /api/v1/requests
@@ -349,6 +396,11 @@ POST   /api/v1/admin/enrollments/:id/catalog/sync
 ```
 
 Mutation endpoints require an idempotency key and optimistic concurrency version. Transport-specific schemas will be generated from shared Zod definitions.
+
+`GET /api/v1/session` is the minimal authenticated bridge between Better Auth
+and business APIs. It returns only actor ID, email, `role: platform_owner`,
+`twoFactor: true` and current freshness; it never returns a cookie, session
+token, IP address or user agent.
 
 ## Phase 0 credential CLI
 
