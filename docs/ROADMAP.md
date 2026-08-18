@@ -26,6 +26,8 @@ Deliverables:
 - English dashboard and resumable `astro_repo` onboarding wizard.
 - Provider, bot, GitHub, Vercel, manifest, capability, locale, budget and catalog management.
 - Reversible activation validation and one-time client pairing.
+- Same-origin administrative ingress, explicit database execution scopes,
+  durable idempotency, audit and transactional outbox foundation.
 
 Exit: Webbin can be configured and activated without manual database editing.
 

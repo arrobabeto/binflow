@@ -43,6 +43,20 @@
       "when": 1786436545774,
       "tag": "0005_abandoned_the_order",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1787025738469,
+      "tag": "0006_third_doctor_spectrum",
+      "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "7",
+      "when": 1787026195073,
+      "tag": "0007_control_plane_guards",
+      "breakpoints": true
     }
   ]
 }

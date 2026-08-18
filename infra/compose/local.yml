@@ -16,6 +16,7 @@ services:
       - '5432:5432'
     volumes:
       - postgres_data:/var/lib/postgresql/data
+      - ../postgres/local-init.sql:/docker-entrypoint-initdb.d/001-runtime-role.sql:ro
 
   redis:
     image: redis:8.4.0-alpine
@@ -67,7 +68,7 @@ services:
     command: ['node', 'apps/api/dist/server.js']
     environment:
       BINFLOW_VERSION: local
-      DATABASE_URL: postgresql://binflow:binflow_local@postgres:5432/binflow
+      DATABASE_URL: postgresql://binflow_app:binflow_local_app@postgres:5432/binflow
       LOG_LEVEL: info
       PORT: '8080'
       REDIS_URL: redis://redis:6379
@@ -96,7 +97,7 @@ services:
       dockerfile: infra/docker/Dockerfile
     command: ['node', 'apps/worker/dist/main.js']
     environment:
-      DATABASE_URL: postgresql://binflow:binflow_local@postgres:5432/binflow
+      DATABASE_URL: postgresql://binflow_app:binflow_local_app@postgres:5432/binflow
       LOG_LEVEL: info
       REDIS_URL: redis://redis:6379
     depends_on:
@@ -127,7 +128,7 @@ services:
       dockerfile: infra/docker/Dockerfile
     command: ['node', 'apps/maintenance/dist/main.js']
     environment:
-      DATABASE_URL: postgresql://binflow:binflow_local@postgres:5432/binflow
+      DATABASE_URL: postgresql://binflow_app:binflow_local_app@postgres:5432/binflow
       LOG_LEVEL: info
       REDIS_URL: redis://redis:6379
     depends_on:

@@ -57,11 +57,23 @@
 - Duplicate webhook/action/queue delivery.
 - Revoked credential, expired approval and budget exhaustion.
 - Attachment deletion after terminal state.
+- Runtime-role RLS with tenant, audited platform-owner and rejected unscoped
+  execution paths.
+- Atomic business mutation, audit and outbox commit/rollback.
+- Concurrent idempotency-key replay and processed-event deduplication.
 
 Database lifecycle tests use an isolated PostgreSQL database through
 `BINFLOW_TEST_DATABASE_URL`. CI provides `binflow_test`; local runs must point
 this variable at a disposable database and never at the normal `binflow` or a
 production database.
+
+RLS suites must connect as a non-owner, non-superuser role. Tests executed only
+as the migration/table owner do not count as tenant-isolation evidence.
+Parallel test processes may call the migration runner; the PostgreSQL advisory
+lock must serialize them without duplicate enum/table creation.
+Database test files sharing one disposable database run serially because their
+fixture cleanup uses transactional table truncation; concurrency behavior is
+tested explicitly inside dedicated cases instead of racing suite cleanup.
 
 ### End-to-end
 
@@ -142,6 +154,8 @@ The final Webbin E2E publishes one real owner-approved article. Test content is 
 - Late verification results cannot move `tested_at` backward or overwrite newer status/evidence, and activation policy failures remain redacted per-item results under `verify --all`.
 - Blog tokens cannot access Administration or Workflows; separately authorized onboarding tokens cannot exceed their declared operation.
 - RLS bypass attempts and platform-owner audit.
+- Missing/stale `If-Match`, idempotency-key body mismatch, cross-actor replay and
+  unscoped repository access.
 
 ## Documentation verification
 

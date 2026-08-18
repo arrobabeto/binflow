@@ -9,6 +9,76 @@ This document defines stable domain-facing contracts. Exact transport representa
 - A request version freezes all effective version identifiers.
 - Breaking schema changes require a new version and migration plan; active runs continue on frozen versions.
 
+## Administrative HTTP conventions
+
+All `/api/v1` payloads are validated by strict shared Zod schemas. Unknown
+fields are rejected. Timestamps are UTC ISO instants and identifiers are UUIDv7
+unless an external provider identifier is explicitly named.
+
+Collection responses use opaque cursor pagination:
+
+```ts
+type CursorPage<T> = {
+  items: T[];
+  nextCursor: string | null;
+};
+```
+
+The default page size is 25 and the maximum is 100. Cursors are server-created,
+scope-bound and cannot be used to select another tenant/project.
+
+Errors use one stable envelope:
+
+```ts
+type ApiErrorResponse = {
+  error: {
+    category:
+      | 'validation_error'
+      | 'authentication_error'
+      | 'authorization_error'
+      | 'policy_denied'
+      | 'conflict_error'
+      | 'budget_exceeded'
+      | 'credential_unavailable'
+      | 'provider_retryable'
+      | 'provider_final'
+      | 'internal_error';
+    code: string;
+    message: string;
+    correlationId: string;
+    fieldErrors?: Record<string, string[]>;
+  };
+};
+```
+
+Provider bodies and native error messages never appear in this envelope.
+
+Every `/api/v1` mutation requires `Idempotency-Key` with 16–200 printable
+ASCII characters. The server binds it to actor, method, route and canonical
+body hash. The same key/request returns the stored response; the same key with
+a different request returns `409 conflict_error`.
+
+Mutable resources return `ETag: "<version>"`. A mutation requires the exact
+strong ETag in `If-Match`; missing input is a validation error and stale input
+is `409 conflict_error`.
+
+Long-running administrative actions return `202`:
+
+```ts
+type AdminOperationReference = {
+  operationId: string;
+  status: 'pending' | 'running' | 'succeeded' | 'failed' | 'cancelled';
+  statusUrl: string;
+};
+```
+
+`GET /api/v1/operations/:operationId` returns current progress, timestamps and
+allowlisted result/error metadata. It never returns queued payloads or secrets.
+Operation transitions are `pending → running|failed|cancelled` and
+`running → succeeded|failed|cancelled`; terminal states cannot transition.
+Updates require the current version, success requires 100 percent progress and
+failure requires a stable error category/code.
+
 ## Core enums
 
 ```ts
@@ -264,6 +334,7 @@ POST   /api/v1/requests/:requestId/revise
 POST   /api/v1/requests/:requestId/cancel
 GET    /api/v1/audit
 GET    /api/v1/usage
+GET    /api/v1/operations/:operationId
 
 POST   /api/v1/admin/enrollments
 PATCH  /api/v1/admin/enrollments/:id

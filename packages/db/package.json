@@ -13,7 +13,7 @@
     "build": "tsc -p tsconfig.json",
     "check": "tsc -p tsconfig.json --noEmit",
     "generate": "drizzle-kit generate",
-    "lint": "eslint src drizzle.config.ts --max-warnings=0",
+    "lint": "eslint src drizzle.config.ts vitest.config.ts --max-warnings=0",
     "migrate": "tsx src/migrate.ts",
     "test": "vitest run"
   },

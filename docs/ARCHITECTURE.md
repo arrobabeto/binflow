@@ -81,6 +81,15 @@ Provider payloads must not cross into domain interfaces. Adapters normalize them
 - Provides versioned administrative REST endpoints.
 - Responds quickly and delegates long-running work.
 
+### Administrative ingress
+
+- Nuxt owns `/api/auth/**` and the Better Auth cookie/session lifecycle.
+- Fastify owns `/api/v1/**`; dashboard pages call it through same-origin ingress.
+- Caddy and the local Nuxt proxy route auth before business API paths so the two
+  handlers never overlap.
+- Fastify maps the authenticated session to a domain actor and performs business
+  authorization independently of the UI.
+
 ### Worker
 
 - Owns LangGraph coordinator and capability subgraphs.
@@ -140,6 +149,20 @@ Original attachments, generated images, rendered artifacts and large provider pa
 - Cross-tenant platform-owner operations use a separately audited administrative path.
 - Secrets, Redis keys, artifact prefixes, bot instances and rate limits are tenant-scoped.
 - Model context contains only the effective project and request data.
+- Runtime repositories execute only inside an explicit transaction-scoped
+  `tenant`, `platform_owner` or named system context. There is no ambient
+  unscoped repository path.
+- Application services use a non-owner PostgreSQL role without `BYPASSRLS`;
+  migrations use a separate schema-owner credential.
+
+## Command consistency
+
+- Every business mutation binds an idempotency key to actor, method, route and
+  canonical request hash.
+- Mutable resources expose a version ETag and require `If-Match` for changes.
+- Business state, its audit event and outbox event commit atomically.
+- Long-running administrative work is represented by a durable operation and
+  queued only after the transaction commits.
 
 ## Local and production modes
 

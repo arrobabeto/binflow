@@ -37,6 +37,23 @@ export const credentialOwnerScope = pgEnum('credential_owner_scope', [
   'tenant',
   'project',
 ]);
+export const idempotencyStatus = pgEnum('idempotency_status', [
+  'processing',
+  'completed',
+  'failed',
+]);
+export const adminOperationStatus = pgEnum('admin_operation_status', [
+  'pending',
+  'running',
+  'succeeded',
+  'failed',
+  'cancelled',
+]);
+export const outboxStatus = pgEnum('outbox_status', [
+  'pending',
+  'published',
+  'failed',
+]);
 
 export const tenants = pgTable(
   'tenants',
@@ -264,6 +281,213 @@ export const credentialEvents = pgTable(
   (table) => [
     index('credential_events_credential_idx').on(table.credentialId),
     pgPolicy('credential_events_tenant_isolation', {
+      for: 'all',
+      using: sql`${table.tenantId} = nullif(current_setting('app.tenant_id', true), '') OR current_setting('app.platform_owner', true) = 'true'`,
+      withCheck: sql`${table.tenantId} = nullif(current_setting('app.tenant_id', true), '') OR current_setting('app.platform_owner', true) = 'true'`,
+    }),
+  ],
+).enableRLS();
+
+export const auditEvents = pgTable(
+  'audit_events',
+  {
+    id: text('id').primaryKey(),
+    tenantId: text('tenant_id').references(() => tenants.id),
+    projectId: text('project_id'),
+    actorType: text('actor_type').notNull(),
+    actorId: text('actor_id').notNull(),
+    action: text('action').notNull(),
+    objectType: text('object_type').notNull(),
+    objectId: text('object_id').notNull(),
+    reason: text('reason'),
+    metadata: jsonb('metadata').notNull().default({}),
+    correlationId: text('correlation_id').notNull(),
+    createdAt: timestamp('created_at', { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (table) => [
+    index('audit_events_tenant_created_idx').on(
+      table.tenantId,
+      table.createdAt,
+    ),
+    index('audit_events_correlation_idx').on(table.correlationId),
+    foreignKey({
+      columns: [table.projectId, table.tenantId],
+      foreignColumns: [projects.id, projects.tenantId],
+      name: 'audit_events_project_tenant_fk',
+    }),
+    pgPolicy('audit_events_tenant_isolation', {
+      for: 'all',
+      using: sql`${table.tenantId} = nullif(current_setting('app.tenant_id', true), '') OR current_setting('app.platform_owner', true) = 'true'`,
+      withCheck: sql`${table.tenantId} = nullif(current_setting('app.tenant_id', true), '') OR current_setting('app.platform_owner', true) = 'true'`,
+    }),
+  ],
+).enableRLS();
+
+export const adminOperations = pgTable(
+  'admin_operations',
+  {
+    id: text('id').primaryKey(),
+    tenantId: text('tenant_id').references(() => tenants.id),
+    projectId: text('project_id'),
+    actorId: text('actor_id').notNull(),
+    type: text('type').notNull(),
+    status: adminOperationStatus('status').notNull().default('pending'),
+    progress: integer('progress').notNull().default(0),
+    inputHash: text('input_hash').notNull(),
+    result: jsonb('result'),
+    errorCategory: text('error_category'),
+    errorCode: text('error_code'),
+    version: integer('version').notNull().default(1),
+    createdAt: timestamp('created_at', { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+    startedAt: timestamp('started_at', { withTimezone: true }),
+    completedAt: timestamp('completed_at', { withTimezone: true }),
+    updatedAt: timestamp('updated_at', { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (table) => [
+    check(
+      'admin_operations_progress_check',
+      sql`${table.progress} >= 0 AND ${table.progress} <= 100`,
+    ),
+    index('admin_operations_tenant_created_idx').on(
+      table.tenantId,
+      table.createdAt,
+    ),
+    foreignKey({
+      columns: [table.projectId, table.tenantId],
+      foreignColumns: [projects.id, projects.tenantId],
+      name: 'admin_operations_project_tenant_fk',
+    }),
+    pgPolicy('admin_operations_tenant_isolation', {
+      for: 'all',
+      using: sql`${table.tenantId} = nullif(current_setting('app.tenant_id', true), '') OR current_setting('app.platform_owner', true) = 'true'`,
+      withCheck: sql`${table.tenantId} = nullif(current_setting('app.tenant_id', true), '') OR current_setting('app.platform_owner', true) = 'true'`,
+    }),
+  ],
+).enableRLS();
+
+export const idempotencyRecords = pgTable(
+  'idempotency_records',
+  {
+    id: text('id').primaryKey(),
+    tenantId: text('tenant_id').references(() => tenants.id),
+    projectId: text('project_id'),
+    actorId: text('actor_id').notNull(),
+    method: text('method').notNull(),
+    route: text('route').notNull(),
+    idempotencyKey: text('idempotency_key').notNull(),
+    requestHash: text('request_hash').notNull(),
+    status: idempotencyStatus('status').notNull().default('processing'),
+    responseStatus: integer('response_status'),
+    responseBody: jsonb('response_body'),
+    operationId: text('operation_id').references(() => adminOperations.id),
+    expiresAt: timestamp('expires_at', { withTimezone: true }).notNull(),
+    createdAt: timestamp('created_at', { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+    updatedAt: timestamp('updated_at', { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (table) => [
+    uniqueIndex('idempotency_records_actor_route_key_unique').on(
+      table.actorId,
+      table.method,
+      table.route,
+      table.idempotencyKey,
+    ),
+    index('idempotency_records_expiry_idx').on(table.expiresAt),
+    foreignKey({
+      columns: [table.projectId, table.tenantId],
+      foreignColumns: [projects.id, projects.tenantId],
+      name: 'idempotency_records_project_tenant_fk',
+    }),
+    pgPolicy('idempotency_records_tenant_isolation', {
+      for: 'all',
+      using: sql`${table.tenantId} = nullif(current_setting('app.tenant_id', true), '') OR current_setting('app.platform_owner', true) = 'true'`,
+      withCheck: sql`${table.tenantId} = nullif(current_setting('app.tenant_id', true), '') OR current_setting('app.platform_owner', true) = 'true'`,
+    }),
+  ],
+).enableRLS();
+
+export const outboxEvents = pgTable(
+  'outbox_events',
+  {
+    id: text('id').primaryKey(),
+    tenantId: text('tenant_id').references(() => tenants.id),
+    projectId: text('project_id'),
+    eventType: text('event_type').notNull(),
+    eventVersion: integer('event_version').notNull(),
+    aggregateType: text('aggregate_type').notNull(),
+    aggregateId: text('aggregate_id').notNull(),
+    payload: jsonb('payload').notNull().default({}),
+    jobKey: text('job_key').notNull(),
+    status: outboxStatus('status').notNull().default('pending'),
+    attempts: integer('attempts').notNull().default(0),
+    availableAt: timestamp('available_at', { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+    publishedAt: timestamp('published_at', { withTimezone: true }),
+    lastErrorCategory: text('last_error_category'),
+    createdAt: timestamp('created_at', { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+    updatedAt: timestamp('updated_at', { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (table) => [
+    uniqueIndex('outbox_events_job_key_unique').on(table.jobKey),
+    index('outbox_events_delivery_idx').on(
+      table.status,
+      table.availableAt,
+      table.createdAt,
+    ),
+    foreignKey({
+      columns: [table.projectId, table.tenantId],
+      foreignColumns: [projects.id, projects.tenantId],
+      name: 'outbox_events_project_tenant_fk',
+    }),
+    pgPolicy('outbox_events_tenant_isolation', {
+      for: 'all',
+      using: sql`${table.tenantId} = nullif(current_setting('app.tenant_id', true), '') OR current_setting('app.platform_owner', true) = 'true'`,
+      withCheck: sql`${table.tenantId} = nullif(current_setting('app.tenant_id', true), '') OR current_setting('app.platform_owner', true) = 'true'`,
+    }),
+  ],
+).enableRLS();
+
+export const processedEvents = pgTable(
+  'processed_events',
+  {
+    id: text('id').primaryKey(),
+    tenantId: text('tenant_id').references(() => tenants.id),
+    projectId: text('project_id'),
+    consumer: text('consumer').notNull(),
+    eventKey: text('event_key').notNull(),
+    result: jsonb('result').notNull().default({}),
+    firstSeenAt: timestamp('first_seen_at', { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+    lastSeenAt: timestamp('last_seen_at', { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (table) => [
+    uniqueIndex('processed_events_consumer_key_unique').on(
+      table.consumer,
+      table.eventKey,
+    ),
+    foreignKey({
+      columns: [table.projectId, table.tenantId],
+      foreignColumns: [projects.id, projects.tenantId],
+      name: 'processed_events_project_tenant_fk',
+    }),
+    pgPolicy('processed_events_tenant_isolation', {
       for: 'all',
       using: sql`${table.tenantId} = nullif(current_setting('app.tenant_id', true), '') OR current_setting('app.platform_owner', true) = 'true'`,
       withCheck: sql`${table.tenantId} = nullif(current_setting('app.tenant_id', true), '') OR current_setting('app.platform_owner', true) = 'true'`,

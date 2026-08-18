@@ -2,6 +2,8 @@ import Fastify, { type FastifyInstance } from 'fastify';
 
 import { healthResponseSchema, type HealthResponse } from '@binflow/contracts';
 
+import { normalizeApiError } from './errors.js';
+
 export const buildApp = (): FastifyInstance => {
   const app = Fastify({
     logger: {
@@ -11,6 +13,25 @@ export const buildApp = (): FastifyInstance => {
         censor: '[REDACTED]',
       },
     },
+  });
+
+  app.addHook('onRequest', (request, reply, done) => {
+    void reply.header('x-correlation-id', request.id);
+    done();
+  });
+
+  app.setErrorHandler((error, request, reply) => {
+    const normalized = normalizeApiError(error, request.id);
+    if (normalized.statusCode >= 500) {
+      request.log.error(
+        {
+          correlationId: request.id,
+          errorCategory: normalized.body.error.category,
+        },
+        'Request failed',
+      );
+    }
+    return reply.code(normalized.statusCode).send(normalized.body);
   });
 
   app.get('/api/v1/health', (): HealthResponse =>
