@@ -16,9 +16,12 @@
     "test": "vitest run test"
   },
   "dependencies": {
+    "@binflow/artifacts": "workspace:*",
+    "@binflow/blog": "workspace:*",
     "@binflow/contracts": "workspace:*",
     "@binflow/db": "workspace:*",
     "@binflow/domain": "workspace:*",
+    "@binflow/policies": "workspace:*",
     "drizzle-orm": "0.45.2",
     "uuid": "13.0.0"
   },

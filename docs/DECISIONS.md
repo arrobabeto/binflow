@@ -25,3 +25,5 @@ This page summarizes active decisions. The linked ADR is authoritative.
 | Project manifests bind immutable locale, provider, path and budget snapshots derived from a code-owned profile          | Accepted | [ADR-0019](adr/0019-versioned-project-manifest-and-budget-policy.md)         |
 | Capability definitions are code-owned and projects bind only immutable approved versions                                | Accepted | [ADR-0020](adr/0020-code-owned-capability-catalog-and-project-binding.md)    |
 | Telegram ingress resolves durable identities and uses a PostgreSQL-authoritative request kernel                         | Accepted | [ADR-0021](adr/0021-telegram-ingress-and-durable-request-kernel.md)          |
+| Blog execution renders exact artifacts and separates preview approval from publication                                  | Accepted | [ADR-0022](adr/0022-complete-blog-execution-and-publication.md)              |
+| Admin Telegram pairing and durable notifications are explicit production-readiness boundaries                           | Accepted | [ADR-0023](adr/0023-admin-notifications-and-production-readiness.md)         |

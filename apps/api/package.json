@@ -14,12 +14,15 @@
   "dependencies": {
     "@binflow/auth": "workspace:*",
     "@binflow/contracts": "workspace:*",
+    "@binflow/db": "workspace:*",
     "@binflow/domain": "workspace:*",
     "@binflow/integration-admin": "workspace:*",
     "@binflow/onboarding": "workspace:*",
     "@binflow/secrets": "workspace:*",
     "@binflow/workflows": "workspace:*",
     "fastify": "5.11.3",
+    "drizzle-orm": "0.45.2",
+    "ioredis": "6.0.0",
     "zod": "4.4.3"
   },
   "devDependencies": {

@@ -93,6 +93,7 @@ services:
       BINFLOW_VERSION: ${BINFLOW_VERSION}
       DATABASE_URL_FILE: /run/secrets/database_url
       REDIS_URL_FILE: /run/secrets/redis_url
+      S3_ENDPOINT: http://minio:9000
       PORT: '8080'
     secrets:
       - auth_secret
@@ -104,13 +105,15 @@ services:
         condition: service_healthy
       redis:
         condition: service_healthy
+      minio:
+        condition: service_healthy
     healthcheck:
       test:
         [
           'CMD',
           'node',
           '-e',
-          "fetch('http://127.0.0.1:8080/api/v1/health').then(r=>{if(!r.ok)process.exit(1)}).catch(()=>process.exit(1))",
+          "fetch('http://127.0.0.1:8080/api/v1/readiness').then(r=>{if(!r.ok)process.exit(1)}).catch(()=>process.exit(1))",
         ]
       interval: 10s
       timeout: 3s
@@ -123,17 +126,26 @@ services:
     command: ['node', 'apps/worker/dist/main.js']
     restart: unless-stopped
     environment:
+      BINFLOW_ARTIFACT_BUCKET: binflow-artifacts
       BINFLOW_KEK_FILE: /run/secrets/binflow_kek
+      BINFLOW_LIVE_EXECUTION_ENABLED: ${BINFLOW_LIVE_EXECUTION_ENABLED:-false}
       DATABASE_URL_FILE: /run/secrets/database_url
       REDIS_URL_FILE: /run/secrets/redis_url
+      S3_ACCESS_KEY_ID_FILE: /run/secrets/minio_root_user
+      S3_ENDPOINT: http://minio:9000
+      S3_SECRET_ACCESS_KEY_FILE: /run/secrets/minio_root_password
     secrets:
       - binflow_kek
       - database_url
       - redis_url
+      - minio_root_password
+      - minio_root_user
     depends_on:
       postgres:
         condition: service_healthy
       redis:
+        condition: service_healthy
+      minio:
         condition: service_healthy
     security_opt:
       - no-new-privileges:true

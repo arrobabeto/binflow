@@ -5,7 +5,10 @@ import { describe, expect, it, vi } from 'vitest';
 import type { CredentialForVerification } from '@binflow/db';
 import { encryptSecret } from '@binflow/secrets';
 
-import { createVercelCredentialVerifier } from '../src/index.js';
+import {
+  createVercelCredentialVerifier,
+  createVercelDeploymentPort,
+} from '../src/index.js';
 
 const createInput = (
   connectionConfiguration: Readonly<Record<string, unknown>> = {
@@ -208,5 +211,75 @@ describe('Vercel credential verifier', () => {
       ),
     ).rejects.toMatchObject({ category: 'policy_denied' });
     expect(fetch).not.toHaveBeenCalled();
+  });
+});
+
+describe('Vercel deployment correlation', () => {
+  it('does not send target=preview and rejects production deployments as previews', async () => {
+    const base = createInput();
+    const calls: URL[] = [];
+    const fetch = vi.fn<typeof globalThis.fetch>(async (input) => {
+      const url = new URL(String(input));
+      calls.push(url);
+      const target = url.searchParams.get('target');
+      return new Response(
+        JSON.stringify({
+          deployments:
+            target === 'production'
+              ? [
+                  {
+                    createdAt: 1_787_000_000_000,
+                    meta: { githubCommitSha: 'merge-sha' },
+                    name: 'webbin',
+                    readyState: 'READY',
+                    target: 'production',
+                    uid: 'production-1',
+                    url: 'webbin.example',
+                  },
+                ]
+              : [
+                  {
+                    createdAt: 1_787_000_000_000,
+                    meta: { githubCommitSha: 'preview-sha' },
+                    name: 'webbin',
+                    readyState: 'READY',
+                    target: null,
+                    uid: 'preview-1',
+                    url: 'preview.example',
+                  },
+                ],
+        }),
+      );
+    });
+    const port = createVercelDeploymentPort({
+      credential: { ...base.credential, status: 'active' },
+      fetch,
+      masterKey: base.masterKey,
+      pollIntervalMs: 1,
+      timeoutMs: 100,
+    });
+
+    await expect(
+      port.waitForPreview({
+        headCommitSha: 'preview-sha',
+        routes: ['/es/articulos/example'],
+      }),
+    ).resolves.toMatchObject({
+      deploymentId: 'preview-1',
+      environment: 'preview',
+      sha: 'preview-sha',
+    });
+    await expect(
+      port.waitForProduction({
+        mergeCommitSha: 'merge-sha',
+        routes: ['/es/articulos/example'],
+      }),
+    ).resolves.toMatchObject({
+      deploymentId: 'production-1',
+      environment: 'production',
+      sha: 'merge-sha',
+    });
+    expect(calls[0]?.searchParams.has('target')).toBe(false);
+    expect(calls[1]?.searchParams.get('target')).toBe('production');
   });
 });

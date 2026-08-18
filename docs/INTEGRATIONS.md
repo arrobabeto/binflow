@@ -35,6 +35,20 @@ Requirements:
 - Usage, provider request ID, tokens, image dimensions, cost and latency recorded.
 - Stable safety identifier when supported.
 
+The production adapter uses the Responses API with strict structured output
+for article generation and translation, `/v1/embeddings` for catalog vectors,
+and `/v1/images/generations` for the cover source. The image response is
+converted deterministically to AVIF before artifact validation because the
+Image API does not return AVIF directly.
+
+The first pricing snapshot uses the published 2026-07-30 standard rates:
+`gpt-5.6-terra` at USD 2.50/M input and USD 15/M output tokens, and
+`gpt-image-2` at USD 5/M text input and USD 30/M image output tokens, plus
+`text-embedding-3-small` at USD 0.02/M input tokens. Every
+model call stores reported tokens and a rounded-up estimated cent value. A rate
+change requires a documented pricing snapshot update; it is never fetched from
+untrusted model output.
+
 The Phase 0 credential check authenticates against the model catalog and confirms visibility of `gpt-5.6-luna`, `gpt-5.6-terra`, `text-embedding-3-small` and `gpt-image-2`. It makes no billable generation request. Structured-output, research, embedding and image capability probes are separate Phase 0 spikes and activation remains blocked until those pass.
 
 ## Telegram
@@ -89,6 +103,10 @@ Subscribed GitHub App event validation is deferred to production webhook activat
 - Read head SHA, checks, conflict state and mergeability.
 - Merge only after approval service issues an internal publish command.
 
+The blog executor obtains an operation-enum token; callers cannot provide an
+arbitrary permission map. A retry first searches for the exact request branch
+and PR and verifies recorded SHAs before deciding whether a mutation remains.
+
 Branch pattern for Webbin:
 
 ```text
@@ -125,6 +143,11 @@ The adapter stores:
 - Relevant build error summary.
 
 Approval is unavailable unless deployment is ready and bound to the PR head SHA.
+
+Preview and production reconciliation filter by the configured project/team,
+Git commit SHA and target. A route check records the HTTP result without
+persisting response bodies. Protected routes require the separately configured
+preview-safe access mechanism during live acceptance.
 
 Preview and production environment variables are separate. Webbin preview must not send Web3Forms submissions to the real destination. Production publication occurs by merging Git and verifying the resulting production deployment, not by promoting an unrelated URL.
 

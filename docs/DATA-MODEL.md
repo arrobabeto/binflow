@@ -188,6 +188,10 @@ Stable user intention, capability, current state/version, tenant/project/user an
 
 Immutable interpreted input, confirmed plan, frozen versions, base source revision, effective policy and superseded relationship.
 
+The interpreted input, plan and frozen configuration are immutable. Lifecycle
+timestamps such as `confirmed_at` and a one-way supersession link are the only
+post-create fields and cannot change the frozen generation input.
+
 `request_actions` contains only hashed opaque tokens with actor, request
 version, action, expiry and consumption binding.
 
@@ -250,9 +254,19 @@ Provider identity, commit association, environment, immutable/branch URLs, state
 
 Request/version/artifact binding, required role, approver, decision, expiry and idempotency/action metadata.
 
+### `admin_pairing_tokens` and `admin_notification_targets`
+
+Platform-scoped hash-only one-time pairing challenges and the single active
+verified admin Telegram destination. Neither table stores a bot token.
+
 ### `publication_attempts`
 
 Precondition snapshot, external action identifiers, result and production verification.
+
+Module 8 materializes the documented content/repository/deployment entities.
+All tenant tables carry tenant/project ownership and RLS. Generated artifact
+bodies remain in object storage; database JSON contains only schema-constrained
+metadata, provider identifiers, hashes and redacted evidence.
 
 ## AI, usage and audit
 

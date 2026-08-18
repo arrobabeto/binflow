@@ -8,6 +8,25 @@ const { data, refresh } = await useFetch<RequestDetail>(
 );
 const errorMessage = ref('');
 
+const decideRequest = async (decision: 'approve' | 'reject') => {
+  if (data.value === undefined) return;
+  errorMessage.value = '';
+  try {
+    await $fetch(`/api/v1/requests/${requestId.value}/${decision}`, {
+      method: 'POST',
+      body: {},
+      headers: {
+        'Idempotency-Key': crypto.randomUUID(),
+        'If-Match': `"${data.value.revision}"`,
+      },
+    });
+    await refresh();
+  } catch (error) {
+    errorMessage.value =
+      error instanceof Error ? error.message : 'Approval decision failed.';
+  }
+};
+
 const cancelRequest = async () => {
   if (data.value === undefined) return;
   errorMessage.value = '';
@@ -71,6 +90,57 @@ const cancelRequest = async () => {
             class="mt-3 overflow-auto whitespace-pre-wrap text-sm text-muted"
             >{{ JSON.stringify(data?.plan ?? {}, null, 2) }}</pre>
         </UCard>
+        <UCard v-if="data?.execution" class="md:col-span-2">
+          <p class="font-semibold">Exact preview evidence</p>
+          <dl class="mt-4 grid gap-3 text-sm md:grid-cols-2">
+            <div>
+              <dt class="text-muted">Approval</dt>
+              <dd class="font-medium">{{ data.execution.approvalStatus }}</dd>
+            </div>
+            <div>
+              <dt class="text-muted">Category decision</dt>
+              <dd class="font-medium">{{ data.execution.categoryKind }}</dd>
+            </div>
+            <div>
+              <dt class="text-muted">Head commit</dt>
+              <dd class="break-all font-mono">
+                {{ data.execution.headCommitSha }}
+              </dd>
+            </div>
+            <div>
+              <dt class="text-muted">Branch</dt>
+              <dd class="break-all font-mono">{{ data.execution.branch }}</dd>
+            </div>
+          </dl>
+          <div class="mt-4 flex flex-wrap gap-2">
+            <UButton
+              v-for="(url, path) in data.execution.previewUrls"
+              :key="path"
+              :to="url"
+              target="_blank"
+              color="neutral"
+              variant="soft"
+              >Open {{ path }}</UButton
+            >
+            <UButton
+              v-if="data.execution.pullRequestUrl"
+              :to="data.execution.pullRequestUrl"
+              target="_blank"
+              color="neutral"
+              variant="soft"
+              >Open pull request</UButton
+            >
+          </div>
+        </UCard>
+      </div>
+      <div
+        v-if="data?.state === 'AWAITING_ADMIN_APPROVAL'"
+        class="mt-6 flex gap-3"
+      >
+        <UButton @click="decideRequest('approve')">Approve category</UButton>
+        <UButton color="error" variant="soft" @click="decideRequest('reject')"
+          >Request revision</UButton
+        >
       </div>
       <UButton
         v-if="

@@ -30,6 +30,14 @@ Never passed to the model:
 
 ## Threats and controls
 
+The blog executor treats model output as untrusted data. Strict schemas,
+renderer rules, editable-path checks and exact file-count checks run before
+GitHub. Models never receive GitHub, Vercel, Telegram, S3 or database
+credentials, generated Markdown is never executed by the worker, and approval
+plus the live-execution switch are enforced outside the model. Logs and audit
+store artifact digests and redacted metadata, never bodies, image bytes or
+provider secrets.
+
 | Threat                           | Required controls                                                                                                   |
 | -------------------------------- | ------------------------------------------------------------------------------------------------------------------- |
 | Unauthorized Telegram user       | One-time pairing, identity allowlist, tenant-scoped bot, RBAC                                                       |
@@ -73,6 +81,10 @@ Never passed to the model:
   supplied only through a direct secret value or `_FILE` indirection.
 
 ### Telegram
+
+An admin Telegram chat is an authorization target only after a fresh-2FA owner
+creates a one-time pairing link and the exact verified admin bot consumes it.
+Unpaired `/start` messages, usernames and chat titles provide no authority.
 
 - Updates are authorized by verified bot identity plus numeric channel
   identity, never username or message text.
@@ -136,13 +148,16 @@ admin approval for a new category without widening the capability.
 - No secret value is returned after creation; UI displays alias, state and masked suffix.
 - Credential entry is an interactive, non-echoed CLI/dashboard operation; command arguments and committed environment files are forbidden. The GitHub App PEM may be imported only from an interactively selected regular `0600` file outside the repository, with a bounded read size.
 - KEK and decrypted credential material never enter model context, queue jobs, workflow checkpoints or provider-neutral domain values.
-- Credential ownership is explicit: platform credentials use null tenant/project foreign keys and the reserved AAD tenant component `platform`; tenant/project credentials use the real tenant ID. `platform` is not a synthetic tenant and is accessible only through the audited platform-owner path.
+- Credential ownership is explicit: platform credentials use null tenant/project foreign keys and the reserved AAD tenant component `platform`; tenant/project credentials use the real tenant ID. `platform` is not a synthetic tenant and is accessible only through an audited platform-owner action or a fixed-purpose system scope; untrusted Telegram input never receives owner authority.
 - Safe provider configuration is stored separately from the encrypted bundle. Secret parsing and plaintext lifetime remain inside the adapter and buffers are cleared in `finally` paths where possible.
 - Verification is externally read-only and persists only allowlisted evidence. Provider bodies, webhook URLs, native error messages, authorization headers, JWTs and ephemeral provider tokens are never stored or printed.
 - Only the Fastify API, worker and maintenance roles receive the runtime KEK;
   the Nuxt dashboard container does not. Docker runtime mounts may expose secret
-  files as read-only `0400`, `0440` or `0444`; writable runtime secret files are
-  rejected. Local host key files remain exact `0600`.
+  files as read-only `0400`, `0440` or `0444`. Docker Desktop Compose may preserve
+  the owner-only host mode as `0600`; Binflow accepts that form only after an
+  `O_RDWR` probe fails with `EROFS`, proving the mount itself is read-only.
+  Writable runtime secret files are rejected. Local host key files remain exact
+  `0600`.
 - Dashboard candidate idempotency binds secret input with an HMAC under the KEK.
   Plaintext and unkeyed secret hashes never enter idempotency, audit or outbox.
 

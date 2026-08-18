@@ -13,7 +13,9 @@ COPY apps/dashboard/package.json apps/dashboard/package.json
 COPY apps/maintenance/package.json apps/maintenance/package.json
 COPY apps/worker/package.json apps/worker/package.json
 COPY packages/ai/package.json packages/ai/package.json
+COPY packages/artifacts/package.json packages/artifacts/package.json
 COPY packages/auth/package.json packages/auth/package.json
+COPY packages/blog/package.json packages/blog/package.json
 COPY packages/contracts/package.json packages/contracts/package.json
 COPY packages/db/package.json packages/db/package.json
 COPY packages/domain/package.json packages/domain/package.json

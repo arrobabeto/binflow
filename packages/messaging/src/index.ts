@@ -71,6 +71,29 @@ export const registerClientTelegramHandlers = (
   });
 };
 
+export const registerAdminTelegramHandlers = (
+  runtime: TelegramRuntime,
+  input: Readonly<{
+    botId: string;
+    handler: (update: TelegramIngress) => Promise<TelegramReply>;
+  }>,
+): void => {
+  runtime.chat.onDirectMessage(async (thread, message) => {
+    const raw = message.raw as TelegramMessage;
+    const externalUserId = raw.from?.id;
+    if (externalUserId === undefined) return;
+    const reply = await input.handler({
+      botId: input.botId,
+      chatId: String(raw.chat.id),
+      externalUserId: String(externalUserId),
+      receivedAt: new Date(raw.date * 1000).toISOString(),
+      text: message.text,
+      updateId: String(raw.message_id),
+    });
+    await thread.post(reply.text);
+  });
+};
+
 export const createTelegramRuntime = async (
   config: TelegramRuntimeConfig,
 ): Promise<TelegramRuntime> => {

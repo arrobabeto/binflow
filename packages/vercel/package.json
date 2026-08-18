@@ -16,6 +16,7 @@
     "test": "vitest run"
   },
   "dependencies": {
+    "@binflow/blog": "workspace:*",
     "@binflow/contracts": "workspace:*",
     "@binflow/domain": "workspace:*",
     "@binflow/integrations": "workspace:*",

@@ -12,6 +12,13 @@
 - API, dashboard, worker, maintenance and one-shot CLI services are packaged in Docker from Phase 0; supervised host processes remain an optional development convenience.
 - Local and production profiles build the same versioned first-party images.
 - Telegram uses polling.
+- `BINFLOW_LIVE_EXECUTION_ENABLED` defaults to `false`. Enabling it authorizes
+  the worker to construct mutation adapters but does not bypass manifest,
+  budget, preview or approval policy.
+- Before webhook cutover, pair and test the admin destination, configure
+  distinct admin/client webhook secrets, verify readiness, then stop polling
+  before registering webhook URLs. Never run polling and webhook delivery
+  together.
 - GitHub/Vercel state may be reconciled by API polling.
 - Real external mutations require explicit test/pilot configuration, never production secrets in committed files.
 - Schema migrations use the database owner connection. API, worker, dashboard
@@ -75,6 +82,12 @@ Production secrets use Docker secrets or a future managed secret provider. They 
 ### Local Phase 0 secret bootstrap
 
 Before storing an integration, run `pnpm binflow secret init` from an interactive terminal. It creates a random 256-bit KEK at the configured host location outside the repository, sets mode `0600` and prints only the resulting reference. Binflow refuses to initialize or start secret-dependent operations when the key path is inside the repository, is not a regular file, has broader permissions or does not contain exactly the supported key material.
+
+Local Compose mounts that `0600` host key read-only at
+`/run/secrets/binflow_kek`. Docker Desktop preserves the source permission bits
+instead of synthesizing `0444`; the runtime therefore verifies the bind mount by
+requiring a non-mutating read/write open probe to fail with `EROFS`. Any
+successfully writable mount remains a startup failure.
 
 Until the Phase 1 onboarding dashboard exists, initialize the pilot ownership scope with `pnpm binflow scope init --tenant webbin --project webbin`. This creates only draft tenant/project records and is idempotent; activation still requires the documented onboarding validations.
 
@@ -194,13 +207,41 @@ polling/webhook ingress and workers before applying it. Existing unscoped
 pairing tokens are revoked; generate a new link afterward. Rollback requires the
 pre-migration database backup and previous application images.
 
+Migration `0014` adds catalog, artifact, repository, deployment, approval,
+model-call and usage records. Stop workers before applying it. Rollback requires
+the coordinated pre-release database backup; do not drop historical workflow
+or provider identifiers manually.
+
+Migration `0015` adds the platform admin pairing target, hash-only pairing
+challenges and service heartbeats. It is additive. Stop admin-bot ingress and
+workers before a coordinated rollback; preserve pairing and notification audit
+history.
+
+Migration `0016` adds tenant-isolated similarity decisions and ranked candidate
+evidence. It is additive and forces RLS for the runtime role. Stop workers while
+applying it; a full rollback restores the coordinated pre-release application
+and database backup rather than deleting similarity history manually.
+
+### Live blog execution switch
+
+Keep `BINFLOW_LIVE_EXECUTION_ENABLED=false` while testing enrollment and the
+fake-provider E2E suite. Set it to `true` only after provider verification,
+artifact storage health and an operator review of the active Webbin manifest.
+Turning it back to `false` immediately prevents new OpenAI/GitHub/Vercel
+mutations. Pending workflow outbox records remain durable and undispatched
+until the switch is enabled again; existing branches and PRs remain recorded
+for reconciliation. Dispatched jobs retry retryable provider/internal failures
+up to four attempts with exponential backoff, while deterministic policy,
+authorization, validation and budget failures stop immediately.
+
 Endpoints:
 
 - Liveness: process event loop is responsive.
 - Readiness: required database connection and migrations are healthy; API can refuse mutation readiness while serving diagnostics.
 - Dependency detail is admin-authenticated and redacted.
 
-Dashboard health surfaces PostgreSQL, Redis, worker heartbeat, queue depth, artifact store and external integration status.
+The Operations dashboard surfaces PostgreSQL, Redis, worker heartbeat, object
+storage and required integration readiness.
 
 ## Backups
 

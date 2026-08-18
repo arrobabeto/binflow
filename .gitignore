@@ -23,4 +23,4 @@ coverage/
 
 data/
 tmp/
-artifacts/
+/artifacts/

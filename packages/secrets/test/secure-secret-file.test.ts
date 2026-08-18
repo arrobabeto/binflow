@@ -83,6 +83,20 @@ describe('runtime master key loading', () => {
         isRuntimeMasterKeyPermissionAllowed('/run/secrets/binflow_kek', mode),
       ).toBe(false);
     }
+    expect(
+      isRuntimeMasterKeyPermissionAllowed(
+        '/run/secrets/binflow_kek',
+        0o600,
+        true,
+      ),
+    ).toBe(true);
+    expect(
+      isRuntimeMasterKeyPermissionAllowed(
+        '/run/secrets/binflow_kek',
+        0o640,
+        true,
+      ),
+    ).toBe(false);
     expect(isRuntimeMasterKeyPermissionAllowed('/tmp/binflow-kek', 0o600)).toBe(
       true,
     );

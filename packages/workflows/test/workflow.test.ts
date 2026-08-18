@@ -9,8 +9,10 @@ import {
   schema,
   withPlatformOwnerScope,
 } from '@binflow/db';
+import { MemoryArtifactStore } from '@binflow/artifacts';
+import type { BlogExecutor } from '@binflow/blog';
 
-import { WorkflowService } from '../src/index.js';
+import { BlogWorkflowRuntime, WorkflowService } from '../src/index.js';
 
 const databaseUrl = process.env.BINFLOW_TEST_DATABASE_URL;
 if (
@@ -123,7 +125,7 @@ describeDatabase('Telegram request workflow kernel', () => {
         });
         await scoped.insert(schema.providerCredentials).values({
           alias: 'Client bot',
-          externalResourceId: '8918222535',
+          externalResourceId: '1000000001',
           id: 'telegram-client',
           kind: 'telegram-client',
           maskedSuffix: '0000',
@@ -131,6 +133,34 @@ describeDatabase('Telegram request workflow kernel', () => {
           secretReferenceId: 'telegram-secret',
           status: 'active',
           tenantId: 'tenant-webbin',
+          version: 1,
+        });
+        await scoped.insert(schema.secretReferences).values({
+          algorithm: 'aes-256-gcm',
+          authTag: 'tag',
+          ciphertext: 'ciphertext',
+          credentialVersion: 1,
+          id: 'telegram-admin-secret',
+          keyVersion: 1,
+          nonce: 'nonce',
+          provider: 'telegram-admin',
+          wrapAuthTag: 'tag',
+          wrappedDek: 'dek',
+          wrapNonce: 'nonce',
+        });
+        await scoped.insert(schema.providerCredentials).values({
+          alias: 'Admin bot',
+          configuration: {
+            expectedUsername: 'BinflowAdminFixture_bot',
+            role: 'admin',
+          },
+          externalResourceId: '1000000002',
+          id: 'telegram-admin',
+          kind: 'telegram-admin',
+          maskedSuffix: '0000',
+          ownerScope: 'platform',
+          secretReferenceId: 'telegram-admin-secret',
+          status: 'active',
           version: 1,
         });
         await scoped.insert(schema.pairingTokens).values({
@@ -231,7 +261,7 @@ describeDatabase('Telegram request workflow kernel', () => {
   });
   afterAll(async () => database.pool.end());
 
-  const update = (updateId: string, text: string, botId = '8918222535') => ({
+  const update = (updateId: string, text: string, botId = '1000000001') => ({
     botId,
     chatId: '500',
     externalUserId: '100',
@@ -250,9 +280,41 @@ describeDatabase('Telegram request workflow kernel', () => {
     );
     expect(replay.text).toContain('not paired');
     const wrongBot = await service.handleTelegramUpdate(
-      update('2', '/tools', '8664708110'),
+      update('2', '/tools', '1000000002'),
     );
     expect(wrongBot.text).toContain('not paired');
+  });
+
+  it('pairs the global admin target once with a hash-only owner challenge', async () => {
+    const link = await service.createAdminPairingLink(
+      'owner-1',
+      'admin-pairing',
+      'admin-pairing-key-0001',
+    );
+    const token = new URL(link.pairingUrl).searchParams.get('start');
+    expect(token).not.toBeNull();
+    const paired = await service.handleAdminTelegramUpdate(
+      update('901', `/start ${token}`, '1000000002'),
+    );
+    expect(paired.text).toContain('paired successfully');
+    const target = await service.getAdminTelegramTarget(
+      'owner-1',
+      'admin-target',
+    );
+    expect(target).toMatchObject({
+      botId: '1000000002',
+      externalUserId: '100',
+      status: 'active',
+    });
+    const replay = await service.handleAdminTelegramUpdate(
+      update('902', `/start ${token}`, '1000000002'),
+    );
+    expect(replay.text).toContain('not paired');
+    expect(
+      JSON.stringify(
+        await database.db.select().from(schema.adminPairingTokens),
+      ),
+    ).not.toContain(token);
   });
 
   it('creates, confirms and durably queues an enabled request', async () => {
@@ -312,5 +374,137 @@ describeDatabase('Telegram request workflow kernel', () => {
     );
     const [request] = await database.db.select().from(schema.requests);
     expect(request?.state).toBe('CANCELLED');
+  });
+
+  it('binds preview approval to evidence and completes an idempotent fake publication', async () => {
+    await service.handleTelegramUpdate(
+      update('1', '/start pairing-token-abcdefghijklmnopqrstuvwxyz'),
+    );
+    const plan = await service.handleTelegramUpdate(
+      update('2', '/create_blog Seguridad operativa con IA'),
+    );
+    const confirmation = plan.actionTokens.find(
+      (action) => action.action === 'confirm_plan',
+    )!;
+    await service.handleTelegramUpdate(
+      update('3', `/action ${confirmation.token}`),
+    );
+    const [request] = await database.db.select().from(schema.requests);
+    const [version] = await database.db.select().from(schema.requestVersions);
+    expect(request).toBeDefined();
+    expect(version).toBeDefined();
+    const markdown = new TextEncoder().encode('---\ntitulo: Test\n---\nBody');
+    const image = new Uint8Array([1, 2, 3]);
+    const fakeExecutor = {
+      execute: async () => ({
+        bundle: {
+          category: 'SOP',
+          categoryKind: 'existing' as const,
+          en: {},
+          es: { titulo: 'Seguridad operativa con IA' },
+          imagePrompt: 'cover',
+          rationale: {},
+          slug: 'seguridad-operativa-con-ia',
+        },
+        catalog: [],
+        catalogRevision: 'catalog-sha',
+        deployment: {
+          deploymentId: 'preview-1',
+          environment: 'preview' as const,
+          readyAt: clock.now().toISOString(),
+          sha: 'abcdef1234567',
+          urls: {
+            '/articulos/seguridad-operativa-con-ia':
+              'https://preview.example/articulos/seguridad-operativa-con-ia',
+            '/es/articulos/seguridad-operativa-con-ia':
+              'https://preview.example/es/articulos/seguridad-operativa-con-ia',
+          },
+        },
+        files: [
+          {
+            bytes: markdown,
+            mime: 'text/markdown' as const,
+            path: 'src/content/articulos-es/seguridad-operativa-con-ia.md',
+            sha256: 'a'.repeat(64),
+          },
+          {
+            bytes: markdown,
+            mime: 'text/markdown' as const,
+            path: 'src/content/articulos/seguridad-operativa-con-ia.md',
+            sha256: 'b'.repeat(64),
+          },
+          {
+            bytes: image,
+            mime: 'image/avif' as const,
+            path: 'public/images/articles/seguridad-operativa-con-ia.avif',
+            sha256: 'c'.repeat(64),
+          },
+        ],
+        publication: {
+          baseCommitSha: 'base1234567',
+          branch: `binflow/create-blog/${request!.id}`,
+          files: [
+            'src/content/articulos-es/seguridad-operativa-con-ia.md',
+            'src/content/articulos/seguridad-operativa-con-ia.md',
+            'public/images/articles/seguridad-operativa-con-ia.avif',
+          ],
+          headCommitSha: 'abcdef1234567',
+          pullRequestId: '101',
+          pullRequestUrl: 'https://github.com/arrobabeto/webbin/pull/101',
+        },
+        similarity: { candidates: [], level: 'novel' as const },
+      }),
+      publish: async () => ({
+        deployment: {
+          deploymentId: 'production-1',
+          environment: 'production' as const,
+          readyAt: clock.now().toISOString(),
+          sha: 'merge1234567',
+          urls: {
+            '/articulos/seguridad-operativa-con-ia':
+              'https://webbin.dev/articulos/seguridad-operativa-con-ia',
+            '/es/articulos/seguridad-operativa-con-ia':
+              'https://webbin.dev/es/articulos/seguridad-operativa-con-ia',
+          },
+        },
+        mergeCommitSha: 'merge1234567',
+      }),
+    } as unknown as BlogExecutor;
+    const artifacts = new MemoryArtifactStore();
+    const runtime = new BlogWorkflowRuntime(
+      database.db,
+      artifacts,
+      fakeExecutor,
+      clock,
+    );
+    const executed = await runtime.execute({
+      reason: 'execute',
+      requestId: request!.id,
+      requestVersionId: version!.id,
+      tenantId: request!.tenantId,
+    });
+    expect(artifacts.values).toHaveLength(3);
+    const approved = await service.handleTelegramUpdate(
+      update('4', `/action ${executed.actions.approve}`),
+    );
+    expect(approved.text).toContain('encolada');
+    await runtime.publish({
+      reason: 'publish',
+      requestId: request!.id,
+      requestVersionId: version!.id,
+      tenantId: request!.tenantId,
+    });
+    const [completed] = await database.db
+      .select()
+      .from(schema.requests)
+      .where(eq(schema.requests.id, request!.id));
+    expect(completed?.state).toBe('COMPLETED');
+    expect(await database.db.select().from(schema.approvals)).toHaveLength(1);
+    expect(
+      await database.db.select().from(schema.publicationAttempts),
+    ).toHaveLength(1);
+    expect(
+      await database.db.select().from(schema.similarityChecks),
+    ).toHaveLength(1);
   });
 });

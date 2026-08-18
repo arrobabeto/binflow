@@ -1,3 +1,4 @@
+import type { DeploymentPort } from '@binflow/blog';
 import { webbinPilotBinding } from '@binflow/contracts';
 import { DomainError } from '@binflow/domain';
 import type {
@@ -241,3 +242,128 @@ export const createVercelCredentialVerifier = (
     }
   },
 });
+
+const deploymentListSchema = z.object({
+  deployments: z.array(
+    z.object({
+      createdAt: z.number().int().nonnegative(),
+      meta: z.record(z.string(), z.unknown()).optional(),
+      name: z.string().min(1),
+      readyState: z.string().min(1),
+      target: z.string().nullable().optional(),
+      uid: z.string().min(1),
+      url: z.string().min(1),
+    }),
+  ),
+});
+
+export const createVercelDeploymentPort = (
+  input: Readonly<{
+    apiBaseUrl?: string;
+    credential: CredentialVerifierInput['credential'];
+    fetch?: typeof globalThis.fetch;
+    masterKey: Buffer;
+    pollIntervalMs?: number;
+    timeoutMs?: number;
+  }>,
+): DeploymentPort => {
+  if (
+    input.credential.kind !== 'vercel' ||
+    input.credential.status !== 'active'
+  )
+    throw new DomainError(
+      'credential_unavailable',
+      'Active Vercel credential is required.',
+    );
+  const configuration = connectionConfigurationSchema.parse(
+    input.credential.connection?.configuration,
+  );
+  const fetch = input.fetch ?? globalThis.fetch;
+  const baseUrl = input.apiBaseUrl ?? 'https://api.vercel.com';
+  const sleep = (milliseconds: number) =>
+    new Promise<void>((resolve) => setTimeout(resolve, milliseconds));
+
+  const wait = async (
+    sha: string,
+    environment: 'preview' | 'production',
+    routes: readonly string[],
+  ) => {
+    const plaintext = decryptSecret(
+      input.credential.envelope,
+      input.masterKey,
+      input.credential.secretContext,
+    );
+    try {
+      const secret = secretSchema.parse(JSON.parse(plaintext.toString('utf8')));
+      const deadline = Date.now() + (input.timeoutMs ?? 10 * 60 * 1_000);
+      do {
+        const url = new URL('/v6/deployments', baseUrl);
+        url.searchParams.set('projectId', configuration.projectId);
+        url.searchParams.set('limit', '20');
+        if (environment === 'production')
+          url.searchParams.set('target', 'production');
+        if (configuration.teamId !== undefined)
+          url.searchParams.set('teamId', configuration.teamId);
+        const response = await fetch(url, {
+          headers: { Authorization: `Bearer ${secret.token}` },
+          signal: AbortSignal.timeout(15_000),
+        });
+        if (!response.ok) throw mapHttpError(response.status, 'project');
+        const deployments = deploymentListSchema.parse(
+          await response.json(),
+        ).deployments;
+        const deployment = deployments.find(
+          (candidate) =>
+            candidate.meta?.githubCommitSha === sha &&
+            (environment === 'production'
+              ? candidate.target === 'production'
+              : candidate.target !== 'production'),
+        );
+        if (
+          deployment?.readyState === 'ERROR' ||
+          deployment?.readyState === 'CANCELED'
+        )
+          throw new DomainError('provider_final', 'Vercel deployment failed.');
+        if (deployment?.readyState === 'READY') {
+          const origin = `https://${deployment.url}`;
+          return {
+            deploymentId: deployment.uid,
+            environment,
+            readyAt: new Date(deployment.createdAt).toISOString(),
+            sha,
+            urls: Object.fromEntries(
+              routes.map((route) => [route, `${origin}${route}`]),
+            ),
+          } as const;
+        }
+        await sleep(input.pollIntervalMs ?? 5_000);
+      } while (Date.now() < deadline);
+      throw new DomainError(
+        'provider_retryable',
+        'Timed out waiting for Vercel deployment.',
+      );
+    } catch (error) {
+      if (error instanceof DomainError) throw error;
+      if (error instanceof z.ZodError)
+        throw new DomainError(
+          'provider_final',
+          'Vercel returned invalid deployment evidence.',
+        );
+      throw new DomainError(
+        'provider_retryable',
+        'Vercel deployment lookup failed.',
+      );
+    } finally {
+      plaintext.fill(0);
+    }
+  };
+
+  return {
+    async waitForPreview(request) {
+      return wait(request.headCommitSha, 'preview', request.routes);
+    },
+    async waitForProduction(request) {
+      return wait(request.mergeCommitSha, 'production', request.routes);
+    },
+  };
+};

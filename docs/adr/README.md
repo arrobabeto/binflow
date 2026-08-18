@@ -27,5 +27,7 @@ ADRs preserve why durable decisions exist. Accepted ADRs are binding until a lat
 | [0019](0019-versioned-project-manifest-and-budget-policy.md)         | Versioned project manifest and budget policy                   | Accepted |
 | [0020](0020-code-owned-capability-catalog-and-project-binding.md)    | Code-owned capability catalog and project binding              | Accepted |
 | [0021](0021-telegram-ingress-and-durable-request-kernel.md)          | Telegram ingress and durable request kernel                    | Accepted |
+| [0022](0022-complete-blog-execution-and-publication.md)              | Complete blog execution and publication                        | Accepted |
+| [0023](0023-admin-notifications-and-production-readiness.md)         | Admin notifications and production readiness                   | Accepted |
 
 Use [0000-template.md](0000-template.md) for new decisions.

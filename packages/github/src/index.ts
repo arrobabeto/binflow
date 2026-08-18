@@ -5,6 +5,11 @@ import { request as octokitRequest } from '@octokit/request';
 import { z } from 'zod';
 
 import { webbinPilotBinding } from '@binflow/contracts';
+import type {
+  CatalogItem,
+  ContentCatalogPort,
+  RepositoryPublicationPort,
+} from '@binflow/blog';
 import { DomainError } from '@binflow/domain';
 import type {
   CredentialVerifier,
@@ -467,3 +472,579 @@ export const createGitHubCredentialVerifier = (
 });
 
 export const githubRegistrationPermissions = registrationPermissions;
+
+const publicationPermissions = {
+  checks: 'read',
+  contents: 'write',
+  deployments: 'read',
+  metadata: 'read',
+  pull_requests: 'write',
+  statuses: 'read',
+} as const;
+
+const pullRequestSchema = z.object({
+  head: z.object({ sha: z.string().min(7) }),
+  html_url: z.url(),
+  merged: z.boolean().optional(),
+  merge_commit_sha: z.string().nullable().optional(),
+  number: z.number().int().positive(),
+  state: z.enum(['open', 'closed']),
+});
+const referenceSchema = z.object({
+  object: z.object({ sha: z.string().min(7) }),
+});
+const contentWriteSchema = z.object({
+  commit: z.object({ sha: z.string().min(7) }),
+});
+const mergeSchema = z.object({
+  merged: z.boolean(),
+  sha: z.string().min(7).optional(),
+});
+const pullFileSchema = z.object({ filename: z.string().min(1) });
+const combinedStatusSchema = z.object({
+  state: z.enum(['success', 'pending', 'failure', 'error']),
+});
+
+export const createGitHubRepositoryPublicationPort = (
+  input: Readonly<{
+    apiBaseUrl?: string;
+    credential: CredentialVerifierInput['credential'];
+    fetch?: typeof globalThis.fetch;
+    installationId: string;
+    masterKey: Buffer;
+    repositoryId: string;
+  }>,
+): RepositoryPublicationPort => {
+  if (
+    input.credential.kind !== 'github-app' ||
+    input.credential.status !== 'active'
+  )
+    throw new DomainError(
+      'credential_unavailable',
+      'Active GitHub App credential is required.',
+    );
+  const configuration = configurationSchema.parse(
+    input.credential.configuration,
+  );
+  const connection = connectionConfigurationSchema.parse(
+    input.credential.connection?.configuration,
+  );
+  if (
+    connection.expectedRepository !== webbinPilotBinding.repository ||
+    connection.defaultBranch !== webbinPilotBinding.productionBranch
+  )
+    throw new DomainError(
+      'policy_denied',
+      'GitHub publication binding is outside Webbin.',
+    );
+  const [owner, repo] = splitRepository(connection.expectedRepository);
+  const repositoryId = Number(input.repositoryId);
+  const installationId = Number(input.installationId);
+  if (
+    !Number.isSafeInteger(repositoryId) ||
+    !Number.isSafeInteger(installationId)
+  )
+    throw new DomainError(
+      'validation_error',
+      'GitHub publication IDs are invalid.',
+    );
+
+  const withToken = async <Value>(
+    operation: (
+      requester: typeof octokitRequest,
+      token: string,
+    ) => Promise<Value>,
+  ): Promise<Value> => {
+    const plaintext = decryptSecret(
+      input.credential.envelope,
+      input.masterKey,
+      input.credential.secretContext,
+    );
+    let token: string | undefined;
+    let failure: unknown;
+    let result: Value | undefined;
+    try {
+      const secret = secretSchema.parse(JSON.parse(plaintext.toString('utf8')));
+      const requester = octokitRequest.defaults({
+        ...(input.apiBaseUrl === undefined
+          ? {}
+          : { baseUrl: input.apiBaseUrl }),
+        request: input.fetch === undefined ? {} : { fetch: input.fetch },
+      });
+      const auth = createAppAuth({
+        appId: configuration.appId,
+        clientId: configuration.clientId,
+        privateKey: secret.privateKey,
+        request: requester,
+      });
+      const authentication = await auth({
+        installationId,
+        permissions: publicationPermissions,
+        refresh: true,
+        repositoryIds: [repositoryId],
+        type: 'installation',
+      });
+      token = authentication.token;
+      if (
+        !exactPermissions(authentication.permissions, publicationPermissions) ||
+        authentication.repositoryIds?.length !== 1 ||
+        Number(authentication.repositoryIds[0]) !== repositoryId
+      )
+        throw new DomainError(
+          'policy_denied',
+          'GitHub publication token was not exactly downscoped.',
+        );
+      result = await operation(requester, token);
+    } catch (error) {
+      failure = error;
+    } finally {
+      plaintext.fill(0);
+      if (token !== undefined) {
+        try {
+          await octokitRequest('DELETE /installation/token', {
+            ...(input.apiBaseUrl === undefined
+              ? {}
+              : { baseUrl: input.apiBaseUrl }),
+            headers: { authorization: `Bearer ${token}` },
+            request: {
+              ...(input.fetch === undefined ? {} : { fetch: input.fetch }),
+              signal: AbortSignal.timeout(5_000),
+            },
+          });
+        } catch {
+          if (failure === undefined)
+            failure = new DomainError(
+              'provider_retryable',
+              'GitHub publication token cleanup failed.',
+            );
+        }
+      }
+    }
+    if (failure !== undefined)
+      throw failure instanceof DomainError ? failure : mapGitHubError(failure);
+    if (result === undefined)
+      throw new DomainError(
+        'internal_error',
+        'GitHub publication operation returned no result.',
+      );
+    return result;
+  };
+
+  const authorization = (token: string) => ({
+    authorization: `Bearer ${token}`,
+  });
+  const listPullFiles = async (
+    requester: typeof octokitRequest,
+    token: string,
+    pullNumber: number,
+  ): Promise<string[]> => {
+    const response = await requester(
+      'GET /repos/{owner}/{repo}/pulls/{pull_number}/files',
+      {
+        headers: authorization(token),
+        owner,
+        per_page: 100,
+        pull_number: pullNumber,
+        repo,
+      },
+    );
+    return z
+      .array(pullFileSchema)
+      .parse(response.data)
+      .map((file) => file.filename);
+  };
+
+  const findExistingPull = async (
+    requester: typeof octokitRequest,
+    token: string,
+    branch: string,
+  ) => {
+    const response = await requester('GET /repos/{owner}/{repo}/pulls', {
+      base: webbinPilotBinding.productionBranch,
+      head: `${owner}:${branch}`,
+      headers: authorization(token),
+      owner,
+      repo,
+      state: 'all',
+    });
+    return z.array(pullRequestSchema).parse(response.data)[0];
+  };
+
+  return {
+    async createDraft(draft) {
+      return withToken(async (requester, token) => {
+        const expectedFiles = draft.files.map((file) => file.path).sort();
+        const existing = await findExistingPull(requester, token, draft.branch);
+        if (existing !== undefined) {
+          const files = (
+            await listPullFiles(requester, token, existing.number)
+          ).sort();
+          if (JSON.stringify(files) !== JSON.stringify(expectedFiles))
+            throw new DomainError(
+              'conflict_error',
+              'Existing request PR has an unexpected file set.',
+            );
+          return {
+            baseCommitSha: 'reconciled',
+            branch: draft.branch,
+            files,
+            headCommitSha: existing.head.sha,
+            pullRequestId: String(existing.number),
+            pullRequestUrl: existing.html_url,
+          };
+        }
+        const baseResponse = await requester(
+          'GET /repos/{owner}/{repo}/git/ref/{ref}',
+          {
+            headers: authorization(token),
+            owner,
+            ref: `heads/${webbinPilotBinding.productionBranch}`,
+            repo,
+          },
+        );
+        const baseSha = referenceSchema.parse(baseResponse.data).object.sha;
+        await requester('POST /repos/{owner}/{repo}/git/refs', {
+          headers: authorization(token),
+          owner,
+          ref: `refs/heads/${draft.branch}`,
+          repo,
+          sha: baseSha,
+        });
+        let headSha = baseSha;
+        for (const file of draft.files) {
+          const response = await requester(
+            'PUT /repos/{owner}/{repo}/contents/{path}',
+            {
+              branch: draft.branch,
+              content: Buffer.from(file.bytes).toString('base64'),
+              headers: authorization(token),
+              message: `Add bilingual blog draft for ${draft.requestId}`,
+              owner,
+              path: file.path,
+              repo,
+            },
+          );
+          headSha = contentWriteSchema.parse(response.data).commit.sha;
+        }
+        const pullResponse = await requester(
+          'POST /repos/{owner}/{repo}/pulls',
+          {
+            base: webbinPilotBinding.productionBranch,
+            body: `Binflow request ${draft.requestId}. Preview and approval are required before merge.`,
+            head: draft.branch,
+            headers: authorization(token),
+            owner,
+            repo,
+            title: `Blog draft: ${draft.slug}`,
+          },
+        );
+        const pull = pullRequestSchema.parse(pullResponse.data);
+        if (pull.head.sha !== headSha)
+          throw new DomainError(
+            'provider_final',
+            'GitHub PR head does not match the final artifact commit.',
+          );
+        return {
+          baseCommitSha: baseSha,
+          branch: draft.branch,
+          files: expectedFiles,
+          headCommitSha: headSha,
+          pullRequestId: String(pull.number),
+          pullRequestUrl: pull.html_url,
+        };
+      });
+    },
+    async revalidate(revalidation) {
+      await withToken(async (requester, token) => {
+        const pullNumber = Number(revalidation.pullRequestId);
+        const response = await requester(
+          'GET /repos/{owner}/{repo}/pulls/{pull_number}',
+          {
+            headers: authorization(token),
+            owner,
+            pull_number: pullNumber,
+            repo,
+          },
+        );
+        const pull = pullRequestSchema.parse(response.data);
+        const files = (
+          await listPullFiles(requester, token, pullNumber)
+        ).sort();
+        if (
+          pull.state !== 'open' ||
+          pull.head.sha !== revalidation.expectedHeadSha ||
+          JSON.stringify(files) !==
+            JSON.stringify([...revalidation.expectedFiles].sort())
+        )
+          throw new DomainError(
+            'conflict_error',
+            'GitHub PR changed after preview approval.',
+          );
+        const status = combinedStatusSchema.parse(
+          (
+            await requester('GET /repos/{owner}/{repo}/commits/{ref}/status', {
+              headers: authorization(token),
+              owner,
+              ref: revalidation.expectedHeadSha,
+              repo,
+            })
+          ).data,
+        );
+        if (status.state !== 'success')
+          throw new DomainError(
+            'conflict_error',
+            'GitHub checks are not successful for the approved commit.',
+          );
+      });
+    },
+    async merge(merge) {
+      return withToken(async (requester, token) => {
+        const pullNumber = Number(merge.pullRequestId);
+        const before = pullRequestSchema.parse(
+          (
+            await requester('GET /repos/{owner}/{repo}/pulls/{pull_number}', {
+              headers: authorization(token),
+              owner,
+              pull_number: pullNumber,
+              repo,
+            })
+          ).data,
+        );
+        if (
+          before.merged === true &&
+          before.merge_commit_sha !== null &&
+          before.merge_commit_sha !== undefined
+        )
+          return { mergeCommitSha: before.merge_commit_sha };
+        if (before.head.sha !== merge.expectedHeadSha)
+          throw new DomainError(
+            'conflict_error',
+            'GitHub PR head changed before merge.',
+          );
+        const response = await requester(
+          'PUT /repos/{owner}/{repo}/pulls/{pull_number}/merge',
+          {
+            headers: authorization(token),
+            merge_method: 'squash',
+            owner,
+            pull_number: pullNumber,
+            repo,
+            sha: merge.expectedHeadSha,
+          },
+        );
+        const result = mergeSchema.parse(response.data);
+        if (!result.merged || result.sha === undefined)
+          throw new DomainError(
+            'conflict_error',
+            'GitHub did not merge the approved PR.',
+          );
+        return { mergeCommitSha: result.sha };
+      });
+    },
+  };
+};
+
+const treeSchema = z.object({
+  sha: z.string().min(7),
+  tree: z.array(
+    z.object({
+      path: z.string().min(1),
+      sha: z.string().min(7),
+      type: z.string().min(1),
+    }),
+  ),
+});
+const blobSchema = z.object({
+  content: z.string().min(1),
+  encoding: z.literal('base64'),
+  sha: z.string().min(7),
+});
+
+const frontmatterValue = (
+  source: string,
+  field: string,
+): string | undefined => {
+  const match = new RegExp(`^${field}:\\s*(.+)$`, 'mu')
+    .exec(source)?.[1]
+    ?.trim();
+  if (match === undefined) return undefined;
+  if (match.startsWith('"') && match.endsWith('"')) {
+    try {
+      const parsed: unknown = JSON.parse(match);
+      return typeof parsed === 'string' ? parsed : undefined;
+    } catch {
+      return undefined;
+    }
+  }
+  return match.replace(/^['"]|['"]$/gu, '');
+};
+
+export const createGitHubContentCatalogPort = (
+  input: Readonly<{
+    apiBaseUrl?: string;
+    credential: CredentialVerifierInput['credential'];
+    fetch?: typeof globalThis.fetch;
+    installationId: string;
+    masterKey: Buffer;
+    repositoryId: string;
+  }>,
+): ContentCatalogPort => {
+  const configuration = configurationSchema.parse(
+    input.credential.configuration,
+  );
+  const connection = connectionConfigurationSchema.parse(
+    input.credential.connection?.configuration,
+  );
+  const [owner, repo] = splitRepository(connection.expectedRepository);
+  const installationId = Number(input.installationId);
+  const repositoryId = Number(input.repositoryId);
+  if (
+    input.credential.kind !== 'github-app' ||
+    input.credential.status !== 'active' ||
+    !Number.isSafeInteger(installationId) ||
+    !Number.isSafeInteger(repositoryId)
+  )
+    throw new DomainError(
+      'credential_unavailable',
+      'Verified GitHub catalog credential is required.',
+    );
+
+  return {
+    async sync() {
+      const plaintext = decryptSecret(
+        input.credential.envelope,
+        input.masterKey,
+        input.credential.secretContext,
+      );
+      let token: string | undefined;
+      let requester: typeof octokitRequest | undefined;
+      let failure: unknown;
+      let result: Awaited<ReturnType<ContentCatalogPort['sync']>> | undefined;
+      try {
+        const secret = secretSchema.parse(
+          JSON.parse(plaintext.toString('utf8')),
+        );
+        requester = octokitRequest.defaults({
+          ...(input.apiBaseUrl === undefined
+            ? {}
+            : { baseUrl: input.apiBaseUrl }),
+          request: input.fetch === undefined ? {} : { fetch: input.fetch },
+        });
+        const auth = createAppAuth({
+          appId: configuration.appId,
+          clientId: configuration.clientId,
+          privateKey: secret.privateKey,
+          request: requester,
+        });
+        const authentication = await auth({
+          installationId,
+          permissions: repositoryReadPermissions,
+          refresh: true,
+          repositoryIds: [repositoryId],
+          type: 'installation',
+        });
+        token = authentication.token;
+        if (
+          !exactPermissions(
+            authentication.permissions,
+            repositoryReadPermissions,
+          ) ||
+          authentication.repositoryIds?.length !== 1 ||
+          Number(authentication.repositoryIds[0]) !== repositoryId
+        )
+          throw new DomainError(
+            'policy_denied',
+            'GitHub catalog token was not exactly downscoped.',
+          );
+        const headers = { authorization: `Bearer ${token}` };
+        const tree = treeSchema.parse(
+          (
+            await requester('GET /repos/{owner}/{repo}/git/trees/{tree_sha}', {
+              headers,
+              owner,
+              recursive: '1',
+              repo,
+              tree_sha: connection.defaultBranch,
+            })
+          ).data,
+        );
+        const entries = tree.tree.filter(
+          (entry) =>
+            entry.type === 'blob' &&
+            entry.path.endsWith('.md') &&
+            (entry.path.startsWith('src/content/articulos-es/') ||
+              entry.path.startsWith('src/content/articulos/')),
+        );
+        const items: CatalogItem[] = [];
+        for (const entry of entries) {
+          const blob = blobSchema.parse(
+            (
+              await requester(
+                'GET /repos/{owner}/{repo}/git/blobs/{file_sha}',
+                {
+                  file_sha: entry.sha,
+                  headers,
+                  owner,
+                  repo,
+                },
+              )
+            ).data,
+          );
+          const source = Buffer.from(
+            blob.content.replaceAll(/\s/gu, ''),
+            'base64',
+          ).toString('utf8');
+          const title = frontmatterValue(source, 'titulo');
+          const category = frontmatterValue(source, 'categoria');
+          if (title === undefined || category === undefined)
+            throw new DomainError(
+              'provider_final',
+              `Webbin catalog item ${entry.path} has invalid frontmatter.`,
+            );
+          const locale = entry.path.startsWith('src/content/articulos-es/')
+            ? 'es'
+            : 'en';
+          items.push({
+            category,
+            contentHash: createHash('sha256').update(source).digest('hex'),
+            locale,
+            slug:
+              entry.path.split('/').at(-1)?.replace(/\.md$/u, '') ?? entry.sha,
+            sourceId: entry.path,
+            sourceRevision: tree.sha,
+            title,
+          });
+        }
+        result = { items, revision: tree.sha };
+      } catch (error) {
+        failure = error;
+      } finally {
+        plaintext.fill(0);
+        if (token !== undefined && requester !== undefined) {
+          try {
+            await requester('DELETE /installation/token', {
+              headers: { authorization: `Bearer ${token}` },
+              request: { signal: AbortSignal.timeout(5_000) },
+            });
+          } catch {
+            if (failure === undefined)
+              failure = new DomainError(
+                'provider_retryable',
+                'GitHub catalog token cleanup failed.',
+              );
+          }
+        }
+      }
+      if (failure !== undefined)
+        throw failure instanceof DomainError
+          ? failure
+          : mapGitHubError(failure);
+      if (result === undefined)
+        throw new DomainError(
+          'internal_error',
+          'GitHub catalog operation returned no result.',
+        );
+      return result;
+    },
+  };
+};

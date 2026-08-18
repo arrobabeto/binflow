@@ -1,6 +1,8 @@
 import Fastify, { type FastifyInstance } from 'fastify';
 
 import {
+  adminTelegramPairingLinkSchema,
+  adminTelegramTargetSchema,
   activationBlockersResponseSchema,
   capabilityCatalogResponseSchema,
   createEnrollmentInputSchema,
@@ -15,8 +17,10 @@ import {
   pairingLinkResponseSchema,
   platformOwnerSessionSchema,
   projectManifestResponseSchema,
+  readinessResponseSchema,
   requestDetailSchema,
   requestPageSchema,
+  requestRevisionInputSchema,
   requestSummarySchema,
   updateEnrollmentInputSchema,
   type HealthResponse,
@@ -57,7 +61,18 @@ export const buildApp = (
       IntegrationAdminService,
       'create' | 'list' | 'revoke' | 'verify'
     >;
-    workflowService?: Pick<WorkflowService, 'cancelAsAdmin' | 'get' | 'list'>;
+    readinessCheck?: () => Promise<unknown>;
+    workflowService?: Pick<
+      WorkflowService,
+      | 'approveAsAdmin'
+      | 'cancelAsAdmin'
+      | 'createAdminPairingLink'
+      | 'get'
+      | 'getAdminTelegramTarget'
+      | 'list'
+      | 'rejectAsAdmin'
+      | 'reviseAsAdmin'
+    >;
     trustedOrigin?: string;
   }> = {},
 ): FastifyInstance => {
@@ -71,6 +86,7 @@ export const buildApp = (
   const enrollmentService = options.enrollmentService;
   const integrationService = options.integrationService;
   const workflowService = options.workflowService;
+  const readinessCheck = options.readinessCheck;
   const trustedOrigin = new URL(
     options.trustedOrigin ??
       process.env.BINFLOW_PUBLIC_URL ??
@@ -121,6 +137,20 @@ export const buildApp = (
       version: process.env.BINFLOW_VERSION ?? 'development',
     }),
   );
+
+  app.get('/api/v1/readiness', async (_request, reply) => {
+    if (readinessCheck === undefined) {
+      void reply.code(503);
+      return readinessResponseSchema.parse({
+        checks: { runtime: 'misconfigured' },
+        status: 'not_ready',
+        timestamp: new Date().toISOString(),
+      });
+    }
+    const result = readinessResponseSchema.parse(await readinessCheck());
+    if (result.status !== 'ready') void reply.code(503);
+    return result;
+  });
 
   app.get(
     '/api/v1/session',
@@ -267,6 +297,29 @@ export const buildApp = (
     return requestPageSchema.parse({ items, nextCursor: null });
   });
 
+  app.get('/api/v1/admin/telegram/target', async (request) => {
+    const session = await requireSession(request);
+    return adminTelegramTargetSchema.parse(
+      await requireWorkflowService().getAdminTelegramTarget(
+        session.actorId,
+        request.id,
+      ),
+    );
+  });
+
+  app.post('/api/v1/admin/telegram/pairing-link', async (request, reply) => {
+    const session = await requireSession(request, true);
+    const mutation = requireMutationHeaders(request.headers, false);
+    const result = await requireWorkflowService().createAdminPairingLink(
+      session.actorId,
+      request.id,
+      mutation.idempotencyKey,
+    );
+    void reply.code(201);
+    void reply.header('cache-control', 'no-store');
+    return adminTelegramPairingLinkSchema.parse(result);
+  });
+
   app.get<{ Params: { id: string } }>(
     '/api/v1/requests/:id',
     async (request) => {
@@ -289,6 +342,53 @@ export const buildApp = (
       const result = await requireWorkflowService().cancelAsAdmin(
         request.params.id,
         mutation.expectedVersion,
+        session.actorId,
+        request.id,
+        mutation.idempotencyKey,
+      );
+      void reply.header('etag', `"${String(result.revision)}"`);
+      return requestSummarySchema.parse(result);
+    },
+  );
+
+  for (const decision of ['approve', 'reject'] as const) {
+    app.post<{ Params: { id: string } }>(
+      `/api/v1/requests/:id/${decision}`,
+      async (request, reply) => {
+        const session = await requireSession(request, true);
+        const mutation = requireMutationHeaders(request.headers);
+        const service = requireWorkflowService();
+        const result = await (decision === 'approve'
+          ? service.approveAsAdmin(
+              request.params.id,
+              mutation.expectedVersion,
+              session.actorId,
+              request.id,
+              mutation.idempotencyKey,
+            )
+          : service.rejectAsAdmin(
+              request.params.id,
+              mutation.expectedVersion,
+              session.actorId,
+              request.id,
+              mutation.idempotencyKey,
+            ));
+        void reply.header('etag', `"${String(result.revision)}"`);
+        return requestSummarySchema.parse(result);
+      },
+    );
+  }
+
+  app.post<{ Params: { id: string } }>(
+    '/api/v1/requests/:id/revise',
+    async (request, reply) => {
+      const session = await requireSession(request, true);
+      const mutation = requireMutationHeaders(request.headers);
+      const body = requestRevisionInputSchema.parse(request.body);
+      const result = await requireWorkflowService().reviseAsAdmin(
+        request.params.id,
+        mutation.expectedVersion,
+        body.feedback,
         session.actorId,
         request.id,
         mutation.idempotencyKey,

@@ -30,6 +30,9 @@
 - Request-state transitions and terminal-state enforcement.
 - Category normalization/classification inputs.
 - Path/field allowlists and manifest validation.
+- Blog capability category normalization, overlap blocking, bilingual
+  frontmatter rendering, exact three-file path policy, true AVIF validation,
+  budget ceilings and approval invalidation.
 - Budget, retention, idempotency and pairing-token rules.
 - Global-profile narrowing, Webbin ES/EN/source/slug invariants and rejection of
   German or `ask_each_action` for the pilot.
@@ -44,8 +47,9 @@
 - Dashboard credential tests cover strict secret-bearing unions, keyed
   idempotency fingerprints, redacted responses/events, optimistic revisions,
   fresh-session gates and same-origin rejection.
-- Runtime KEK tests accept supported read-only Docker-secret modes, retain exact
-  `0600` for host files and reject any writable mount.
+- Runtime KEK tests accept supported read-only Docker-secret modes, accept the
+  Docker Desktop `0600` compatibility form only with a proven `EROFS` mount,
+  retain exact `0600` for host files and reject any writable mount.
 
 ### Contract
 
@@ -58,6 +62,8 @@
 - Vercel deployment/SHA correlation.
 - Vercel credential identity and exact project/team, GitHub repository and production-branch verification without project mutation.
 - S3-compatible artifact lifecycle.
+- Production OpenAI, GitHub and Vercel adapters against controlled HTTP mocks;
+  CI never enables live Webbin mutation.
 - Better Auth session and TOTP behavior.
 - Single-owner bootstrap is serialized, refuses existing users and never accepts
   a password argument; HTTP sign-up remains disabled.
@@ -85,6 +91,8 @@
 - Plan confirmation → graph resume.
 - Catalog sync → similarity decision.
 - Graph → fake GitHub PR → fake deployment → approval → merge.
+- Full fake-provider request-to-publication flow, including conditional admin
+  approval and production route evidence.
 - Duplicate webhook/action/queue delivery.
 - Revoked credential, expired approval and budget exhaustion.
 - Attachment deletion after terminal state.
@@ -126,6 +134,12 @@ client bot
 ```
 
 The final Webbin E2E publishes one real owner-approved article. Test content is not temporarily published and reverted merely to prove the pipeline.
+
+Admin pairing tests cover token replay, wrong-bot/user isolation, target
+replacement and redacted persistence. Notification tests cover durable retry
+without workflow advancement. The complete fake-provider acceptance flow runs
+with `BINFLOW_LIVE_EXECUTION_ENABLED` absent or false and proves that no external
+mutation adapter was constructed.
 
 ## Required scenario matrix
 

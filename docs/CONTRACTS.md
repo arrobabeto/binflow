@@ -392,6 +392,16 @@ type ApprovalBinding = {
 
 Any artifact identifier change invalidates the approval. Duplicate approval actions return the current decision without repeating effects.
 
+Client action tokens support `approve_preview`, `request_revision`, `reject`
+and `cancel` after preview. Admin action tokens support `approve_publish` and
+`reject` only for a new-category request. Tokens are opaque, hashed, expire in
+24 hours and bind to one request version, PR head SHA and preview deployment.
+
+Publication resume signals use the same stable request/request-version
+identity as generation and add a code-owned reason: `execute`, `publish` or
+`reconcile`. Queue payloads contain no provider credential, generated body or
+attachment bytes.
+
 ## Generated rationale and model call
 
 ```ts
@@ -424,6 +434,7 @@ POST   /api/v1/requests/:requestId/cancel
 GET    /api/v1/audit
 GET    /api/v1/usage
 GET    /api/v1/operations/:operationId
+GET    /api/v1/readiness
 
 GET    /api/v1/admin/enrollments
 GET    /api/v1/admin/enrollments/:id
@@ -440,6 +451,8 @@ POST   /api/v1/admin/integrations
 POST   /api/v1/admin/integrations/:id/verify
 POST   /api/v1/admin/integrations/:id/revoke
 POST   /api/v1/admin/enrollments/:id/catalog/sync
+POST   /api/v1/admin/telegram/pairing-link
+GET    /api/v1/admin/telegram/target
 ```
 
 Module 7 implements a redacted request projection with request ID,
@@ -458,6 +471,12 @@ deduplicates by bot/update and returns localized reply intents. It never accepts
 tenant/project IDs supplied by an update.
 
 Mutation endpoints require an idempotency key and optimistic concurrency version. Transport-specific schemas will be generated from shared Zod definitions.
+
+The admin Telegram pairing-link endpoint requires a fresh two-factor owner
+session and an idempotency key. It returns plaintext only once as
+`{ pairingUrl, expiresAt }`; persistence stores only the token hash. The target
+projection returns only bot username, paired Telegram user/chat IDs, status and
+timestamps. It never returns bot tokens or pairing-token material.
 
 Enrollment creation and update use strict shared schemas. Supported locale
 values are `en`, `es` and `de`; `astro_repo` is the only profile. Creation
