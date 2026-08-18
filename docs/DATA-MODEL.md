@@ -110,7 +110,11 @@ token.
 
 ### `project_manifest_versions`
 
-Immutable JSON contract, version, validation state, creator, timestamps and superseded link.
+Immutable JSON contract, tenant/project scope, positive project-local version,
+global-profile version, dependency fingerprint, validation state, creator,
+timestamps and superseded link. A unique project/version key serializes version
+creation. A validated version is reused only when its dependency fingerprint is
+unchanged; active versions are never updated or superseded by a draft save.
 
 ### `capability_definitions` and `project_capability_bindings`
 
@@ -122,7 +126,16 @@ Immutable editorial rules, provider/model/prompt configs and graph versions.
 
 ### `project_locales`
 
-Conversation locale, content locales, required locales and translation policy derived into the active manifest.
+Immutable per-manifest snapshot of conversation, content, default, required and
+slug locales plus translation policy. It is derived by validation and cannot be
+written independently from the manifest.
+
+### `project_budget_policies`
+
+Immutable per-manifest snapshot of request/day, model-call/request,
+token/request and estimated USD-cent request/day ceilings. Usage enforcement
+freezes this version when a request starts; Phase 1 persists and displays the
+policy before the workflow kernel begins enforcement.
 
 ## Integrations and secrets
 

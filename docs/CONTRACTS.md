@@ -148,9 +148,10 @@ Only `astro_repo` is active in the first MVP. The other enum values reserve stab
 type ProjectManifest = {
   id: string;
   projectId: string;
-  version: string;
+  version: number;
   profile: ProjectProfile;
   status: 'draft' | 'validated' | 'active' | 'superseded';
+  globalProfileVersion: string;
   conversationLocale: SupportedLocale;
   contentLocales: SupportedLocale[];
   defaultContentLocale: SupportedLocale;
@@ -181,7 +182,16 @@ type ProjectManifest = {
   validationProfileId: string;
   rulesVersion: string;
   graphVersion: string;
+  budgetPolicy: ProjectBudgetPolicy;
   enabledCapabilities: CapabilityBinding[];
+};
+
+type ProjectBudgetPolicy = {
+  maxRequestsPerDay: number;
+  maxModelCallsPerRequest: number;
+  maxTokensPerRequest: number;
+  maxEstimatedCostCentsPerRequest: number;
+  maxEstimatedCostCentsPerDay: number;
 };
 ```
 
@@ -192,6 +202,16 @@ Validation rules:
 - Project policy may narrow but never expand the global profile contract.
 - Active manifest versions are immutable; editing creates a draft version and revalidation.
 - Runs retain the manifest version with which they started.
+- Counts and USD-cent budget fields are positive integers; the daily estimated
+  cost ceiling must be greater than or equal to the per-request ceiling.
+- Saving enrollment configuration does not create a manifest. Successful
+  deterministic enrollment validation creates or reuses one validated version.
+- Revalidation reuses an identical dependency fingerprint and otherwise creates
+  the next project-local integer version while superseding only the previous
+  non-active version.
+- Webbin accepts exactly `es` and `en`, with `es` as default/slug locale and
+  `always_translate`; `de` and `ask_each_action` are rejected by the pilot
+  overlay rather than silently ignored.
 
 ## Capability definition
 
@@ -386,6 +406,7 @@ GET    /api/v1/operations/:operationId
 
 GET    /api/v1/admin/enrollments
 GET    /api/v1/admin/enrollments/:id
+GET    /api/v1/admin/enrollments/:id/manifest
 POST   /api/v1/admin/enrollments
 PATCH  /api/v1/admin/enrollments/:id
 POST   /api/v1/admin/enrollments/:id/validate
@@ -417,6 +438,14 @@ current and successful. A pairing-link response contains plaintext only on its
 first successful delivery. Its idempotency record stores a redacted delivery
 receipt; replay returns `409 pairing_link_already_delivered`, and persistence or
 later reads never expose the token.
+
+`GET .../:id/manifest` returns the latest validated project manifest or `null`
+together with the code-owned global-profile summary used by the dashboard. It
+contains no provider credential configuration. Successful `POST .../validate`
+includes the `project_manifest` attempt with allowlisted `manifestId`, integer
+`manifestVersion`, `globalProfileVersion` and dependency `fingerprint`
+evidence. The enrollment draft accepts `defaultContentLocale` and a strict
+`budgetPolicy`; those values are not operational until manifest validation.
 
 `GET /api/v1/session` is the minimal authenticated bridge between Better Auth
 and business APIs. It returns only actor ID, email, `role: platform_owner`,

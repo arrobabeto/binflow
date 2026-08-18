@@ -78,6 +78,13 @@
       "when": 1787035029263,
       "tag": "0010_cynical_microchip",
       "breakpoints": true
+    },
+    {
+      "idx": 11,
+      "version": "7",
+      "when": 1787037951202,
+      "tag": "0011_shiny_toxin",
+      "breakpoints": true
     }
   ]
 }

@@ -7,10 +7,14 @@ import {
   createEnrollmentInputSchema,
   enrollmentConfigurationSchema,
   enrollmentSchema,
+  projectManifestResponseSchema,
+  projectManifestSchema,
   type CreateEnrollmentInput,
   type Enrollment,
   type EnrollmentConfiguration,
   type EnrollmentValidationAttempt,
+  type ProjectManifest,
+  type ProjectManifestResponse,
   type UpdateEnrollmentInput,
 } from '@binflow/contracts';
 import {
@@ -24,6 +28,11 @@ import {
   type ScopedDatabase,
 } from '@binflow/db';
 import { DomainError, type Clock, systemClock } from '@binflow/domain';
+import {
+  astroRepoGlobalProfile,
+  buildProjectManifest,
+  type VerifiedManifestBindings,
+} from '@binflow/manifests';
 
 const CONFIGURATION_CHECK = 'configuration';
 const CREDENTIAL_CHECKS = [
@@ -57,8 +66,10 @@ const ensureConfigurationComplete = (
 ): readonly string[] => {
   const required: readonly (keyof EnrollmentConfiguration)[] = [
     'clientContactEmail',
+    'budgetPolicy',
     'clientConversationLocale',
     'contentLocales',
+    'defaultContentLocale',
     'editorialAudience',
     'editorialVoice',
     'productionDomain',
@@ -94,6 +105,14 @@ const ensureConfigurationComplete = (
   }
   return [...new Set(missing)];
 };
+
+const toProjectManifest = (
+  row: typeof schema.projectManifestVersions.$inferSelect,
+): ProjectManifest =>
+  projectManifestSchema.parse({
+    ...row.document,
+    status: row.status,
+  });
 
 const toEnrollment = (row: {
   enrollment: typeof schema.clientEnrollments.$inferSelect;
@@ -261,6 +280,38 @@ export class EnrollmentService {
       this.database,
       { actorId, correlationId, reason: 'Read client enrollment' },
       (database) => selectEnrollment(database, enrollmentId),
+    );
+  }
+
+  public async getManifest(
+    enrollmentId: string,
+    actorId: string,
+    correlationId: string,
+  ): Promise<ProjectManifestResponse> {
+    return withPlatformOwnerScope(
+      this.database,
+      { actorId, correlationId, reason: 'Read project manifest' },
+      async (database) => {
+        const enrollment = await selectEnrollment(database, enrollmentId);
+        const [row] = await database
+          .select()
+          .from(schema.projectManifestVersions)
+          .where(
+            and(
+              eq(
+                schema.projectManifestVersions.projectId,
+                enrollment.projectId,
+              ),
+              eq(schema.projectManifestVersions.tenantId, enrollment.tenantId),
+            ),
+          )
+          .orderBy(desc(schema.projectManifestVersions.version))
+          .limit(1);
+        return projectManifestResponseSchema.parse({
+          globalProfile: astroRepoGlobalProfile,
+          manifest: row === undefined ? null : toProjectManifest(row),
+        });
+      },
     );
   }
 
@@ -514,12 +565,20 @@ export class EnrollmentService {
             const checks: Readonly<{
               checkName: string;
               evidence: Record<string, JsonValue>;
-              result: 'success' | 'failed';
+              errorCategory?: string;
+              errorCode?: string;
+              result: 'success' | 'failed' | 'blocked';
             }>[] = [
               {
                 checkName: CONFIGURATION_CHECK,
                 evidence:
                   missing.length === 0 ? { complete: true } : { missing },
+                ...(missing.length === 0
+                  ? {}
+                  : {
+                      errorCategory: 'validation_error',
+                      errorCode: 'configuration_incomplete',
+                    }),
                 result: missing.length === 0 ? 'success' : 'failed',
               },
             ];
@@ -528,6 +587,47 @@ export class EnrollmentService {
               current,
             );
             checks.push(...credentialChecks);
+            if (
+              missing.length === 0 &&
+              credentialChecks.every((check) => check.result === 'success')
+            ) {
+              try {
+                const manifest = await this.materializeManifest(
+                  database,
+                  current,
+                  context,
+                );
+                checks.push({
+                  checkName: 'project_manifest',
+                  evidence: {
+                    fingerprint: manifest.fingerprint,
+                    globalProfileVersion: manifest.globalProfileVersion,
+                    manifestId: manifest.id,
+                    manifestVersion: manifest.version,
+                  },
+                  result: 'success',
+                });
+              } catch (error) {
+                if (!(error instanceof DomainError)) throw error;
+                const domainError = error;
+                checks.push({
+                  checkName: 'project_manifest',
+                  errorCategory: domainError.category,
+                  errorCode:
+                    domainError.metadata.code ?? 'project_manifest_failed',
+                  evidence: { valid: false },
+                  result: 'failed',
+                });
+              }
+            } else {
+              checks.push({
+                checkName: 'project_manifest',
+                errorCategory: 'validation_error',
+                errorCode: 'project_manifest_dependencies_blocked',
+                evidence: { dependenciesReady: false },
+                result: 'blocked',
+              });
+            }
             const checkedAt = this.clock.now();
             const dependencyFingerprint = fingerprint({
               configuration: current.configuration,
@@ -545,10 +645,9 @@ export class EnrollmentService {
                   ? {}
                   : {
                       errorCategory:
-                        check.checkName === CONFIGURATION_CHECK
-                          ? 'validation_error'
-                          : 'credential_unavailable',
-                      errorCode: `${check.checkName}_missing`,
+                        check.errorCategory ?? 'credential_unavailable',
+                      errorCode:
+                        check.errorCode ?? `${check.checkName}_missing`,
                     }),
                 id: uuidv7(),
                 projectId: current.projectId,
@@ -597,13 +696,11 @@ export class EnrollmentService {
                 errorCategory:
                   check.result === 'success'
                     ? null
-                    : check.checkName === CONFIGURATION_CHECK
-                      ? 'validation_error'
-                      : 'credential_unavailable',
+                    : (check.errorCategory ?? 'credential_unavailable'),
                 errorCode:
                   check.result === 'success'
                     ? null
-                    : `${check.checkName}_missing`,
+                    : (check.errorCode ?? `${check.checkName}_missing`),
                 evidence: check.evidence,
                 result: check.result,
               })),
@@ -825,6 +922,192 @@ export class EnrollmentService {
       (value) =>
         value as unknown as { blockers: readonly string[]; ready: boolean },
     );
+  }
+
+  private async materializeManifest(
+    database: ScopedDatabase,
+    enrollment: Enrollment,
+    context: ActorContext,
+  ): Promise<ProjectManifest> {
+    await database.execute(
+      sql`select pg_advisory_xact_lock(hashtext(${`project-manifest:${enrollment.projectId}`}))`,
+    );
+    const bindings = await this.resolveManifestBindings(database, enrollment);
+    const [latest] = await database
+      .select()
+      .from(schema.projectManifestVersions)
+      .where(
+        and(
+          eq(schema.projectManifestVersions.projectId, enrollment.projectId),
+          eq(schema.projectManifestVersions.tenantId, enrollment.tenantId),
+        ),
+      )
+      .orderBy(desc(schema.projectManifestVersions.version))
+      .limit(1);
+    const nextVersion = (latest?.version ?? 0) + 1;
+    const now = this.clock.now();
+    const candidate = buildProjectManifest({
+      configuration: enrollment.configuration,
+      id: uuidv7(),
+      projectId: enrollment.projectId,
+      projectKey: enrollment.projectKey,
+      tenantKey: enrollment.tenantKey,
+      validatedAt: now,
+      verifiedBindings: bindings,
+      version: nextVersion,
+    });
+    if (
+      latest?.dependencyFingerprint === candidate.fingerprint &&
+      (latest.status === 'validated' || latest.status === 'active')
+    )
+      return toProjectManifest(latest);
+
+    if (
+      latest !== undefined &&
+      (latest.status === 'draft' || latest.status === 'validated')
+    )
+      await database
+        .update(schema.projectManifestVersions)
+        .set({ status: 'superseded', supersededAt: now })
+        .where(eq(schema.projectManifestVersions.id, latest.id));
+
+    await database.insert(schema.projectManifestVersions).values({
+      createdBy: context.actorId,
+      dependencyFingerprint: candidate.fingerprint,
+      document: candidate,
+      globalProfileVersion: candidate.globalProfileVersion,
+      id: candidate.id,
+      profile: candidate.profile,
+      projectId: enrollment.projectId,
+      status: 'validated',
+      tenantId: enrollment.tenantId,
+      validatedAt: now,
+      version: candidate.version,
+    });
+    await database.insert(schema.projectLocales).values({
+      contentLocales: candidate.contentLocales,
+      conversationLocale: candidate.conversationLocale,
+      defaultContentLocale: candidate.defaultContentLocale,
+      id: uuidv7(),
+      manifestVersionId: candidate.id,
+      projectId: enrollment.projectId,
+      requiredContentLocales: candidate.requiredContentLocales,
+      slugLocale: candidate.slugLocale,
+      tenantId: enrollment.tenantId,
+      translationPolicy: candidate.translationPolicy,
+    });
+    await database.insert(schema.projectBudgetPolicies).values({
+      id: uuidv7(),
+      manifestVersionId: candidate.id,
+      maxEstimatedCostCentsPerDay:
+        candidate.budgetPolicy.maxEstimatedCostCentsPerDay,
+      maxEstimatedCostCentsPerRequest:
+        candidate.budgetPolicy.maxEstimatedCostCentsPerRequest,
+      maxModelCallsPerRequest: candidate.budgetPolicy.maxModelCallsPerRequest,
+      maxRequestsPerDay: candidate.budgetPolicy.maxRequestsPerDay,
+      maxTokensPerRequest: candidate.budgetPolicy.maxTokensPerRequest,
+      projectId: enrollment.projectId,
+      tenantId: enrollment.tenantId,
+    });
+    await database.insert(schema.auditEvents).values({
+      action: 'project_manifest.validated',
+      actorId: context.actorId,
+      actorType: 'platform_owner',
+      correlationId: context.correlationId,
+      id: uuidv7(),
+      metadata: {
+        fingerprint: candidate.fingerprint,
+        globalProfileVersion: candidate.globalProfileVersion,
+        version: candidate.version,
+      },
+      objectId: candidate.id,
+      objectType: 'project_manifest',
+      projectId: enrollment.projectId,
+      tenantId: enrollment.tenantId,
+    });
+    await database.insert(schema.outboxEvents).values({
+      aggregateId: candidate.id,
+      aggregateType: 'project_manifest',
+      eventType: 'project_manifest.validated',
+      eventVersion: 1,
+      id: uuidv7(),
+      jobKey: `project_manifest.validated:${candidate.id}`,
+      payload: {
+        fingerprint: candidate.fingerprint,
+        version: candidate.version,
+      },
+      projectId: enrollment.projectId,
+      tenantId: enrollment.tenantId,
+    });
+    return candidate;
+  }
+
+  private async resolveManifestBindings(
+    database: ScopedDatabase,
+    enrollment: Enrollment,
+  ): Promise<VerifiedManifestBindings> {
+    const rows = await database
+      .select({
+        evidence: schema.integrationConnections.verificationEvidence,
+        kind: schema.integrationConnections.kind,
+      })
+      .from(schema.integrationConnections)
+      .innerJoin(
+        schema.providerCredentials,
+        eq(
+          schema.providerCredentials.id,
+          schema.integrationConnections.credentialId,
+        ),
+      )
+      .where(
+        and(
+          eq(schema.integrationConnections.projectId, enrollment.projectId),
+          eq(schema.integrationConnections.tenantId, enrollment.tenantId),
+          eq(schema.integrationConnections.status, 'active'),
+          eq(schema.providerCredentials.status, 'active'),
+          inArray(schema.integrationConnections.kind, ['github-app', 'vercel']),
+        ),
+      );
+    const evidence = (kind: 'github-app' | 'vercel') => {
+      const value = rows.find((row) => row.kind === kind)?.evidence;
+      if (value === null || typeof value !== 'object' || Array.isArray(value))
+        throw new DomainError(
+          'credential_unavailable',
+          `${kind} verified binding evidence is unavailable.`,
+          { code: `${kind}_binding_evidence_missing` },
+        );
+      return value as Record<string, unknown>;
+    };
+    const github = evidence('github-app');
+    const vercel = evidence('vercel');
+    const requiredString = (
+      value: Record<string, unknown>,
+      key: string,
+      kind: string,
+    ): string => {
+      const field = value[key];
+      if (typeof field !== 'string' || field.length === 0)
+        throw new DomainError(
+          'credential_unavailable',
+          `${kind} verified binding evidence is incomplete.`,
+          { code: `${kind}_binding_evidence_missing` },
+        );
+      return field;
+    };
+    const teamId = vercel.teamId;
+    return {
+      github: {
+        defaultBranch: requiredString(github, 'defaultBranch', 'github'),
+        installationId: requiredString(github, 'installationId', 'github'),
+        repository: requiredString(github, 'repository', 'github'),
+      },
+      vercel: {
+        productionBranch: requiredString(vercel, 'productionBranch', 'vercel'),
+        projectId: requiredString(vercel, 'projectId', 'vercel'),
+        repository: requiredString(vercel, 'repository', 'vercel'),
+        ...(typeof teamId === 'string' && teamId.length > 0 ? { teamId } : {}),
+      },
+    };
   }
 
   private async resolveCredentialChecks(

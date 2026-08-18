@@ -352,6 +352,19 @@ importers:
         specifier: 24.13.3
         version: 24.13.3
 
+  packages/manifests:
+    dependencies:
+      '@binflow/contracts':
+        specifier: workspace:*
+        version: link:../contracts
+      '@binflow/domain':
+        specifier: workspace:*
+        version: link:../domain
+    devDependencies:
+      '@types/node':
+        specifier: 24.13.3
+        version: 24.13.3
+
   packages/messaging:
     dependencies:
       '@binflow/domain':
@@ -394,6 +407,9 @@ importers:
       '@binflow/domain':
         specifier: workspace:*
         version: link:../domain
+      '@binflow/manifests':
+        specifier: workspace:*
+        version: link:../manifests
       drizzle-orm:
         specifier: 0.45.2
         version: 0.45.2(@types/pg@8.20.0)(kysely@0.29.5)(pg@8.23.0)

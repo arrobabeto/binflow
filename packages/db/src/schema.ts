@@ -14,7 +14,12 @@ import {
   uniqueIndex,
 } from 'drizzle-orm/pg-core';
 
-import type { EnrollmentConfiguration } from '@binflow/contracts';
+import type {
+  EnrollmentConfiguration,
+  ProjectManifest,
+  SupportedLocale,
+  TranslationPolicy,
+} from '@binflow/contracts';
 
 export * from './auth-schema.js';
 
@@ -75,6 +80,12 @@ export const enrollmentValidationResult = pgEnum(
   'enrollment_validation_result',
   ['success', 'failed', 'blocked'],
 );
+export const projectManifestStatus = pgEnum('project_manifest_status', [
+  'draft',
+  'validated',
+  'active',
+  'superseded',
+]);
 
 export const tenants = pgTable(
   'tenants',
@@ -112,6 +123,7 @@ export const projects = pgTable(
     displayName: text('display_name').notNull(),
     profile: text('profile').notNull().default('astro_repo'),
     status: projectStatus('status').notNull().default('draft'),
+    activeManifestVersion: integer('active_manifest_version'),
     version: integer('version').notNull().default(1),
     createdAt: timestamp('created_at', { withTimezone: true })
       .notNull()
@@ -122,9 +134,166 @@ export const projects = pgTable(
   },
   (table) => [
     uniqueIndex('projects_tenant_key_unique').on(table.tenantId, table.key),
+    check(
+      'projects_active_manifest_version_check',
+      sql`${table.activeManifestVersion} IS NULL OR ${table.activeManifestVersion} >= 1`,
+    ),
     uniqueIndex('projects_id_tenant_unique').on(table.id, table.tenantId),
     index('projects_tenant_idx').on(table.tenantId),
     pgPolicy('projects_tenant_isolation', {
+      for: 'all',
+      using: sql`${table.tenantId} = nullif(current_setting('app.tenant_id', true), '') OR current_setting('app.platform_owner', true) = 'true'`,
+      withCheck: sql`${table.tenantId} = nullif(current_setting('app.tenant_id', true), '') OR current_setting('app.platform_owner', true) = 'true'`,
+    }),
+  ],
+).enableRLS();
+
+export const projectManifestVersions = pgTable(
+  'project_manifest_versions',
+  {
+    id: text('id').primaryKey(),
+    tenantId: text('tenant_id')
+      .notNull()
+      .references(() => tenants.id),
+    projectId: text('project_id').notNull(),
+    version: integer('version').notNull(),
+    status: projectManifestStatus('status').notNull(),
+    profile: text('profile').notNull(),
+    globalProfileVersion: text('global_profile_version').notNull(),
+    dependencyFingerprint: text('dependency_fingerprint').notNull(),
+    document: jsonb('document').$type<ProjectManifest>().notNull(),
+    createdBy: text('created_by').notNull(),
+    validatedAt: timestamp('validated_at', { withTimezone: true }).notNull(),
+    supersededAt: timestamp('superseded_at', { withTimezone: true }),
+    createdAt: timestamp('created_at', { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (table) => [
+    check(
+      'project_manifest_versions_version_check',
+      sql`${table.version} >= 1`,
+    ),
+    uniqueIndex('project_manifest_versions_project_version_unique').on(
+      table.projectId,
+      table.version,
+    ),
+    unique('project_manifest_versions_id_scope_unique').on(
+      table.id,
+      table.tenantId,
+      table.projectId,
+    ),
+    foreignKey({
+      columns: [table.projectId, table.tenantId],
+      foreignColumns: [projects.id, projects.tenantId],
+      name: 'project_manifest_versions_project_tenant_fk',
+    }),
+    index('project_manifest_versions_project_idx').on(
+      table.projectId,
+      table.version,
+    ),
+    pgPolicy('project_manifest_versions_tenant_isolation', {
+      for: 'all',
+      using: sql`${table.tenantId} = nullif(current_setting('app.tenant_id', true), '') OR current_setting('app.platform_owner', true) = 'true'`,
+      withCheck: sql`${table.tenantId} = nullif(current_setting('app.tenant_id', true), '') OR current_setting('app.platform_owner', true) = 'true'`,
+    }),
+  ],
+).enableRLS();
+
+export const projectLocales = pgTable(
+  'project_locales',
+  {
+    id: text('id').primaryKey(),
+    manifestVersionId: text('manifest_version_id').notNull(),
+    tenantId: text('tenant_id').notNull(),
+    projectId: text('project_id').notNull(),
+    conversationLocale: text('conversation_locale')
+      .$type<SupportedLocale>()
+      .notNull(),
+    contentLocales: jsonb('content_locales')
+      .$type<SupportedLocale[]>()
+      .notNull(),
+    defaultContentLocale: text('default_content_locale')
+      .$type<SupportedLocale>()
+      .notNull(),
+    requiredContentLocales: jsonb('required_content_locales')
+      .$type<SupportedLocale[]>()
+      .notNull(),
+    slugLocale: text('slug_locale').$type<SupportedLocale>().notNull(),
+    translationPolicy: text('translation_policy')
+      .$type<TranslationPolicy>()
+      .notNull(),
+    createdAt: timestamp('created_at', { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (table) => [
+    uniqueIndex('project_locales_manifest_unique').on(table.manifestVersionId),
+    foreignKey({
+      columns: [table.manifestVersionId, table.tenantId, table.projectId],
+      foreignColumns: [
+        projectManifestVersions.id,
+        projectManifestVersions.tenantId,
+        projectManifestVersions.projectId,
+      ],
+      name: 'project_locales_manifest_scope_fk',
+    }),
+    foreignKey({
+      columns: [table.projectId, table.tenantId],
+      foreignColumns: [projects.id, projects.tenantId],
+      name: 'project_locales_project_tenant_fk',
+    }),
+    pgPolicy('project_locales_tenant_isolation', {
+      for: 'all',
+      using: sql`${table.tenantId} = nullif(current_setting('app.tenant_id', true), '') OR current_setting('app.platform_owner', true) = 'true'`,
+      withCheck: sql`${table.tenantId} = nullif(current_setting('app.tenant_id', true), '') OR current_setting('app.platform_owner', true) = 'true'`,
+    }),
+  ],
+).enableRLS();
+
+export const projectBudgetPolicies = pgTable(
+  'project_budget_policies',
+  {
+    id: text('id').primaryKey(),
+    manifestVersionId: text('manifest_version_id').notNull(),
+    tenantId: text('tenant_id').notNull(),
+    projectId: text('project_id').notNull(),
+    maxRequestsPerDay: integer('max_requests_per_day').notNull(),
+    maxModelCallsPerRequest: integer('max_model_calls_per_request').notNull(),
+    maxTokensPerRequest: integer('max_tokens_per_request').notNull(),
+    maxEstimatedCostCentsPerRequest: integer(
+      'max_estimated_cost_cents_per_request',
+    ).notNull(),
+    maxEstimatedCostCentsPerDay: integer(
+      'max_estimated_cost_cents_per_day',
+    ).notNull(),
+    createdAt: timestamp('created_at', { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (table) => [
+    check(
+      'project_budget_policies_positive_check',
+      sql`${table.maxRequestsPerDay} >= 1 AND ${table.maxModelCallsPerRequest} >= 1 AND ${table.maxTokensPerRequest} >= 1000 AND ${table.maxEstimatedCostCentsPerRequest} >= 1 AND ${table.maxEstimatedCostCentsPerDay} >= ${table.maxEstimatedCostCentsPerRequest}`,
+    ),
+    uniqueIndex('project_budget_policies_manifest_unique').on(
+      table.manifestVersionId,
+    ),
+    foreignKey({
+      columns: [table.manifestVersionId, table.tenantId, table.projectId],
+      foreignColumns: [
+        projectManifestVersions.id,
+        projectManifestVersions.tenantId,
+        projectManifestVersions.projectId,
+      ],
+      name: 'project_budget_policies_manifest_scope_fk',
+    }),
+    foreignKey({
+      columns: [table.projectId, table.tenantId],
+      foreignColumns: [projects.id, projects.tenantId],
+      name: 'project_budget_policies_project_tenant_fk',
+    }),
+    pgPolicy('project_budget_policies_tenant_isolation', {
       for: 'all',
       using: sql`${table.tenantId} = nullif(current_setting('app.tenant_id', true), '') OR current_setting('app.platform_owner', true) = 'true'`,
       withCheck: sql`${table.tenantId} = nullif(current_setting('app.tenant_id', true), '') OR current_setting('app.platform_owner', true) = 'true'`,

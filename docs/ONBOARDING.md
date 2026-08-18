@@ -47,10 +47,14 @@ Until the Phase 1 dashboard wizard is available, the Phase 0 interactive CLI may
 
 - Content/default/required/slug locales constrained by the global manifest.
 - Translation policy.
+- Request/day, model-call/request, token/request and estimated USD-cent
+  request/day budgets.
 - Editorial voice, audience, prohibited claims and research policy.
 - Categories and internal-link rules.
 
-For Webbin: Spanish and English required, Spanish slug locale, always translate.
+For Webbin: Spanish is the default/source and slug locale; Spanish and English
+are the exact required content locales; translation is always enabled. German
+and per-action translation selection are rejected by the pilot manifest.
 
 ### 4. Client Telegram bot
 
@@ -96,6 +100,12 @@ are not side effects of `integration verify`.
 - Bind `create_blog_draft`, access and approval policy.
 - Show effective allowed/blocked paths and required validations.
 - Validate that no project setting expands global capability scope.
+
+Manifest validation reads current verified GitHub/Vercel binding identities,
+materializes an immutable locale and budget snapshot, and records the exact
+manifest fingerprint/version as enrollment evidence. An unchanged fingerprint
+is reused; a changed draft creates the next version. Capability binding is
+completed by the following catalog module and cannot be supplied by a model.
 
 ### 9. Content catalog
 
