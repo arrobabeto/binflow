@@ -1,9 +1,15 @@
 import { cwd } from 'node:process';
 
 import { Command, Option } from 'commander';
+import { password } from '@inquirer/prompts';
 import { v7 as uuidv7 } from 'uuid';
 
 import { createOpenAICredentialVerifier } from '@binflow/ai';
+import {
+  bootstrapPlatformOwner,
+  createAuthSecretFile,
+  loadLocalAuthSecretFile,
+} from '@binflow/auth';
 import {
   type CredentialOwnerScope,
   integrationKindSchema,
@@ -34,7 +40,13 @@ import {
 } from '@binflow/secrets';
 import { createVercelCredentialVerifier } from '@binflow/vercel';
 
-import { databaseUrl, masterKeyPath, migrationDatabaseUrl } from './config.js';
+import {
+  authSecretPath,
+  databaseUrl,
+  masterKeyPath,
+  migrationDatabaseUrl,
+  publicBaseUrl,
+} from './config.js';
 import { promptIntegrationInput } from './integration-input.js';
 
 const program = new Command()
@@ -73,6 +85,64 @@ program
     const destination = path ?? masterKeyPath();
     await createMasterKeyFile(destination, cwd());
     console.log(`Master key initialized at ${destination}`);
+  });
+
+program
+  .command('auth-secret')
+  .description('Manage the external Better Auth secret')
+  .command('init')
+  .option('--path <path>', 'External Better Auth secret path')
+  .action(async ({ path }: { path?: string }) => {
+    const destination = path ?? authSecretPath();
+    await createAuthSecretFile(destination, cwd());
+    console.log(`Better Auth secret initialized at ${destination}`);
+  });
+
+program
+  .command('admin')
+  .description('Manage the sole platform owner')
+  .command('bootstrap')
+  .requiredOption('--email <email>', 'Platform-owner email')
+  .requiredOption('--name <name>', 'Platform-owner display name')
+  .action(async ({ email, name }: { email: string; name: string }) => {
+    if (!process.stdin.isTTY || !process.stdout.isTTY) {
+      throw new Error(
+        'Platform-owner bootstrap requires an interactive terminal.',
+      );
+    }
+    const validatePassword = (value: string): true | string =>
+      value.length < 12 || value.length > 128
+        ? 'Password must contain 12 to 128 characters.'
+        : true;
+    const first = await password({
+      mask: '*',
+      message: 'Platform-owner password',
+      validate: validatePassword,
+    });
+    const confirmation = await password({
+      mask: '*',
+      message: 'Confirm platform-owner password',
+      validate: (value) =>
+        value === first ? true : 'The passwords do not match.',
+    });
+    try {
+      const ownerUrl = await migrationDatabaseUrl();
+      await runMigrations(ownerUrl);
+      const secret = await loadLocalAuthSecretFile(authSecretPath(), cwd());
+      const created = await bootstrapPlatformOwner({
+        baseURL: publicBaseUrl(),
+        databaseUrl: ownerUrl,
+        email,
+        name,
+        password: first,
+        secret,
+      });
+      console.log(
+        `Platform owner ${created.email} created. Complete TOTP enrollment in the dashboard.`,
+      );
+    } finally {
+      void confirmation;
+    }
   });
 
 program

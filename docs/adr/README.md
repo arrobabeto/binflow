@@ -21,5 +21,6 @@ ADRs preserve why durable decisions exist. Accepted ADRs are binding until a lat
 | [0013](0013-github-app-administrative-registration.md)               | GitHub App administrative registration and runtime downscoping | Accepted |
 | [0014](0014-integration-credential-scope-and-verification.md)        | Integration credential scope and candidate verification        | Accepted |
 | [0015](0015-administrative-ingress-and-scoped-database-execution.md) | Administrative ingress and scoped database execution           | Accepted |
+| [0016](0016-platform-owner-bootstrap-and-session-assurance.md)       | Platform-owner bootstrap and session assurance                 | Accepted |
 
 Use [0000-template.md](0000-template.md) for new decisions.

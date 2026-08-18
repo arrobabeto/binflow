@@ -89,6 +89,11 @@ Provider payloads must not cross into domain interfaces. Adapters normalize them
   handlers never overlap.
 - Fastify maps the authenticated session to a domain actor and performs business
   authorization independently of the UI.
+- Both servers import the same `packages/auth` configuration and database schema;
+  only Nuxt mounts its HTTP handler. Fastify calls the server API to resolve the
+  cookie and never trusts browser-supplied actor or role fields.
+- Runtime sign-up is disabled. The one platform owner is created by the local
+  CLI before browser TOTP enrollment.
 
 ### Worker
 

@@ -25,9 +25,21 @@ Settings
 
 - `/login`: email and password.
 - `/two-factor`: TOTP or unused backup code.
-- `/security`: enable/rotate TOTP, regenerate backup codes and revoke sessions.
+- `/security`: enable TOTP, regenerate backup codes and revoke sessions.
 - No public signup or password reset email in the first MVP; recovery follows the documented bootstrap/break-glass process.
 - Routes containing credentials, enrollment mutation or approvals require a verified two-factor session.
+- Password-only sessions may access only `/security`, sign-out and the auth
+  calls needed to finish TOTP enrollment.
+- Every login after enrollment requires TOTP or one unused backup code. Trusted
+  device bypass is not offered.
+- Sensitive security, secret, integration and approval mutations require a
+  session created within the previous five minutes; the UI sends the owner back
+  through login when freshness expires.
+- Backup codes are rendered once after enrollment or regeneration and the UI
+  requires the owner to acknowledge that they were stored before leaving.
+- TOTP replacement is not a browser self-service action because disabling the
+  only active factor before replacement could strand the sole owner. It uses
+  the audited host-level recovery procedure.
 
 ## Overview
 

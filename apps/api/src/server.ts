@@ -1,9 +1,12 @@
 import { buildApp } from './app.js';
+import { createApiAuthRuntime } from './auth.js';
 
-const app = buildApp();
+const authRuntime = await createApiAuthRuntime();
+const app = buildApp({ auth: authRuntime.auth });
 
 const close = async (): Promise<void> => {
   await app.close();
+  await authRuntime.close();
   process.exitCode = 0;
 };
 

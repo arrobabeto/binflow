@@ -29,6 +29,22 @@ All notable changes to product behavior, architecture, contracts, security, oper
   concurrency, durable idempotency, administrative operations and transactional
   outbox delivery.
 - Serialized concurrent schema migration runners with a PostgreSQL advisory lock.
+- Added ADR-0016 and the documented administrative authentication contract:
+  single-owner interactive bootstrap, disabled public sign-up, mandatory TOTP,
+  single-use backup codes, database-backed rate limits and fresh-session gates.
+- Removed top-level await from the migration executable so the shared database
+  package remains bundle-safe for the Nuxt authentication server runtime.
+- Added the Better Auth server runtime, sole-owner CLI bootstrap, Nuxt login,
+  TOTP enrollment/challenge, one-time backup-code display, session management
+  and the authenticated Fastify session bridge.
+- Revoked all dormant password-only sessions when initial TOTP enrollment
+  completes so they cannot inherit two-factor assurance retroactively.
+- Serialized root workspace test tasks that share the disposable PostgreSQL
+  database, preventing cross-package fixture cleanup races.
+- Aligned the Nuxt server bundle target with the pinned Node.js 24 runtime so
+  modern dependency syntax is preserved without an incompatible ES2019 pass.
+- Added dashboard/auth readiness checks and made the production Caddy service
+  wait for a healthy dashboard rather than only a started process.
 
 ### Changed
 

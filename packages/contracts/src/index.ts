@@ -152,3 +152,17 @@ export type AdminOperationReference = z.infer<
 >;
 export type AdminOperation = z.infer<typeof adminOperationSchema>;
 export type HealthResponse = z.infer<typeof healthResponseSchema>;
+
+export const platformOwnerSessionSchema = z
+  .object({
+    actorId: z.string().min(1),
+    email: z.email(),
+    fresh: z.boolean(),
+    role: z.literal('platform_owner'),
+    twoFactor: z.literal(true),
+  })
+  .strict();
+
+export type PlatformOwnerSessionResponse = z.infer<
+  typeof platformOwnerSessionSchema
+>;

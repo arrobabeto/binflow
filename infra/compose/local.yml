@@ -67,11 +67,16 @@ services:
       dockerfile: infra/docker/Dockerfile
     command: ['node', 'apps/api/dist/server.js']
     environment:
+      BINFLOW_AUTH_SECRET_FILE: /run/secrets/auth_secret
+      BINFLOW_PUBLIC_URL: http://localhost:3000
+      BINFLOW_SECURE_COOKIES: 'false'
       BINFLOW_VERSION: local
       DATABASE_URL: postgresql://binflow_app:binflow_local_app@postgres:5432/binflow
       LOG_LEVEL: info
       PORT: '8080'
       REDIS_URL: redis://redis:6379
+    secrets:
+      - auth_secret
     depends_on:
       postgres:
         condition: service_healthy
@@ -112,13 +117,30 @@ services:
       dockerfile: infra/docker/Dockerfile
     command: ['node', 'apps/dashboard/.output/server/index.mjs']
     environment:
+      BINFLOW_AUTH_SECRET_FILE: /run/secrets/auth_secret
+      BINFLOW_INTERNAL_API_URL: http://api:8080
+      BINFLOW_PUBLIC_URL: http://localhost:3000
+      BINFLOW_SECURE_COOKIES: 'false'
+      DATABASE_URL: postgresql://binflow_app:binflow_local_app@postgres:5432/binflow
       HOST: 0.0.0.0
       NITRO_HOST: 0.0.0.0
       NITRO_PORT: '3000'
-      NUXT_PUBLIC_API_BASE_URL: http://api:8080
+    secrets:
+      - auth_secret
     depends_on:
       api:
         condition: service_healthy
+    healthcheck:
+      test:
+        [
+          'CMD',
+          'node',
+          '-e',
+          "fetch('http://127.0.0.1:3000/login').then(r=>{if(!r.ok)process.exit(1)}).catch(()=>process.exit(1))",
+        ]
+      interval: 5s
+      timeout: 3s
+      retries: 20
     ports:
       - '3000:3000'
 
@@ -143,3 +165,7 @@ volumes:
   minio_data:
   postgres_data:
   redis_data:
+
+secrets:
+  auth_secret:
+    file: ${BINFLOW_AUTH_SECRET_PATH:-${HOME}/.config/binflow/auth-secret-v1.key}

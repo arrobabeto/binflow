@@ -1,7 +1,12 @@
 {$BINFLOW_DOMAIN} {
 	encode zstd gzip
 
-	@api path /api/* /webhooks/*
+	@auth path /api/auth/*
+	handle @auth {
+		reverse_proxy dashboard:3000
+	}
+
+	@api path /api/v1/* /webhooks/*
 	handle @api {
 		reverse_proxy api:8080
 	}

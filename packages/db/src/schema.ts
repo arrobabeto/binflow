@@ -13,6 +13,10 @@ import {
   uniqueIndex,
 } from 'drizzle-orm/pg-core';
 
+export * from './auth-schema.js';
+
+export * from './auth-schema.js';
+
 export const tenantStatus = pgEnum('tenant_status', [
   'draft',
   'active',

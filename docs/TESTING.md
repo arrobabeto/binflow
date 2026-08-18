@@ -45,6 +45,14 @@
 - Vercel credential identity and exact project/team, GitHub repository and production-branch verification without project mutation.
 - S3-compatible artifact lifecycle.
 - Better Auth session and TOTP behavior.
+- Single-owner bootstrap is serialized, refuses existing users and never accepts
+  a password argument; HTTP sign-up remains disabled.
+- Password-only sessions cannot reach business APIs. TOTP or a single-use backup
+  code completes login; trusted-device requests are rejected.
+- Initial TOTP enrollment revokes every other password-only session so assurance
+  cannot be inherited retroactively.
+- Session expiry, five-minute freshness, revocation, database-backed rate limits,
+  Origin/CSRF enforcement and cookie flags are covered explicitly.
 - LangGraph PostgreSQL checkpointer compatibility.
 
 ### Integration
@@ -74,6 +82,8 @@ lock must serialize them without duplicate enum/table creation.
 Database test files sharing one disposable database run serially because their
 fixture cleanup uses transactional table truncation; concurrency behavior is
 tested explicitly inside dedicated cases instead of racing suite cleanup.
+The root `pnpm test` command also serializes workspace test tasks for the same
+reason; individual non-database packages may still be run directly in parallel.
 
 ### End-to-end
 
