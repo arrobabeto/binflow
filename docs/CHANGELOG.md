@@ -27,6 +27,9 @@ All notable changes to product behavior, architecture, contracts, security, oper
 
 ### Changed
 
+- Replaced the AMD64-only ClamAV container with the official pinned Debian
+  multi-architecture image so local Apple Silicon and production AMD64 hosts
+  use the same native Compose service.
 - Moved SecretsProvider and initial credential setup from Phase 1 into Phase 0; Phase 1 dashboard management reuses the same application services.
 - Reconciled GitHub security and integration documentation with the registered permission ceiling while preserving least privilege for normal runtime tokens.
 - Corrected the GitHub App private key to platform scope with a separate Webbin installation binding and narrowly defined the read-only installation-audit token exception.

@@ -159,5 +159,8 @@ CI introduced with implementation must:
 - No critical/high security finding remains open.
 - E2E evidence records exact request, PR, SHA, deployment and production URLs.
 - Local setup succeeds from an empty database and object store.
+- The pinned ClamAV image exposes native `linux/arm64` and `linux/amd64`
+  manifests; its Compose service becomes healthy and detects the EICAR test
+  signature before attachment scanning is accepted.
 - Destructive PostgreSQL integration tests refuse database names that do not end in `_test`; CI uses a disposable isolated database only.
 - Documentation matches the observed behavior and acceptance evidence.

@@ -5,6 +5,10 @@
 ### Local MVP
 
 - PostgreSQL, Redis, MinIO and ClamAV through Docker Compose.
+- ClamAV uses the official Debian-based `clamav/clamav-debian:1.4.6` image so
+  the same Compose definition runs natively on Apple Silicon (`linux/arm64`)
+  and the production VPS target (`linux/amd64`); do not force an emulated
+  platform in Compose.
 - API, dashboard, worker, maintenance and one-shot CLI services are packaged in Docker from Phase 0; supervised host processes remain an optional development convenience.
 - Local and production profiles build the same versioned first-party images.
 - Telegram uses polling.
