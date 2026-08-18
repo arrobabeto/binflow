@@ -23,6 +23,7 @@ COPY packages/integrations/package.json packages/integrations/package.json
 COPY packages/messaging/package.json packages/messaging/package.json
 COPY packages/manifests/package.json packages/manifests/package.json
 COPY packages/onboarding/package.json packages/onboarding/package.json
+COPY packages/policies/package.json packages/policies/package.json
 COPY packages/secrets/package.json packages/secrets/package.json
 COPY packages/vercel/package.json packages/vercel/package.json
 RUN pnpm install --frozen-lockfile

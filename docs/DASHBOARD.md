@@ -77,6 +77,9 @@ reuses the project manifest and shows its redacted effective contract. Webbin
 offers English and Spanish content only, requires both, uses Spanish as source
 and slug locale, and fixes translation to `always_translate`; globally
 supported German and `ask_each_action` remain unavailable for this pilot.
+The same view shows the effective code-owned capability catalog. In the first
+MVP `Create blog` is enabled as `create_blog_draft@1`; executor, schemas,
+permissions and approval behavior are read-only and cannot be edited in the UI.
 
 ## Requests
 

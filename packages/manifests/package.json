@@ -17,7 +17,8 @@
   },
   "dependencies": {
     "@binflow/contracts": "workspace:*",
-    "@binflow/domain": "workspace:*"
+    "@binflow/domain": "workspace:*",
+    "@binflow/policies": "workspace:*"
   },
   "devDependencies": {
     "@types/node": "24.13.3"

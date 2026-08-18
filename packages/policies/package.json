@@ -1,5 +1,5 @@
 {
-  "name": "@binflow/onboarding",
+  "name": "@binflow/policies",
   "version": "0.0.0",
   "private": true,
   "type": "module",
@@ -13,16 +13,12 @@
     "build": "tsc -p tsconfig.json",
     "check": "tsc -p tsconfig.json --noEmit",
     "lint": "eslint src --max-warnings=0",
-    "test": "vitest run"
+    "test": "vitest run test"
   },
   "dependencies": {
     "@binflow/contracts": "workspace:*",
-    "@binflow/db": "workspace:*",
     "@binflow/domain": "workspace:*",
-    "@binflow/manifests": "workspace:*",
-    "@binflow/policies": "workspace:*",
-    "drizzle-orm": "0.45.2",
-    "uuid": "14.0.1"
+    "zod": "4.4.3"
   },
   "devDependencies": {
     "@types/node": "24.13.3"

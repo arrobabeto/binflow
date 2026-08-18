@@ -23,3 +23,4 @@ This page summarizes active decisions. The linked ADR is authoritative.
 | Client onboarding is resumable and activation requires current named validation evidence                                | Accepted | [ADR-0017](adr/0017-resumable-enrollment-and-activation-evidence.md)         |
 | Dashboard credential enrollment uses API-only KEK access and one-time secret submission                                 | Accepted | [ADR-0018](adr/0018-dashboard-credential-enrollment-boundary.md)             |
 | Project manifests bind immutable locale, provider, path and budget snapshots derived from a code-owned profile          | Accepted | [ADR-0019](adr/0019-versioned-project-manifest-and-budget-policy.md)         |
+| Capability definitions are code-owned and projects bind only immutable approved versions                                | Accepted | [ADR-0020](adr/0020-code-owned-capability-catalog-and-project-binding.md)    |

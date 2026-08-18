@@ -8,6 +8,7 @@ import {
   type ProjectManifest,
 } from '@binflow/contracts';
 import { DomainError } from '@binflow/domain';
+import { webbinCapabilityBinding } from '@binflow/policies';
 
 export const astroRepoGlobalProfile = {
   id: 'astro_repo',
@@ -157,6 +158,7 @@ export const buildProjectManifest = (
     contentLocales: ['es', 'en'],
     defaultContentLocale: 'es',
     globalProfileVersion: astroRepoGlobalProfile.version,
+    enabledCapabilities: [webbinCapabilityBinding],
     projectId: input.projectId,
     requiredContentLocales: ['es', 'en'],
     slugLocale: 'es',
@@ -229,7 +231,7 @@ export const buildProjectManifest = (
         ? {}
         : { teamId: input.verifiedBindings.vercel.teamId }),
     },
-    enabledCapabilities: [],
+    enabledCapabilities: [webbinCapabilityBinding],
     fingerprint,
     globalProfileVersion: astroRepoGlobalProfile.version,
     graphVersion: 'workflow-kernel-pending@1',

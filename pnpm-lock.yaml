@@ -360,6 +360,9 @@ importers:
       '@binflow/domain':
         specifier: workspace:*
         version: link:../domain
+      '@binflow/policies':
+        specifier: workspace:*
+        version: link:../policies
     devDependencies:
       '@types/node':
         specifier: 24.13.3
@@ -410,12 +413,31 @@ importers:
       '@binflow/manifests':
         specifier: workspace:*
         version: link:../manifests
+      '@binflow/policies':
+        specifier: workspace:*
+        version: link:../policies
       drizzle-orm:
         specifier: 0.45.2
         version: 0.45.2(@types/pg@8.20.0)(kysely@0.29.5)(pg@8.23.0)
       uuid:
         specifier: 14.0.1
         version: 14.0.1
+    devDependencies:
+      '@types/node':
+        specifier: 24.13.3
+        version: 24.13.3
+
+  packages/policies:
+    dependencies:
+      '@binflow/contracts':
+        specifier: workspace:*
+        version: link:../contracts
+      '@binflow/domain':
+        specifier: workspace:*
+        version: link:../domain
+      zod:
+        specifier: 4.4.3
+        version: 4.4.3
     devDependencies:
       '@types/node':
         specifier: 24.13.3

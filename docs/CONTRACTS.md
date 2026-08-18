@@ -240,6 +240,26 @@ type ToolDefinition<Input = unknown, Output = unknown> = {
 };
 ```
 
+The first immutable registry entry is `create_blog_draft@1` with executor
+`workflow.create_blog@1`, profile `astro_repo`, medium risk, preview required,
+client publication access and deterministic conditional admin approval for a
+new category. Project configuration cannot override its schemas, executor,
+permissions, timeout, retries or budget. It can only bind the exact definition
+through a validated manifest.
+
+```ts
+type CapabilityCatalogItem = {
+  id: 'create_blog_draft';
+  version: 1;
+  command: '/create_blog';
+  displayName: 'Create blog';
+  access: CapabilityAccess;
+  enabled: boolean;
+  requiresPreview: true;
+  riskClass: 'medium';
+};
+```
+
 ## `create_blog_draft`
 
 Telegram command: `/create_blog`.
@@ -394,6 +414,7 @@ GET    /api/v1/health
 GET    /api/v1/session
 GET    /api/v1/projects
 GET    /api/v1/projects/:projectId
+GET    /api/v1/projects/:projectId/capabilities
 GET    /api/v1/requests
 GET    /api/v1/requests/:requestId
 POST   /api/v1/requests/:requestId/approve

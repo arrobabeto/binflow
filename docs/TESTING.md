@@ -20,6 +20,8 @@
 - Zod schemas and domain value objects.
 - Locale intersection and translation policy.
 - Capability access and approval matrices.
+- Exact capability registry version, immutable project binding, disabled-tool
+  invisibility and manifest/binding fingerprint agreement.
 - Request-state transitions and terminal-state enforcement.
 - Category normalization/classification inputs.
 - Path/field allowlists and manifest validation.

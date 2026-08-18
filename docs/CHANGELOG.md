@@ -77,6 +77,9 @@ All notable changes to product behavior, architecture, contracts, security, oper
 - Added the `@binflow/manifests` validator, migration `0011`, immutable locale
   and budget snapshots, manifest validation evidence, authenticated read API
   and effective-contract/budget controls in the enrollment dashboard.
+- Added ADR-0020 and the code-owned `create_blog_draft@1` capability registry,
+  immutable manifest-scoped project bindings, capability-catalog validation,
+  read-only dashboard projection and migration `0012`.
 
 ### Changed
 
