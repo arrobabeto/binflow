@@ -14,8 +14,31 @@
 - Telegram uses polling.
 - GitHub/Vercel state may be reconciled by API polling.
 - Real external mutations require explicit test/pilot configuration, never production secrets in committed files.
+- Schema migrations use the database owner connection. API, worker, dashboard
+  auth and maintenance use a distinct non-owner runtime role so RLS is effective.
 
 Start durable dependencies with `docker compose -f infra/compose/local.yml up -d postgres redis minio clamav`, then apply migrations with `pnpm db:migrate`. The same Compose file can build the current API, dashboard, worker and maintenance images; the CLI intentionally runs in the trusted host terminal so interactive secret input never traverses Compose configuration.
+
+`DATABASE_URL` is the runtime application connection. `BINFLOW_MIGRATION_DATABASE_URL`
+or its `_FILE` variant is the schema-owner connection used only by migration and
+release commands. Production must not mount the migration credential into API,
+dashboard, worker or maintenance containers.
+
+Fresh local PostgreSQL volumes create `binflow_app` through
+`infra/postgres/local-init.sql`. For an existing local volume, recreate only the
+PostgreSQL container to mount the script, then apply it idempotently:
+
+```text
+docker compose -f infra/compose/local.yml up -d --force-recreate postgres
+docker compose -f infra/compose/local.yml exec -T postgres psql -v ON_ERROR_STOP=1 -U binflow -d binflow -f /docker-entrypoint-initdb.d/001-runtime-role.sql
+```
+
+This does not recreate or delete the PostgreSQL data volume.
+
+Migration execution serializes on the PostgreSQL advisory lock named
+`binflow_schema_migrations`. A second migrator waits for the first and then
+reconciles the journal; operators must not bypass this runner with concurrent
+manual SQL application.
 
 ### Production-ready profile
 
@@ -93,6 +116,13 @@ secret references and limits Phase 0 to one project connection per credential
 version. Apply it after `0004`; rollback keeps the constraints unless the full
 credential-model backup is restored.
 
+Migration `0006` adds the administrative operation, idempotency, audit, outbox
+and processed-event foundation, forces RLS on tenant-owned tables and grants
+only runtime DML to the pre-provisioned `binflow_app` role. Migration `0007`
+makes audit events append-only. Both are additive; rollback keeps the tables and
+stops new writers before reverting application images. Do not remove audit or
+idempotency history during rollback.
+
 Production supplies the KEK as a Docker secret. Database records contain one random DEK and AES-256-GCM encrypted envelope per credential version; the KEK itself is never stored in PostgreSQL.
 
 ## Health
@@ -165,6 +195,13 @@ integration
 4. Verify health and run smoke tests.
 5. Enable webhook delivery only after readiness.
 6. Record deployment version and operational change in documentation/changelog.
+
+The migration step uses the schema-owner credential; all application containers
+are smoke-tested with the RLS-constrained runtime credential.
+Production Compose exposes the one-shot `migrate` service only through the
+`release` profile. Run it before application rollout with
+`docker compose --profile release run --rm migrate`; the schema-owner secret is
+mounted only in that container.
 
 Do not use floating `latest` tags in production.
 

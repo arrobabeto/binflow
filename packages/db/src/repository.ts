@@ -10,7 +10,8 @@ import { webbinPilotBinding } from '@binflow/contracts';
 import { DomainError, type ErrorCategory } from '@binflow/domain';
 import type { EncryptedSecretEnvelope } from '@binflow/secrets';
 
-import type { Database } from './client.js';
+import type { DatabaseTransaction } from './client.js';
+import type { ScopedDatabase } from './scope.js';
 import {
   credentialEvents,
   integrationConnections,
@@ -90,7 +91,7 @@ const ownershipLockKey = (
   ].join(':');
 
 const auditScope = async (
-  tx: Parameters<Parameters<Database['transaction']>[0]>[0],
+  tx: DatabaseTransaction,
   credentialId: string,
   fallback: Readonly<{
     projectId: string | null;
@@ -126,7 +127,7 @@ const assertOwnerScope = (
 };
 
 export const ensureDraftScope = async (
-  db: Database,
+  db: ScopedDatabase,
   input: Readonly<{
     tenantKey: string;
     projectKey: string;
@@ -166,7 +167,7 @@ export const ensureDraftScope = async (
 };
 
 export const resolveScope = async (
-  db: Database,
+  db: ScopedDatabase,
   input: Readonly<{ tenantKey?: string; projectKey?: string }>,
 ): Promise<ResolvedScope> => {
   if (input.projectKey !== undefined) {
@@ -204,7 +205,7 @@ export const resolveScope = async (
 };
 
 export const storeCredentialVersion = async (
-  db: Database,
+  db: ScopedDatabase,
   input: Readonly<{
     alias: string;
     configuration: SafeConfiguration;
@@ -341,7 +342,7 @@ export const storeCredentialVersion = async (
   });
 };
 
-export const listCredentials = async (db: Database) =>
+export const listCredentials = async (db: ScopedDatabase) =>
   db
     .select({
       alias: providerCredentials.alias,
@@ -361,7 +362,7 @@ export const listCredentials = async (db: Database) =>
     .orderBy(desc(providerCredentials.createdAt));
 
 export const getCredentialForVerification = async (
-  db: Database,
+  db: ScopedDatabase,
   credentialId: string,
 ): Promise<CredentialForVerification | undefined> => {
   const [row] = await db
@@ -491,7 +492,7 @@ export const getCredentialForVerification = async (
 };
 
 export const listCredentialIdsForVerification = async (
-  db: Database,
+  db: ScopedDatabase,
 ): Promise<string[]> => {
   const rows = await db
     .select({
@@ -536,7 +537,7 @@ export const listCredentialIdsForVerification = async (
 };
 
 export const recordCredentialVerificationSuccess = async (
-  db: Database,
+  db: ScopedDatabase,
   input: Readonly<{
     checkedAt: Date;
     credentialId: string;
@@ -715,7 +716,7 @@ export const recordCredentialVerificationSuccess = async (
   });
 
 export const recordCredentialVerificationFailure = async (
-  db: Database,
+  db: ScopedDatabase,
   input: Readonly<{
     category: ErrorCategory;
     checkedAt: Date;
@@ -805,7 +806,7 @@ export const recordCredentialVerificationFailure = async (
   });
 
 export const revokeCredential = async (
-  db: Database,
+  db: ScopedDatabase,
   credentialId: string,
 ): Promise<boolean> =>
   db.transaction(async (tx) => {

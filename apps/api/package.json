@@ -13,6 +13,7 @@
   },
   "dependencies": {
     "@binflow/contracts": "workspace:*",
+    "@binflow/domain": "workspace:*",
     "fastify": "5.11.3"
   },
   "devDependencies": {

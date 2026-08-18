@@ -37,6 +37,35 @@ Role (`admin` or `client`), tenant, bot username, secret references, webhook/pol
 
 Hashed token, tenant/user/bot binding, expiry, consumed timestamp and creator.
 
+## Command, audit and delivery foundation
+
+### `idempotency_records`
+
+Actor, method, route, idempotency key, canonical request hash, lifecycle state,
+HTTP status, redacted response or operation reference and expiry. The unique
+boundary is actor plus method, route and key; a reused key cannot cross actors.
+
+### `admin_operations`
+
+Durable platform-owner operation, type, status, progress, input hash, allowlisted
+result/error, optimistic version and start/end timestamps. Provider secrets and
+queue payloads are never stored here.
+
+Statuses are `pending`, `running`, `succeeded`, `failed` and `cancelled`.
+Terminal rows are immutable through the application transition service.
+
+### `outbox_events`
+
+Event type/version, aggregate identity, tenant/project scope, redacted payload,
+stable job key, publish attempts, availability time, published timestamp and
+last stable error category. The row is created in the same transaction as the
+business mutation and audit event.
+
+### `processed_events`
+
+Consumer plus event/idempotency key, first/last observation and result. Its
+unique key prevents duplicate queue or webhook delivery from repeating effects.
+
 ## Project configuration
 
 ### `projects`
@@ -179,6 +208,10 @@ Tenant/project/request/capability/node/provider/model dimensions and reported/ca
 ### `audit_events`
 
 Append-only actor, action, object, tenant/project/request identifiers, redacted metadata, correlation IDs and timestamp.
+
+Administrative platform-owner access includes its actor and reason even when
+the target spans tenants. Audit rows cannot be updated through application
+repositories; a database trigger rejects update and delete operations.
 
 ## Retention defaults
 

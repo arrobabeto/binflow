@@ -18,6 +18,8 @@ import {
   revokeCredential,
   runMigrations,
   storeCredentialVersion,
+  type ScopedDatabase,
+  withPlatformOwnerScope,
 } from '@binflow/db';
 import { createGitHubCredentialVerifier } from '@binflow/github';
 import {
@@ -32,7 +34,7 @@ import {
 } from '@binflow/secrets';
 import { createVercelCredentialVerifier } from '@binflow/vercel';
 
-import { databaseUrl, masterKeyPath } from './config.js';
+import { databaseUrl, masterKeyPath, migrationDatabaseUrl } from './config.js';
 import { promptIntegrationInput } from './integration-input.js';
 
 const program = new Command()
@@ -41,13 +43,22 @@ const program = new Command()
   .showHelpAfterError();
 
 const withDatabase = async <T>(
-  action: (db: ReturnType<typeof createDatabase>['db']) => Promise<T>,
+  action: (db: ScopedDatabase) => Promise<T>,
 ): Promise<T> => {
   const url = await databaseUrl();
-  await runMigrations(url);
+  await runMigrations(await migrationDatabaseUrl());
   const { db, pool } = createDatabase(url);
   try {
-    return await action(db);
+    const correlationId = uuidv7();
+    return await withPlatformOwnerScope(
+      db,
+      {
+        actorId: 'local-cli',
+        correlationId,
+        reason: `Phase 0 CLI command: ${process.argv.slice(2, 4).join(' ')}`,
+      },
+      action,
+    );
   } finally {
     await pool.end();
   }

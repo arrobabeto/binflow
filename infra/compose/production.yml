@@ -157,11 +157,28 @@ services:
     security_opt:
       - no-new-privileges:true
 
+  migrate:
+    image: ${BINFLOW_IMAGE_REGISTRY}/binflow:${BINFLOW_VERSION}
+    command: ['node', 'packages/db/dist/migrate.js']
+    profiles: ['release']
+    environment:
+      BINFLOW_MIGRATION_DATABASE_URL_FILE: /run/secrets/migration_database_url
+    secrets:
+      - migration_database_url
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: 'no'
+    security_opt:
+      - no-new-privileges:true
+
 secrets:
   binflow_kek:
     file: ${BINFLOW_KEK_PATH:?Set BINFLOW_KEK_PATH}
   database_url:
     file: ${BINFLOW_DATABASE_URL_PATH:?Set BINFLOW_DATABASE_URL_PATH}
+  migration_database_url:
+    file: ${BINFLOW_MIGRATION_DATABASE_URL_PATH:?Set BINFLOW_MIGRATION_DATABASE_URL_PATH}
   redis_url:
     file: ${BINFLOW_REDIS_URL_PATH:?Set BINFLOW_REDIS_URL_PATH}
   minio_root_password:

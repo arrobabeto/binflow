@@ -47,6 +47,9 @@ importers:
       '@binflow/contracts':
         specifier: workspace:*
         version: link:../../packages/contracts
+      '@binflow/domain':
+        specifier: workspace:*
+        version: link:../../packages/domain
       fastify:
         specifier: 5.11.3
         version: 5.11.3

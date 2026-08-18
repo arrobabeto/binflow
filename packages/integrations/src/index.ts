@@ -1,12 +1,12 @@
 import type { IntegrationKind } from '@binflow/contracts';
 import {
   type CredentialForVerification,
-  type Database,
   getCredentialForVerification,
   listCredentialIdsForVerification,
   recordCredentialVerificationFailure,
   recordCredentialVerificationSuccess,
   type SafeConfiguration,
+  type ScopedDatabase,
 } from '@binflow/db';
 import {
   DomainError,
@@ -125,7 +125,7 @@ export interface CredentialVerificationRepository {
 }
 
 export const createDatabaseCredentialVerificationRepository = (
-  db: Database,
+  db: ScopedDatabase,
 ): CredentialVerificationRepository => ({
   getCredential: (credentialId) =>
     getCredentialForVerification(db, credentialId),

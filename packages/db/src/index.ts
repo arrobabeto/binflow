@@ -1,4 +1,18 @@
-export { createDatabase, type Database } from './client.js';
+export {
+  createDatabase,
+  type Database,
+  type DatabaseTransaction,
+} from './client.js';
+export {
+  completeIdempotencyRecord,
+  createAdminOperation,
+  hashCanonicalRequest,
+  recordProcessedEvent,
+  reserveIdempotencyKey,
+  transitionAdminOperation,
+  type IdempotencyReservation,
+  type JsonValue,
+} from './control-plane.js';
 export { runMigrations } from './migrate.js';
 export {
   ensureDraftScope,
@@ -15,3 +29,10 @@ export {
   type SafeConfiguration,
 } from './repository.js';
 export * as schema from './schema.js';
+export {
+  withPlatformOwnerScope,
+  withSystemTenantScope,
+  withTenantScope,
+  type DatabaseExecutionScope,
+  type ScopedDatabase,
+} from './scope.js';

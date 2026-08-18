@@ -24,6 +24,11 @@ All notable changes to product behavior, architecture, contracts, security, oper
 - Added secure interactive GitHub PEM file import with repository-boundary, regular-file, size and `0600` permission checks.
 - Added the Chat SDK Telegram/Redis runtime boundary and an in-memory messaging fake without enabling real bot handlers.
 - Runtime containers execute compiled Node entrypoints as a non-root user and do not invoke package managers at startup.
+- Added ADR-0015 and the Phase 1 control-plane foundation contracts for
+  same-origin auth/business ingress, explicit database scopes, optimistic
+  concurrency, durable idempotency, administrative operations and transactional
+  outbox delivery.
+- Serialized concurrent schema migration runners with a PostgreSQL advisory lock.
 
 ### Changed
 
