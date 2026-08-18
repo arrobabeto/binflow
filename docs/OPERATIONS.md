@@ -165,6 +165,11 @@ but contains security state. Rollback stops dashboard/API auth traffic, restores
 the pre-release database backup and prior images together; never drop live auth
 tables merely to downgrade an application container.
 
+Migration `0009` adds the resumable enrollment aggregate, immutable validation
+attempts and hash-only pairing-token records with tenant/project RLS. It is
+additive. Rollback stops enrollment writers and keeps history; restoring a prior
+database backup is required if the release itself must be reversed.
+
 ## Health
 
 Endpoints:

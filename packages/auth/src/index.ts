@@ -210,6 +210,12 @@ export const createBinflowAuth = (
 
 export type BinflowAuth = ReturnType<typeof createBinflowAuth>;
 
+export type BinflowAuthRuntime = Readonly<{
+  auth: BinflowAuth;
+  close: () => Promise<void>;
+  database: Database;
+}>;
+
 export const createBinflowAuthRuntime = async (
   input: Readonly<{
     baseURL: string;
@@ -219,7 +225,7 @@ export const createBinflowAuthRuntime = async (
     secretFile?: string;
     trustedOrigins: readonly string[];
   }>,
-) => {
+): Promise<BinflowAuthRuntime> => {
   const database = createDatabase(input.databaseUrl);
   try {
     const secret = await loadAuthSecret({
@@ -234,6 +240,7 @@ export const createBinflowAuthRuntime = async (
         secret,
         trustedOrigins: input.trustedOrigins,
       }),
+      database: database.db,
       close: async (): Promise<void> => database.pool.end(),
     };
   } catch (error) {

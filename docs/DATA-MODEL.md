@@ -99,6 +99,15 @@ DRAFT → CONFIGURING → VALIDATING → VALIDATION_FAILED
 
 Alternate states: `REVALIDATION_REQUIRED`, `SUSPENDED`, `ARCHIVED`.
 
+The row is the versioned onboarding aggregate and contains the strict wizard
+configuration, current step, last validation timestamp and one-to-one
+tenant/project binding. `enrollment_validation_attempts` stores immutable named
+check/version results, dependency fingerprints, allowlisted evidence, stable
+errors and execution timestamps. `pairing_tokens` stores only token hashes and
+binding/expiry/consumption metadata; plaintext is returned once. The associated
+idempotency record contains only a redacted delivery receipt, never the link or
+token.
+
 ### `project_manifest_versions`
 
 Immutable JSON contract, version, validation state, creator, timestamps and superseded link.

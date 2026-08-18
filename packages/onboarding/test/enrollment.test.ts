@@ -1,0 +1,261 @@
+import { createHash } from 'node:crypto';
+
+import { eq, sql } from 'drizzle-orm';
+import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
+
+import {
+  createDatabase,
+  runMigrations,
+  schema,
+  withPlatformOwnerScope,
+} from '@binflow/db';
+
+import { EnrollmentService } from '../src/index.js';
+
+const databaseUrl = process.env.BINFLOW_TEST_DATABASE_URL;
+if (
+  databaseUrl !== undefined &&
+  !new URL(databaseUrl).pathname.slice(1).endsWith('_test')
+) {
+  throw new Error(
+    'BINFLOW_TEST_DATABASE_URL must name a database ending in _test.',
+  );
+}
+const describeDatabase = databaseUrl === undefined ? describe.skip : describe;
+
+describeDatabase('client enrollment lifecycle', () => {
+  const database = createDatabase(databaseUrl!);
+  const service = new EnrollmentService(database.db, {
+    now: () => new Date('2026-08-18T00:00:00.000Z'),
+  });
+
+  beforeAll(async () => runMigrations(databaseUrl!));
+  beforeEach(async () => {
+    await database.db.execute(sql`
+      truncate table
+        pairing_tokens,
+        enrollment_validation_attempts,
+        client_enrollments,
+        idempotency_records,
+        outbox_events,
+        audit_events,
+        credential_events,
+        integration_connections,
+        provider_credentials,
+        secret_references,
+        projects,
+        tenants
+      restart identity cascade
+    `);
+  });
+  afterAll(async () => database.pool.end());
+
+  const context = (idempotencyKey: string) => ({
+    actorId: 'owner-1',
+    correlationId: `correlation-${idempotencyKey}`,
+    idempotencyKey,
+  });
+
+  it('adopts a draft scope atomically and replays an identical creation', async () => {
+    const input = {
+      projectDisplayName: 'Webbin',
+      projectKey: 'webbin',
+      tenantDisplayName: 'Webbin',
+      tenantKey: 'webbin',
+    };
+    const first = await service.create(
+      input,
+      context('create-enrollment-0001'),
+    );
+    const replay = await service.create(
+      input,
+      context('create-enrollment-0001'),
+    );
+
+    expect(replay).toEqual(first);
+    expect(
+      await database.db.select().from(schema.clientEnrollments),
+    ).toHaveLength(1);
+    const events = await database.db
+      .select()
+      .from(schema.outboxEvents)
+      .where(eq(schema.outboxEvents.eventType, 'enrollment.created'));
+    expect(events).toHaveLength(1);
+  });
+
+  it('rejects stale updates and writes immutable validation evidence', async () => {
+    const created = await service.create(
+      {
+        projectDisplayName: 'Webbin',
+        projectKey: 'webbin',
+        tenantDisplayName: 'Webbin',
+        tenantKey: 'webbin',
+      },
+      context('create-enrollment-0002'),
+    );
+    const updated = await service.update(
+      created.id,
+      { configuration: {}, currentStep: 2 },
+      1,
+      context('update-enrollment-0002'),
+    );
+    await expect(
+      service.update(
+        created.id,
+        { configuration: {}, currentStep: 3 },
+        1,
+        context('update-enrollment-0003'),
+      ),
+    ).rejects.toMatchObject({ category: 'conflict_error' });
+
+    const result = await service.validate(
+      updated.id,
+      updated.version,
+      context('validate-enrollment-02'),
+    );
+    expect(result.enrollment.state).toBe('validation_failed');
+    expect(result.attempts.map((attempt) => attempt.checkName)).toContain(
+      'configuration',
+    );
+    const row = (
+      await database.db.select().from(schema.enrollmentValidationAttempts)
+    )[0]!;
+    await expect(
+      database.db
+        .update(schema.enrollmentValidationAttempts)
+        .set({ result: 'success' })
+        .where(eq(schema.enrollmentValidationAttempts.id, row.id)),
+    ).rejects.toThrow();
+  });
+
+  it('stores only the pairing-token hash and returns plaintext once', async () => {
+    const created = await service.create(
+      {
+        projectDisplayName: 'Webbin',
+        projectKey: 'webbin',
+        tenantDisplayName: 'Webbin',
+        tenantKey: 'webbin',
+      },
+      context('create-enrollment-0003'),
+    );
+    await withPlatformOwnerScope(
+      database.db,
+      {
+        actorId: 'owner-1',
+        correlationId: 'pairing-fixture',
+        reason: 'Pairing test fixture',
+      },
+      async (scoped) => {
+        await scoped
+          .update(schema.clientEnrollments)
+          .set({ state: 'ready_for_pairing' })
+          .where(eq(schema.clientEnrollments.id, created.id));
+        await scoped.insert(schema.secretReferences).values({
+          algorithm: 'aes-256-gcm',
+          authTag: 'tag',
+          ciphertext: 'ciphertext',
+          credentialVersion: 1,
+          id: 'telegram-secret',
+          keyVersion: 1,
+          nonce: 'nonce',
+          provider: 'telegram-client',
+          projectId: created.projectId,
+          tenantId: created.tenantId,
+          wrapAuthTag: 'tag',
+          wrappedDek: 'dek',
+          wrapNonce: 'nonce',
+        });
+        await scoped.insert(schema.providerCredentials).values({
+          alias: 'Client bot',
+          id: 'telegram-credential',
+          kind: 'telegram-client',
+          maskedSuffix: '0000',
+          ownerScope: 'project',
+          projectId: created.projectId,
+          secretReferenceId: 'telegram-secret',
+          status: 'active',
+          tenantId: created.tenantId,
+          verificationEvidence: { username: 'CT_Webbin_bot' },
+          version: 1,
+        });
+        await scoped.insert(schema.integrationConnections).values({
+          credentialId: 'telegram-credential',
+          id: 'telegram-connection',
+          kind: 'telegram-client',
+          projectId: created.projectId,
+          status: 'active',
+          tenantId: created.tenantId,
+        });
+      },
+    );
+
+    const result = await service.createPairingLink(
+      created.id,
+      1,
+      context('pairing-enrollment-003'),
+    );
+    const token = new URL(result.pairingUrl).searchParams.get('start')!;
+    const stored = (await database.db.select().from(schema.pairingTokens))[0]!;
+    expect(stored.tokenHash).toBe(
+      createHash('sha256').update(token).digest('hex'),
+    );
+    expect(JSON.stringify(stored)).not.toContain(token);
+    const receipt = (
+      await database.db
+        .select()
+        .from(schema.idempotencyRecords)
+        .where(
+          eq(
+            schema.idempotencyRecords.idempotencyKey,
+            'pairing-enrollment-003',
+          ),
+        )
+    )[0]!;
+    expect(JSON.stringify(receipt.responseBody)).not.toContain(token);
+    expect(result.enrollment.state).toBe('pairing_pending');
+    await expect(
+      service.createPairingLink(
+        created.id,
+        1,
+        context('pairing-enrollment-003'),
+      ),
+    ).rejects.toMatchObject({
+      category: 'conflict_error',
+      metadata: { code: 'pairing_link_already_delivered' },
+    });
+  });
+
+  it('rejects child evidence whose enrollment scope does not match', async () => {
+    const first = await service.create(
+      {
+        projectDisplayName: 'One',
+        projectKey: 'one',
+        tenantDisplayName: 'One',
+        tenantKey: 'one',
+      },
+      context('create-enrollment-0004'),
+    );
+    const second = await service.create(
+      {
+        projectDisplayName: 'Two',
+        projectKey: 'two',
+        tenantDisplayName: 'Two',
+        tenantKey: 'two',
+      },
+      context('create-enrollment-0005'),
+    );
+    await expect(
+      database.db.insert(schema.enrollmentValidationAttempts).values({
+        checkName: 'configuration',
+        checkVersion: 1,
+        dependencyFingerprint: 'fingerprint',
+        enrollmentId: first.id,
+        evidence: {},
+        id: 'cross-scope-attempt',
+        projectId: second.projectId,
+        result: 'success',
+        tenantId: second.tenantId,
+      }),
+    ).rejects.toThrow();
+  });
+});

@@ -1,8 +1,12 @@
 import { buildApp } from './app.js';
 import { createApiAuthRuntime } from './auth.js';
+import { EnrollmentService } from '@binflow/onboarding';
 
 const authRuntime = await createApiAuthRuntime();
-const app = buildApp({ auth: authRuntime.auth });
+const app = buildApp({
+  auth: authRuntime.auth,
+  enrollmentService: new EnrollmentService(authRuntime.database),
+});
 
 const close = async (): Promise<void> => {
   await app.close();

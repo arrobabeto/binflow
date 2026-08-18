@@ -21,6 +21,9 @@ const signOut = async () => {
           <p class="font-semibold">Administrative control plane</p>
         </div>
         <div class="flex items-center gap-3">
+          <UButton to="/clients" color="neutral" variant="soft"
+            >Clients</UButton
+          >
           <span class="text-sm text-muted">{{ session?.user.email }}</span>
           <UButton color="neutral" variant="ghost" @click="signOut"
             >Sign out</UButton
@@ -31,7 +34,7 @@ const signOut = async () => {
     <main class="mx-auto max-w-6xl px-6 py-10">
       <h1 class="text-3xl font-semibold tracking-tight">System overview</h1>
       <p class="mt-2 text-muted">
-        The authenticated Phase 1 control plane is ready for onboarding modules.
+        Manage client enrollment, integration readiness and activation evidence.
       </p>
       <div class="mt-8 grid gap-4 sm:grid-cols-3">
         <UCard>
@@ -45,8 +48,8 @@ const signOut = async () => {
           <p class="mt-2 text-xl font-semibold">TOTP verified</p>
         </UCard>
         <UCard>
-          <p class="text-sm text-muted">Role</p>
-          <p class="mt-2 text-xl font-semibold">Platform owner</p>
+          <p class="text-sm text-muted">Client onboarding</p>
+          <UButton class="mt-3" to="/clients">Open clients</UButton>
         </UCard>
       </div>
     </main>

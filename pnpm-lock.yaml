@@ -53,6 +53,9 @@ importers:
       '@binflow/domain':
         specifier: workspace:*
         version: link:../../packages/domain
+      '@binflow/onboarding':
+        specifier: workspace:*
+        version: link:../../packages/onboarding
       fastify:
         specifier: 5.11.3
         version: 5.11.3
@@ -109,6 +112,9 @@ importers:
       '@binflow/auth':
         specifier: workspace:*
         version: link:../../packages/auth
+      '@binflow/contracts':
+        specifier: workspace:*
+        version: link:../../packages/contracts
       '@binflow/domain':
         specifier: workspace:*
         version: link:../../packages/domain
@@ -323,6 +329,28 @@ importers:
       zod:
         specifier: 4.4.3
         version: 4.4.3
+    devDependencies:
+      '@types/node':
+        specifier: 24.13.3
+        version: 24.13.3
+
+  packages/onboarding:
+    dependencies:
+      '@binflow/contracts':
+        specifier: workspace:*
+        version: link:../contracts
+      '@binflow/db':
+        specifier: workspace:*
+        version: link:../db
+      '@binflow/domain':
+        specifier: workspace:*
+        version: link:../domain
+      drizzle-orm:
+        specifier: 0.45.2
+        version: 0.45.2(@types/pg@8.20.0)(kysely@0.29.5)(pg@8.23.0)
+      uuid:
+        specifier: 14.0.1
+        version: 14.0.1
     devDependencies:
       '@types/node':
         specifier: 24.13.3

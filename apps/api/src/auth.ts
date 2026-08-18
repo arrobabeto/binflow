@@ -1,6 +1,9 @@
 import { readFile } from 'node:fs/promises';
 
-import { createBinflowAuthRuntime } from '@binflow/auth';
+import {
+  createBinflowAuthRuntime,
+  type BinflowAuthRuntime,
+} from '@binflow/auth';
 
 const readDatabaseUrl = async (): Promise<string> => {
   if (process.env.DATABASE_URL !== undefined) return process.env.DATABASE_URL;
@@ -10,7 +13,7 @@ const readDatabaseUrl = async (): Promise<string> => {
   return 'postgresql://binflow_app:binflow_local_app@localhost:5432/binflow';
 };
 
-export const createApiAuthRuntime = async () =>
+export const createApiAuthRuntime = async (): Promise<BinflowAuthRuntime> =>
   createBinflowAuthRuntime({
     baseURL: process.env.BINFLOW_PUBLIC_URL ?? 'http://localhost:3000',
     databaseUrl: await readDatabaseUrl(),

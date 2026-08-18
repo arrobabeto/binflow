@@ -166,3 +166,128 @@ export const platformOwnerSessionSchema = z
 export type PlatformOwnerSessionResponse = z.infer<
   typeof platformOwnerSessionSchema
 >;
+
+export const enrollmentStateSchema = z.enum([
+  'draft',
+  'configuring',
+  'validating',
+  'validation_failed',
+  'ready_for_pairing',
+  'pairing_pending',
+  'active',
+  'revalidation_required',
+  'suspended',
+  'archived',
+]);
+
+const enrollmentKeySchema = z
+  .string()
+  .min(2)
+  .max(64)
+  .regex(/^[a-z0-9]+(?:-[a-z0-9]+)*$/);
+
+const httpsUrlSchema = z.url().refine((value) => value.startsWith('https://'), {
+  message: 'URL must use HTTPS.',
+});
+
+export const enrollmentConfigurationSchema = z
+  .object({
+    clientContactEmail: z.email().optional(),
+    clientConversationLocale: supportedLocaleSchema.optional(),
+    contentLocales: z.array(supportedLocaleSchema).min(1).max(3).optional(),
+    editorialAudience: z.string().min(1).max(2000).optional(),
+    editorialVoice: z.string().min(1).max(2000).optional(),
+    previewDomain: httpsUrlSchema.optional(),
+    productionDomain: httpsUrlSchema.optional(),
+    prohibitedClaims: z.array(z.string().min(1).max(500)).max(50).optional(),
+    requiredLocales: z.array(supportedLocaleSchema).min(1).max(3).optional(),
+    researchPolicy: z.string().min(1).max(2000).optional(),
+    slugLocale: supportedLocaleSchema.optional(),
+    timezone: z.string().trim().min(1).max(100).optional(),
+    translationPolicy: translationPolicySchema.optional(),
+  })
+  .strict();
+
+export const createEnrollmentInputSchema = z
+  .object({
+    projectDisplayName: z.string().min(1).max(120),
+    projectKey: enrollmentKeySchema,
+    tenantDisplayName: z.string().min(1).max(120),
+    tenantKey: enrollmentKeySchema,
+  })
+  .strict();
+
+export const updateEnrollmentInputSchema = z
+  .object({
+    configuration: enrollmentConfigurationSchema,
+    currentStep: z.number().int().min(1).max(11),
+  })
+  .strict();
+
+export const enrollmentSchema = z
+  .object({
+    configuration: enrollmentConfigurationSchema,
+    createdAt: z.iso.datetime(),
+    currentStep: z.number().int().min(1).max(11),
+    id: z.string().min(1),
+    lastValidatedAt: z.iso.datetime().nullable(),
+    projectId: z.string().min(1),
+    projectKey: enrollmentKeySchema,
+    state: enrollmentStateSchema,
+    tenantId: z.string().min(1),
+    tenantKey: enrollmentKeySchema,
+    updatedAt: z.iso.datetime(),
+    version: resourceVersionSchema,
+  })
+  .strict();
+
+export const enrollmentValidationAttemptSchema = z
+  .object({
+    checkName: z.string().min(1),
+    checkedAt: z.iso.datetime(),
+    errorCategory: z.string().nullable(),
+    errorCode: z.string().nullable(),
+    evidence: z.record(z.string(), z.unknown()),
+    result: z.enum(['success', 'failed', 'blocked']),
+  })
+  .strict();
+
+export const enrollmentValidationResponseSchema = z
+  .object({
+    attempts: z.array(enrollmentValidationAttemptSchema),
+    enrollment: enrollmentSchema,
+  })
+  .strict();
+
+export const pairingLinkResponseSchema = z
+  .object({
+    enrollment: enrollmentSchema,
+    expiresAt: z.iso.datetime(),
+    pairingUrl: z.url(),
+  })
+  .strict();
+
+export const enrollmentPageSchema = z
+  .object({
+    items: z.array(enrollmentSchema),
+    nextCursor: z.string().nullable(),
+  })
+  .strict();
+
+export const activationBlockersResponseSchema = z
+  .object({
+    blockers: z.array(z.string().min(1)),
+    ready: z.boolean(),
+  })
+  .strict();
+
+export type EnrollmentState = z.infer<typeof enrollmentStateSchema>;
+export type EnrollmentConfiguration = z.infer<
+  typeof enrollmentConfigurationSchema
+>;
+export type CreateEnrollmentInput = z.infer<typeof createEnrollmentInputSchema>;
+export type UpdateEnrollmentInput = z.infer<typeof updateEnrollmentInputSchema>;
+export type Enrollment = z.infer<typeof enrollmentSchema>;
+export type EnrollmentValidationAttempt = z.infer<
+  typeof enrollmentValidationAttemptSchema
+>;

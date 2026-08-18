@@ -58,9 +58,10 @@ ASCII characters. The server binds it to actor, method, route and canonical
 body hash. The same key/request returns the stored response; the same key with
 a different request returns `409 conflict_error`.
 
-Mutable resources return `ETag: "<version>"`. A mutation requires the exact
-strong ETag in `If-Match`; missing input is a validation error and stale input
-is `409 conflict_error`.
+Mutable resources return `ETag: "<version>"`. A mutation of an existing
+resource requires the exact strong ETag in `If-Match`; create operations have
+no prior version and therefore require only the idempotency key. Missing input
+is a validation error and stale input is `409 conflict_error`.
 
 Long-running administrative actions return `202`:
 
@@ -383,6 +384,8 @@ GET    /api/v1/audit
 GET    /api/v1/usage
 GET    /api/v1/operations/:operationId
 
+GET    /api/v1/admin/enrollments
+GET    /api/v1/admin/enrollments/:id
 POST   /api/v1/admin/enrollments
 PATCH  /api/v1/admin/enrollments/:id
 POST   /api/v1/admin/enrollments/:id/validate
@@ -396,6 +399,22 @@ POST   /api/v1/admin/enrollments/:id/catalog/sync
 ```
 
 Mutation endpoints require an idempotency key and optimistic concurrency version. Transport-specific schemas will be generated from shared Zod definitions.
+
+Enrollment creation and update use strict shared schemas. Supported locale
+values are `en`, `es` and `de`; `astro_repo` is the only profile. Creation
+accepts tenant/project keys and adopts the matching Phase 0 draft scope.
+Responses include `version` and `ETag: "<version>"`. Existing-resource
+mutations require `Idempotency-Key` and `If-Match: "<version>"`; creation has
+no `If-Match`. Missing inputs are validation errors and a stale version is a
+conflict.
+
+`POST .../validate` synchronously records immutable current named validation
+attempts; later external scans/probes use durable operations. `POST .../activate`
+fails with `policy_denied` until every activation check defined by ADR-0017 is
+current and successful. A pairing-link response contains plaintext only on its
+first successful delivery. Its idempotency record stores a redacted delivery
+receipt; replay returns `409 pairing_link_already_delivered`, and persistence or
+later reads never expose the token.
 
 `GET /api/v1/session` is the minimal authenticated bridge between Better Auth
 and business APIs. It returns only actor ID, email, `role: platform_owner`,
