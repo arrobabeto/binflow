@@ -105,7 +105,11 @@ Manifest validation reads current verified GitHub/Vercel binding identities,
 materializes an immutable locale and budget snapshot, and records the exact
 manifest fingerprint/version as enrollment evidence. An unchanged fingerprint
 is reused; a changed draft creates the next version. Capability binding is
-completed by the following catalog module and cannot be supplied by a model.
+materialized from the code-owned registry in the same validation transaction.
+For Webbin the only allowed binding is `create_blog_draft@1` with
+`client_publish`; it cannot be supplied or widened by a model or administrator.
+The named `capability_catalog` validation evidence must match the manifest and
+binding snapshot before activation.
 
 ### 9. Content catalog
 

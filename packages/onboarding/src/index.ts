@@ -5,11 +5,13 @@ import { v7 as uuidv7 } from 'uuid';
 
 import {
   createEnrollmentInputSchema,
+  capabilityCatalogResponseSchema,
   enrollmentConfigurationSchema,
   enrollmentSchema,
   projectManifestResponseSchema,
   projectManifestSchema,
   type CreateEnrollmentInput,
+  type CapabilityCatalogResponse,
   type Enrollment,
   type EnrollmentConfiguration,
   type EnrollmentValidationAttempt,
@@ -33,6 +35,10 @@ import {
   buildProjectManifest,
   type VerifiedManifestBindings,
 } from '@binflow/manifests';
+import {
+  projectCapabilityCatalog,
+  webbinCapabilityBinding,
+} from '@binflow/policies';
 
 const CONFIGURATION_CHECK = 'configuration';
 const CREDENTIAL_CHECKS = [
@@ -44,6 +50,7 @@ const CREDENTIAL_CHECKS = [
 ] as const;
 const ACTIVATION_ONLY_CHECKS = [
   'project_manifest',
+  'capability_catalog',
   'content_catalog',
   'telegram_test_send',
   'github_reversible_probe',
@@ -310,6 +317,37 @@ export class EnrollmentService {
         return projectManifestResponseSchema.parse({
           globalProfile: astroRepoGlobalProfile,
           manifest: row === undefined ? null : toProjectManifest(row),
+        });
+      },
+    );
+  }
+
+  public async getCapabilities(
+    projectId: string,
+    actorId: string,
+    correlationId: string,
+  ): Promise<CapabilityCatalogResponse> {
+    return withPlatformOwnerScope(
+      this.database,
+      { actorId, correlationId, reason: 'Read project capability catalog' },
+      async (database) => {
+        const [row] = await database
+          .select()
+          .from(schema.projectManifestVersions)
+          .where(eq(schema.projectManifestVersions.projectId, projectId))
+          .orderBy(desc(schema.projectManifestVersions.version))
+          .limit(1);
+        if (row === undefined)
+          return capabilityCatalogResponseSchema.parse({
+            items: [],
+            manifestVersion: null,
+            projectId,
+          });
+        const manifest = toProjectManifest(row);
+        return capabilityCatalogResponseSchema.parse({
+          items: projectCapabilityCatalog(manifest.enabledCapabilities),
+          manifestVersion: manifest.version,
+          projectId,
         });
       },
     );
@@ -607,6 +645,29 @@ export class EnrollmentService {
                   },
                   result: 'success',
                 });
+                const catalog = projectCapabilityCatalog(
+                  manifest.enabledCapabilities,
+                );
+                checks.push({
+                  checkName: 'capability_catalog',
+                  evidence: {
+                    capabilityIds: catalog.map(
+                      (capability) =>
+                        `${capability.id}@${String(capability.version)}`,
+                    ),
+                    manifestVersion: manifest.version,
+                  },
+                  result:
+                    catalog.length === 1 && catalog[0]?.enabled === true
+                      ? 'success'
+                      : 'failed',
+                  ...(catalog.length === 1 && catalog[0]?.enabled === true
+                    ? {}
+                    : {
+                        errorCategory: 'policy_denied',
+                        errorCode: 'capability_catalog_invalid',
+                      }),
+                });
               } catch (error) {
                 if (!(error instanceof DomainError)) throw error;
                 const domainError = error;
@@ -618,6 +679,13 @@ export class EnrollmentService {
                   evidence: { valid: false },
                   result: 'failed',
                 });
+                checks.push({
+                  checkName: 'capability_catalog',
+                  errorCategory: 'policy_denied',
+                  errorCode: 'capability_catalog_blocked',
+                  evidence: { manifestReady: false },
+                  result: 'blocked',
+                });
               }
             } else {
               checks.push({
@@ -625,6 +693,13 @@ export class EnrollmentService {
                 errorCategory: 'validation_error',
                 errorCode: 'project_manifest_dependencies_blocked',
                 evidence: { dependenciesReady: false },
+                result: 'blocked',
+              });
+              checks.push({
+                checkName: 'capability_catalog',
+                errorCategory: 'validation_error',
+                errorCode: 'capability_catalog_dependencies_blocked',
+                evidence: { manifestReady: false },
                 result: 'blocked',
               });
             }
@@ -1006,6 +1081,16 @@ export class EnrollmentService {
       maxModelCallsPerRequest: candidate.budgetPolicy.maxModelCallsPerRequest,
       maxRequestsPerDay: candidate.budgetPolicy.maxRequestsPerDay,
       maxTokensPerRequest: candidate.budgetPolicy.maxTokensPerRequest,
+      projectId: enrollment.projectId,
+      tenantId: enrollment.tenantId,
+    });
+    await database.insert(schema.projectCapabilityBindings).values({
+      access: webbinCapabilityBinding.access,
+      capabilityId: webbinCapabilityBinding.capabilityId,
+      capabilityVersion: webbinCapabilityBinding.capabilityVersion,
+      createdBy: context.actorId,
+      id: uuidv7(),
+      manifestVersionId: candidate.id,
       projectId: enrollment.projectId,
       tenantId: enrollment.tenantId,
     });

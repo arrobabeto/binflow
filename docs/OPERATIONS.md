@@ -182,6 +182,11 @@ stops enrollment validation writers and preserves manifest history; an older
 application ignores the new tables and nullable project column, but a full
 release rollback still uses the coordinated pre-release backup procedure.
 
+Migration `0012` adds the global capability-definition projection and immutable
+project/manifest capability bindings. It seeds only `create_blog_draft@1` and is
+additive. Rollback stops enrollment validation writers and preserves binding
+history; restore the coordinated pre-release backup for a full release revert.
+
 ## Health
 
 Endpoints:

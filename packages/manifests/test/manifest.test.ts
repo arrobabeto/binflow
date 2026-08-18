@@ -51,7 +51,13 @@ describe('project manifest', () => {
       'src/content/articulos-es/*.md',
       'public/images/articles/*.avif',
     ]);
-    expect(manifest.enabledCapabilities).toEqual([]);
+    expect(manifest.enabledCapabilities).toEqual([
+      {
+        access: 'client_publish',
+        capabilityId: 'create_blog_draft',
+        capabilityVersion: 1,
+      },
+    ]);
   });
 
   it('rejects locale, translation and provider expansion', () => {

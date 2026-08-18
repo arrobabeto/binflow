@@ -2,6 +2,7 @@ import Fastify, { type FastifyInstance } from 'fastify';
 
 import {
   activationBlockersResponseSchema,
+  capabilityCatalogResponseSchema,
   createEnrollmentInputSchema,
   credentialPageSchema,
   credentialSummarySchema,
@@ -40,6 +41,7 @@ export const buildApp = (
       EnrollmentService,
       | 'create'
       | 'createPairingLink'
+      | 'getCapabilities'
       | 'get'
       | 'getManifest'
       | 'evaluateActivation'
@@ -317,6 +319,19 @@ export const buildApp = (
       );
       void reply.header('etag', `"${String(enrollment.version)}"`);
       return enrollmentSchema.parse(enrollment);
+    },
+  );
+
+  app.get<{ Params: { projectId: string } }>(
+    '/api/v1/projects/:projectId/capabilities',
+    async (request) => {
+      const session = await requireSession(request);
+      const catalog = await requireService().getCapabilities(
+        request.params.projectId,
+        session.actorId,
+        request.id,
+      );
+      return capabilityCatalogResponseSchema.parse(catalog);
     },
   );
 

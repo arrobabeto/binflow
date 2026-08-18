@@ -118,7 +118,12 @@ unchanged; active versions are never updated or superseded by a draft save.
 
 ### `capability_definitions` and `project_capability_bindings`
 
-Global code-owned capability versions and project-specific access/approval bindings.
+`capability_definitions` mirrors the immutable code-owned registry for query and
+audit. `project_capability_bindings` is an immutable tenant/project/manifest
+snapshot referencing an exact definition version and access level. The first
+MVP permits only `create_blog_draft@1` with `client_publish` for Webbin. A
+composite scope foreign key prevents a binding from crossing tenant, project or
+manifest boundaries. Binding rows cannot be updated or deleted.
 
 ### `rule_set_versions`, `node_config_versions`, `workflow_definitions`
 

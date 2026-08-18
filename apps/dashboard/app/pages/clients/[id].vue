@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import type {
+  CapabilityCatalogResponse,
   Enrollment,
   EnrollmentValidationAttempt,
   ProjectManifestResponse,
@@ -14,6 +15,13 @@ const { data: manifestState, refresh: refreshManifest } =
   await useFetch<ProjectManifestResponse>(
     `/api/v1/admin/enrollments/${id}/manifest`,
   );
+const capabilityUrl = computed(() =>
+  enrollment.value?.projectId
+    ? `/api/v1/projects/${enrollment.value.projectId}/capabilities`
+    : null,
+);
+const { data: capabilityState, refresh: refreshCapabilities } =
+  await useFetch<CapabilityCatalogResponse>(capabilityUrl);
 const form = reactive({
   clientContactEmail: '',
   clientConversationLocale: 'en',
@@ -141,6 +149,7 @@ const validate = () =>
     enrollment.value = result.enrollment;
     attempts.value = result.attempts;
     await refreshManifest();
+    await refreshCapabilities();
     message.value =
       result.enrollment.state === 'ready_for_pairing'
         ? 'Validation passed.'
@@ -375,6 +384,32 @@ const createPairing = () =>
           </template>
           <p v-else class="mt-2 text-sm text-muted">
             Validate the complete draft to create version 1.
+          </p>
+        </UCard>
+        <UCard>
+          <p class="font-semibold">Enabled tools</p>
+          <div
+            v-for="capability in capabilityState?.items ?? []"
+            :key="`${capability.id}@${capability.version}`"
+            class="mt-3 rounded-lg border border-default p-3 text-sm"
+          >
+            <div class="flex items-center justify-between gap-3">
+              <p class="font-medium">{{ capability.displayName }}</p>
+              <UBadge color="success" variant="soft">Enabled</UBadge>
+            </div>
+            <p class="mt-1 text-muted">
+              {{ capability.id }}@{{ capability.version }} ·
+              {{ capability.command }} · {{ capability.access }}
+            </p>
+            <p class="mt-1 text-muted">
+              Medium risk · exact preview and client approval required
+            </p>
+          </div>
+          <p
+            v-if="(capabilityState?.items.length ?? 0) === 0"
+            class="mt-2 text-sm text-muted"
+          >
+            Validate the enrollment to bind the code-owned tool catalog.
           </p>
         </UCard>
         <UAlert v-if="message" :description="message" />

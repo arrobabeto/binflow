@@ -1,6 +1,7 @@
 import { sql } from 'drizzle-orm';
 import {
   check,
+  boolean,
   foreignKey,
   index,
   integer,
@@ -294,6 +295,90 @@ export const projectBudgetPolicies = pgTable(
       name: 'project_budget_policies_project_tenant_fk',
     }),
     pgPolicy('project_budget_policies_tenant_isolation', {
+      for: 'all',
+      using: sql`${table.tenantId} = nullif(current_setting('app.tenant_id', true), '') OR current_setting('app.platform_owner', true) = 'true'`,
+      withCheck: sql`${table.tenantId} = nullif(current_setting('app.tenant_id', true), '') OR current_setting('app.platform_owner', true) = 'true'`,
+    }),
+  ],
+).enableRLS();
+
+export const capabilityDefinitions = pgTable(
+  'capability_definitions',
+  {
+    id: text('id').notNull(),
+    version: integer('version').notNull(),
+    command: text('command').notNull(),
+    displayName: text('display_name').notNull(),
+    executorId: text('executor_id').notNull(),
+    inputSchemaId: text('input_schema_id').notNull(),
+    outputSchemaId: text('output_schema_id').notNull(),
+    allowedProfiles: jsonb('allowed_profiles').$type<string[]>().notNull(),
+    riskClass: text('risk_class').notNull(),
+    requiredPermissions: jsonb('required_permissions')
+      .$type<string[]>()
+      .notNull(),
+    requiresPreview: boolean('requires_preview').notNull(),
+    approvalPolicyId: text('approval_policy_id').notNull(),
+    timeoutSeconds: integer('timeout_seconds').notNull(),
+    retryPolicy: jsonb('retry_policy').notNull(),
+    budgetPolicy: jsonb('budget_policy').notNull(),
+    createdAt: timestamp('created_at', { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (table) => [
+    unique('capability_definitions_id_version_unique').on(
+      table.id,
+      table.version,
+    ),
+    check('capability_definitions_version_check', sql`${table.version} >= 1`),
+    check(
+      'capability_definitions_timeout_check',
+      sql`${table.timeoutSeconds} >= 1`,
+    ),
+  ],
+);
+
+export const projectCapabilityBindings = pgTable(
+  'project_capability_bindings',
+  {
+    id: text('id').primaryKey(),
+    manifestVersionId: text('manifest_version_id').notNull(),
+    tenantId: text('tenant_id').notNull(),
+    projectId: text('project_id').notNull(),
+    capabilityId: text('capability_id').notNull(),
+    capabilityVersion: integer('capability_version').notNull(),
+    access: text('access').notNull(),
+    createdBy: text('created_by').notNull(),
+    createdAt: timestamp('created_at', { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (table) => [
+    uniqueIndex('project_capability_bindings_manifest_capability_unique').on(
+      table.manifestVersionId,
+      table.capabilityId,
+    ),
+    foreignKey({
+      columns: [table.capabilityId, table.capabilityVersion],
+      foreignColumns: [capabilityDefinitions.id, capabilityDefinitions.version],
+      name: 'project_capability_bindings_definition_fk',
+    }),
+    foreignKey({
+      columns: [table.manifestVersionId, table.tenantId, table.projectId],
+      foreignColumns: [
+        projectManifestVersions.id,
+        projectManifestVersions.tenantId,
+        projectManifestVersions.projectId,
+      ],
+      name: 'project_capability_bindings_manifest_scope_fk',
+    }),
+    foreignKey({
+      columns: [table.projectId, table.tenantId],
+      foreignColumns: [projects.id, projects.tenantId],
+      name: 'project_capability_bindings_project_tenant_fk',
+    }),
+    pgPolicy('project_capability_bindings_tenant_isolation', {
       for: 'all',
       using: sql`${table.tenantId} = nullif(current_setting('app.tenant_id', true), '') OR current_setting('app.platform_owner', true) = 'true'`,
       withCheck: sql`${table.tenantId} = nullif(current_setting('app.tenant_id', true), '') OR current_setting('app.platform_owner', true) = 'true'`,

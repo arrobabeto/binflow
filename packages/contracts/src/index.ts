@@ -448,6 +448,72 @@ export const capabilityBindingSchema = z
   })
   .strict();
 
+export const sourceReferenceSchema = z
+  .object({
+    kind: z.enum(['url', 'telegram_document', 'project_content']),
+    value: z.string().min(1).max(2048),
+  })
+  .strict();
+
+const createBlogSharedSchema = {
+  category: z.string().trim().min(1).max(120).optional(),
+  imageAssetId: z.string().min(1).optional(),
+  notes: z.string().max(10_000).optional(),
+  projectId: z.string().min(1),
+  publicationDate: z.iso.date().optional(),
+  sourceLocale: supportedLocaleSchema.optional(),
+  sources: z.array(sourceReferenceSchema).max(5).optional(),
+} as const;
+
+export const createBlogDraftInputSchema = z.discriminatedUnion('mode', [
+  z
+    .object({
+      ...createBlogSharedSchema,
+      audience: z.string().trim().min(1).max(2000).optional(),
+      context: z.string().trim().min(1).max(10_000).optional(),
+      internalLinks: z.array(z.string().min(1).max(2048)).max(20).optional(),
+      keywords: z.array(z.string().trim().min(1).max(100)).max(30).optional(),
+      mode: z.literal('brief'),
+      objective: z.string().trim().min(1).max(2000).optional(),
+      topic: z.string().trim().min(1).max(500),
+    })
+    .strict(),
+  z
+    .object({
+      ...createBlogSharedSchema,
+      content: z.string().min(1).max(200_000),
+      mode: z.literal('draft'),
+      title: z.string().trim().min(1).max(200),
+    })
+    .strict(),
+]);
+
+export const capabilityCatalogItemSchema = z
+  .object({
+    access: z.enum([
+      'disabled',
+      'client_publish',
+      'admin_required',
+      'admin_only',
+    ]),
+    command: z.literal('/create_blog'),
+    displayName: z.literal('Create blog'),
+    enabled: z.boolean(),
+    id: z.literal('create_blog_draft'),
+    requiresPreview: z.literal(true),
+    riskClass: z.literal('medium'),
+    version: z.literal(1),
+  })
+  .strict();
+
+export const capabilityCatalogResponseSchema = z
+  .object({
+    items: z.array(capabilityCatalogItemSchema),
+    manifestVersion: z.number().int().positive().nullable(),
+    projectId: z.string().min(1),
+  })
+  .strict();
+
 const manifestCollectionSchema = z
   .object({
     directory: z.string().min(1),
@@ -526,6 +592,12 @@ export const projectManifestResponseSchema = z
 
 export type ProjectManifestStatus = z.infer<typeof projectManifestStatusSchema>;
 export type CapabilityBinding = z.infer<typeof capabilityBindingSchema>;
+export type SourceReference = z.infer<typeof sourceReferenceSchema>;
+export type CreateBlogDraftInput = z.infer<typeof createBlogDraftInputSchema>;
+export type CapabilityCatalogItem = z.infer<typeof capabilityCatalogItemSchema>;
+export type CapabilityCatalogResponse = z.infer<
+  typeof capabilityCatalogResponseSchema
+>;
 export type ProjectManifest = z.infer<typeof projectManifestSchema>;
 export type GlobalProfileSummary = z.infer<typeof globalProfileSummarySchema>;
 export type ProjectManifestResponse = z.infer<

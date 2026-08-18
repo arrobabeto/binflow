@@ -422,6 +422,12 @@ describeDatabase('client enrollment lifecycle', () => {
         result: 'success',
       }),
     );
+    expect(first.attempts).toContainEqual(
+      expect.objectContaining({
+        checkName: 'capability_catalog',
+        result: 'success',
+      }),
+    );
     const firstManifest = await service.getManifest(
       created.id,
       'owner-1',
@@ -429,6 +435,13 @@ describeDatabase('client enrollment lifecycle', () => {
     );
     expect(firstManifest.manifest).toMatchObject({
       contentLocales: ['es', 'en'],
+      enabledCapabilities: [
+        {
+          access: 'client_publish',
+          capabilityId: 'create_blog_draft',
+          capabilityVersion: 1,
+        },
+      ],
       status: 'validated',
       version: 1,
     });
@@ -479,11 +492,25 @@ describeDatabase('client enrollment lifecycle', () => {
     expect(
       await database.db.select().from(schema.projectBudgetPolicies),
     ).toHaveLength(2);
+    expect(
+      await database.db.select().from(schema.projectCapabilityBindings),
+    ).toHaveLength(2);
     await expect(
       database.db
         .update(schema.projectLocales)
         .set({ slugLocale: 'en' })
         .where(eq(schema.projectLocales.manifestVersionId, versions[1]!.id)),
+    ).rejects.toThrow();
+    await expect(
+      database.db
+        .update(schema.projectCapabilityBindings)
+        .set({ access: 'admin_only' })
+        .where(
+          eq(
+            schema.projectCapabilityBindings.manifestVersionId,
+            versions[1]!.id,
+          ),
+        ),
     ).rejects.toThrow();
   });
 });

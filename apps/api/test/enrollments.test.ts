@@ -50,7 +50,13 @@ const manifest: ProjectManifest = {
     protectionMode: 'vercel_auth',
     provider: 'vercel',
   },
-  enabledCapabilities: [],
+  enabledCapabilities: [
+    {
+      access: 'client_publish',
+      capabilityId: 'create_blog_draft',
+      capabilityVersion: 1,
+    },
+  ],
   fingerprint: 'a'.repeat(64),
   globalProfileVersion: 'astro_repo@1',
   graphVersion: 'workflow-kernel-pending@1',
@@ -86,6 +92,22 @@ const createService = () => ({
     pairingUrl: 'https://t.me/binflow_client_bot?start=one-time-token',
   })),
   get: vi.fn(async () => enrollment),
+  getCapabilities: vi.fn(async () => ({
+    items: [
+      {
+        access: 'client_publish' as const,
+        command: '/create_blog' as const,
+        displayName: 'Create blog' as const,
+        enabled: true,
+        id: 'create_blog_draft' as const,
+        requiresPreview: true as const,
+        riskClass: 'medium' as const,
+        version: 1 as const,
+      },
+    ],
+    manifestVersion: 1,
+    projectId: 'project-1',
+  })),
   getManifest: vi.fn(async () => ({
     globalProfile: {
       id: 'astro_repo' as const,
@@ -149,6 +171,27 @@ describe('client enrollment API', () => {
     expect(response.json()).toMatchObject({
       globalProfile: { version: 'astro_repo@1' },
       manifest: { id: 'manifest-1', version: 1 },
+    });
+    await app.close();
+  });
+
+  it('returns only project-enabled code-owned capabilities', async () => {
+    const service = createService();
+    const app = buildApp({
+      enrollmentService: service,
+      resolvePlatformOwnerSession: sessionResolver,
+    });
+
+    const response = await app.inject({
+      method: 'GET',
+      url: '/api/v1/projects/project-1/capabilities',
+    });
+
+    expect(response.statusCode).toBe(200);
+    expect(response.json()).toMatchObject({
+      items: [{ id: 'create_blog_draft', version: 1 }],
+      manifestVersion: 1,
+      projectId: 'project-1',
     });
     await app.close();
   });
