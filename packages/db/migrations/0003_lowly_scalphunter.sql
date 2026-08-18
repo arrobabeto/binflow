@@ -1,0 +1,1 @@
+ALTER TABLE "integration_connections" ADD COLUMN "verification_evidence" jsonb DEFAULT '{}'::jsonb NOT NULL;

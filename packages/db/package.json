@@ -19,6 +19,7 @@
   },
   "dependencies": {
     "@binflow/contracts": "workspace:*",
+    "@binflow/domain": "workspace:*",
     "@binflow/secrets": "workspace:*",
     "drizzle-orm": "0.45.2",
     "pg": "8.23.0",

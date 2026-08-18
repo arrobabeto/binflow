@@ -12,9 +12,14 @@
     "test": "vitest run"
   },
   "dependencies": {
+    "@binflow/ai": "workspace:*",
     "@binflow/contracts": "workspace:*",
     "@binflow/db": "workspace:*",
+    "@binflow/github": "workspace:*",
+    "@binflow/integrations": "workspace:*",
+    "@binflow/messaging": "workspace:*",
     "@binflow/secrets": "workspace:*",
+    "@binflow/vercel": "workspace:*",
     "@inquirer/prompts": "8.5.2",
     "commander": "15.0.0",
     "uuid": "14.0.1"

@@ -38,6 +38,8 @@ References support implementation but do not override Binflow's accepted ADRs an
 - [Vercel Git deployments](https://vercel.com/docs/git)
 - [Vercel generated URLs](https://vercel.com/docs/deployments/generated-urls)
 - [Vercel deployment protection](https://vercel.com/docs/deployment-protection)
+- [Vercel REST API](https://vercel.com/docs/rest-api)
+- [Vercel API access tokens](https://vercel.com/kb/guide/how-do-i-use-a-vercel-api-access-token)
 
 ## Workflows and security
 

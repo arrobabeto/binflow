@@ -11,6 +11,22 @@ permissions:
 jobs:
   verify:
     runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:17.7-bookworm
+        env:
+          POSTGRES_DB: binflow_test
+          POSTGRES_PASSWORD: binflow_test
+          POSTGRES_USER: binflow
+        options: >-
+          --health-cmd "pg_isready -U binflow -d binflow_test"
+          --health-interval 5s
+          --health-timeout 3s
+          --health-retries 20
+        ports:
+          - 5432:5432
+    env:
+      BINFLOW_TEST_DATABASE_URL: postgresql://binflow:binflow_test@localhost:5432/binflow_test
     steps:
       - uses: actions/checkout@v4
       - uses: pnpm/action-setup@v4
@@ -20,6 +36,7 @@ jobs:
         with:
           node-version: 24.13.0
           cache: pnpm
+      - run: pnpm check:workspaces
       - run: pnpm install --frozen-lockfile
       - run: node scripts/check-docs.mjs
       - run: pnpm format:check

@@ -48,7 +48,7 @@ services:
       - minio_data:/data
 
   clamav:
-    image: clamav/clamav:1.4.3
+    image: clamav/clamav-debian:1.4.6
     healthcheck:
       test: ['CMD', '/usr/local/bin/clamdcheck.sh']
       interval: 30s

@@ -289,9 +289,10 @@ pnpm binflow scope init --tenant webbin --project webbin
 pnpm binflow integration set --kind openai --tenant webbin
 pnpm binflow integration set --kind telegram-admin
 pnpm binflow integration set --kind telegram-client --tenant webbin
-pnpm binflow integration set --kind github-app --project webbin
-pnpm binflow integration set --kind vercel --project webbin
+pnpm binflow integration set --kind github-app --tenant webbin --project webbin
+pnpm binflow integration set --kind vercel --tenant webbin --project webbin
 pnpm binflow integration verify --all
+pnpm binflow integration verify <credential-id>
 pnpm binflow integration list
 pnpm binflow integration revoke <id>
 ```
@@ -300,11 +301,31 @@ Contract rules:
 
 - `secret init` generates a random 256-bit KEK at a configured host path outside the repository and applies file mode `0600`; it never prints the key.
 - `scope init` creates an idempotent Phase 0 draft tenant/project scope so credential ownership can be validated before the Phase 1 onboarding dashboard exists. It accepts keys and display names only, never credentials, and cannot activate a project.
-- `integration set` requires an interactive terminal and reads secret values through non-echoed prompts. Secrets are forbidden in command arguments, environment interpolation examples and command output.
-- `integration set` validates the required tenant/project scope before storing one encrypted credential version. Repeating it creates a new version; it does not silently overwrite ciphertext.
-- `integration verify` resolves a credential only inside the provider adapter, performs the narrow provider health check and stores a redacted result.
+- `integration set` requires an interactive terminal and reads secret values through non-echoed prompts. The multiline GitHub App PEM is the sole file-import exception: the operator selects its path interactively, and Binflow requires a regular `0600` file outside the repository with a bounded size. Secrets are forbidden in command arguments, environment interpolation examples and command output.
+- `integration set` validates the required tenant/project scope before storing one encrypted credential version. Project-scoped commands require both tenant and project keys so duplicate project keys across tenants cannot resolve ambiguously. Repeating it creates a new version; it does not silently overwrite ciphertext.
+- `integration set` creates an `unverified` candidate. GitHub App registration material is platform-scoped even though `--project webbin` validates and creates its separate non-secret Webbin installation binding.
+- In Phase 0, GitHub/Vercel Webbin bindings are authorized only for internal tenant/project keys `webbin/webbin`; provider repository/branch values are fixed application policy. A project credential and connection must have identical owner scope, their kinds must match, and one credential version has at most one connection.
+- `integration verify <credential-id>` checks exactly one `unverified`, `invalid` or `active` credential; `revoked` and `superseded` versions are unavailable. `integration verify --all` checks every current active credential plus the newest unverified candidate for each owner scope and kind; ordering is stable by kind, owner scope and version.
+- `integration verify` resolves and parses plaintext only inside the provider adapter, performs the read-only provider check and stores an allowlisted redacted result. It never changes Telegram webhook state, sends a Telegram message or mutates Webbin.
+- Successful candidate verification atomically sets it `active` and the previous active version `superseded`. An older candidate cannot replace a newer active version. Permanent failure sets the candidate `invalid`; retryable failure preserves its state. A failed candidate never replaces the previous active credential.
+- Attempt results are monotonic by `checkedAt`; a late older result is audited and discarded. Deterministic activation rejection returns a redacted failed result and does not stop `--all`, while a concurrent revoke remains unavailable.
+- `--all` continues after individual failures, prints one redacted row per selected credential and exits non-zero when any check fails.
 - `integration list` returns identifiers, ownership, kind, alias/masked suffix, state, version and health timestamps only.
 - `integration revoke <id>` is idempotent, prevents future resolution immediately and records a credential event without retaining or displaying plaintext.
 - Commands return a non-zero exit status for invalid scope, insecure KEK permissions, non-interactive secret entry, provider failure or unavailable/revoked credentials.
 
 The dashboard must reuse these application contracts rather than implement a second credential path.
+
+Credential ownership and payload split:
+
+| Kind              | Owner scope                                             | Non-secret configuration                                                                                          | Encrypted bundle               |
+| ----------------- | ------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------- | ------------------------------ |
+| `openai`          | tenant                                                  | required Phase 0 model set/version                                                                                | API key                        |
+| `telegram-admin`  | platform                                                | expected bot username, role                                                                                       | bot token                      |
+| `telegram-client` | tenant                                                  | expected bot username, role                                                                                       | bot token                      |
+| `github-app`      | platform registration plus project installation binding | credential: App/client IDs; connection: fixed Webbin repository/branch and discovered installation/repository IDs | private key and webhook secret |
+| `vercel`          | project plus project connection                         | connection: project/team IDs and fixed Webbin GitHub repository/production branch                                 | access token                   |
+
+The project-scoped legacy GitHub shape preserved by migration `0002` is revoked audit history only and is never eligible for resolution or verification.
+
+Provider verification returns a normalized result with credential ID, kind, checked timestamp, outcome, stable error category when applicable and provider-specific evidence validated by a strict per-kind schema. Extra evidence fields reject the result before persistence/output. Raw provider payloads and messages are not part of the contract. Integration statuses are `unverified`, `active`, `invalid`, `superseded` and `revoked`.

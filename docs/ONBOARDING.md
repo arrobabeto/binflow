@@ -59,6 +59,8 @@ For Webbin: Spanish and English required, Spanish slug locale, always translate.
 - Local polling or production webhook configuration.
 - One test message to an admin-controlled chat before activation.
 
+The first item is the read-only credential check. Webhook configuration and the test message are later activation validations and are never side effects of `integration verify`.
+
 The global admin bot is configured under platform settings, not separately per client.
 
 ### 5. OpenAI
@@ -75,12 +77,18 @@ The global admin bot is configured under platform settings, not separately per c
 - Read manifest paths/schema/rules.
 - Create and remove a reversible test branch/artifact.
 
+Credential verification performs only the first read-only identity/permission checks. The reversible branch/artifact probe is a separate, explicitly admin-authorized activation validation and is forbidden while Webbin is in reference-only mode.
+
 ### 7. Vercel
 
 - Select project/team and validate repository mapping.
 - Confirm preview mode and deployment/head SHA correlation.
 - Confirm preview protection and environment isolation.
 - Confirm side-effect services are disabled or use test credentials.
+
+The first item begins with the read-only credential/project check. Preview
+creation and deployment/SHA correlation are later activation validations and
+are not side effects of `integration verify`.
 
 ### 8. Manifest and capabilities
 

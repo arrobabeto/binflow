@@ -3,7 +3,7 @@
 - Status: Accepted
 - Date: 2026-08-10
 - Supersedes: ADR-0012 only for the GitHub App registration permission set
-- Superseded by: None
+- Superseded by: ADR-0014 only for the administrative installation-audit token exception
 
 ## Context
 

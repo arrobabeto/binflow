@@ -24,8 +24,22 @@ export const integrationStatusSchema = z.enum([
   'unverified',
   'active',
   'invalid',
+  'superseded',
   'revoked',
 ]);
+
+export const credentialOwnerScopeSchema = z.enum([
+  'platform',
+  'tenant',
+  'project',
+]);
+
+export const webbinPilotBinding = {
+  projectKey: 'webbin',
+  productionBranch: 'main',
+  repository: 'arrobabeto/webbin',
+  tenantKey: 'webbin',
+} as const;
 
 export const healthResponseSchema = z.object({
   status: z.enum(['ok', 'degraded']),
@@ -39,4 +53,5 @@ export type TranslationPolicy = z.infer<typeof translationPolicySchema>;
 export type ProjectProfile = z.infer<typeof projectProfileSchema>;
 export type IntegrationKind = z.infer<typeof integrationKindSchema>;
 export type IntegrationStatus = z.infer<typeof integrationStatusSchema>;
+export type CredentialOwnerScope = z.infer<typeof credentialOwnerScopeSchema>;
 export type HealthResponse = z.infer<typeof healthResponseSchema>;

@@ -10,6 +10,8 @@
 
 Phase 0 credentials are created, verified, listed and revoked through the interactive CLI contract in [Public contracts](CONTRACTS.md#phase-0-credential-cli). The later dashboard uses the same application services and SecretsProvider.
 
+Verification is externally read-only. Candidate activation and replacement follow [ADR-0014](adr/0014-integration-credential-scope-and-verification.md). Provider authentication/policy failures invalidate the candidate; rate limits, timeouts, network failures and provider outages preserve the previous status for safe retry.
+
 ## OpenAI
 
 First MVP uses an OpenAI API key owned by each tenant.
@@ -33,15 +35,22 @@ Requirements:
 - Usage, provider request ID, tokens, image dimensions, cost and latency recorded.
 - Stable safety identifier when supported.
 
+The Phase 0 credential check authenticates against the model catalog and confirms visibility of `gpt-5.6-luna`, `gpt-5.6-terra`, `text-embedding-3-small` and `gpt-image-2`. It makes no billable generation request. Structured-output, research, embedding and image capability probes are separate Phase 0 spikes and activation remains blocked until those pass.
+
 ## Telegram
 
 Chat SDK Telegram adapter behind `MessagingGateway`.
 
-Onboarding validates bot token through `getMe`, username, transport state and ability to send a test message. Production additionally sets and verifies a tenant-scoped webhook and secret. Incoming updates deduplicate by bot integration and `update_id`.
+Phase 0 verification calls `getMe` and `getWebhookInfo`, requires a bot identity and exact expected username, and checks that local polling is not blocked by an existing webhook. It never calls `deleteWebhook`, `setWebhook` or `sendMessage`. Onboarding later sends a test message after an authorized chat ID exists. Production additionally sets and verifies a tenant-scoped webhook and secret. Incoming updates deduplicate by bot integration and `update_id`.
+
+Activation also requires that the normalized Telegram bot ID is not active for
+any other admin/client credential or tenant.
 
 ## GitHub
 
 ### Authentication
+
+The GitHub App private key/webhook secret are one platform registration credential. App/client IDs are non-secret configuration. Webbin stores a separate non-secret installation binding; installation tokens are short-lived and never persisted.
 
 The GitHub App is installed only on `arrobabeto/webbin`. Its explicitly approved registration permission ceiling is:
 
@@ -65,6 +74,10 @@ Every short-lived installation token is limited to Webbin and downscoped to the 
 - Deployments: read only when needed for correlation.
 
 Normal execution omits Administration and Workflows. They may be requested only for a separately modeled, exact admin-authorized onboarding/configuration operation with deterministic policy checks and complete audit. The model cannot choose permissions. See [ADR-0013](adr/0013-github-app-administrative-registration.md).
+
+Phase 0 verification is read-only: it validates App identity and exact registration permissions, enumerates the configured installation to prove that its selected repository set is only `arrobabeto/webbin`, then verifies Webbin identity and `main` as default branch. The enumeration uses the narrowly approved metadata/read-only `installation_audit` token from [ADR-0014](adr/0014-integration-credential-scope-and-verification.md); it is revoked/discarded immediately. Verification never creates a branch, commit, PR or deployment. The webhook secret remains unverified until a signed delivery is observed.
+
+Subscribed GitHub App event validation is deferred to production webhook activation, where the registered event set and signed-delivery path are checked together; Phase 0 credential verification does not claim that evidence.
 
 ### Repository operations
 
@@ -91,6 +104,15 @@ Production listens for installation, pull request, push and check events with si
 ## Vercel
 
 Preferred preview mode is Vercel Git Integration. Onboarding confirms project/repository relationship and whether non-production branch pushes create Preview Deployments.
+
+Phase 0 credential verification is read-only. It first calls the authenticated
+user endpoint, then reads the configured project with the configured `teamId`
+when present. Team projects must have `accountId = teamId`; personal projects
+must have `accountId = user.id`. The project ID, Git provider, separate GitHub
+`org` + `repo` fields resolving to exact `arrobabeto/webbin`, and `main`
+production branch must match the immutable Webbin connection policy. It does
+not create, redeploy, promote, pause or update a project. Preview behavior and
+deployment/SHA correlation remain separate activation validations.
 
 If the existing integration cannot satisfy exact preview requirements, a separately approved onboarding PR adds controlled preview CI. This PR is never combined with generated content.
 

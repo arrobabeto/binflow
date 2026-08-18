@@ -16,8 +16,11 @@ COPY packages/ai/package.json packages/ai/package.json
 COPY packages/contracts/package.json packages/contracts/package.json
 COPY packages/db/package.json packages/db/package.json
 COPY packages/domain/package.json packages/domain/package.json
+COPY packages/github/package.json packages/github/package.json
+COPY packages/integrations/package.json packages/integrations/package.json
 COPY packages/messaging/package.json packages/messaging/package.json
 COPY packages/secrets/package.json packages/secrets/package.json
+COPY packages/vercel/package.json packages/vercel/package.json
 RUN pnpm install --frozen-lockfile
 
 FROM dependencies AS build

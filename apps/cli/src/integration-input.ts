@@ -1,9 +1,13 @@
 import { input, password } from '@inquirer/prompts';
+import { cwd } from 'node:process';
 
+import { phase0OpenAIModels } from '@binflow/ai';
 import type { IntegrationKind } from '@binflow/contracts';
+import { loadSecureSecretFile } from '@binflow/secrets';
 
-type PromptResult = Readonly<{
+export type PromptResult = Readonly<{
   alias: string;
+  configuration: Readonly<Record<string, unknown>>;
   maskedSuffix: string;
   plaintext: Buffer;
 }>;
@@ -18,18 +22,28 @@ export const promptIntegrationInput = async (
   kind: IntegrationKind,
 ): Promise<PromptResult> => {
   let primarySecret: string;
+  let configuration: Record<string, unknown>;
   let value: Record<string, string>;
 
   switch (kind) {
     case 'openai': {
       primarySecret = await secret('OpenAI API key');
       value = { apiKey: primarySecret };
+      configuration = { requiredModels: [...phase0OpenAIModels] };
       break;
     }
     case 'telegram-admin':
     case 'telegram-client': {
       primarySecret = await secret('Telegram bot token');
+      const expectedUsername = await input({
+        message: 'Expected Telegram bot username (without @)',
+        validate: required,
+      });
       value = { botToken: primarySecret };
+      configuration = {
+        expectedUsername: expectedUsername.replace(/^@/, ''),
+        role: kind === 'telegram-admin' ? 'admin' : 'client',
+      };
       break;
     }
     case 'github-app': {
@@ -41,10 +55,24 @@ export const promptIntegrationInput = async (
         message: 'GitHub App client ID',
         validate: required,
       });
-      const privateKey = await secret('GitHub App private key (PEM)');
+      const privateKeyPath = await input({
+        message: 'GitHub App private key path (regular 0600 file)',
+        validate: required,
+      });
+      const privateKeyBuffer = await loadSecureSecretFile(
+        privateKeyPath,
+        cwd(),
+      );
+      let privateKey: string;
+      try {
+        privateKey = privateKeyBuffer.toString('utf8');
+      } finally {
+        privateKeyBuffer.fill(0);
+      }
       const webhookSecret = await secret('GitHub App webhook secret');
-      primarySecret = privateKey;
-      value = { appId, clientId, privateKey, webhookSecret };
+      primarySecret = webhookSecret;
+      value = { privateKey, webhookSecret };
+      configuration = { appId, clientId };
       break;
     }
     case 'vercel': {
@@ -57,10 +85,9 @@ export const promptIntegrationInput = async (
         message: 'Vercel team ID (leave empty for personal account)',
       });
       primarySecret = token;
-      value =
-        teamId.trim() === ''
-          ? { projectId, token }
-          : { projectId, teamId, token };
+      value = { token };
+      configuration =
+        teamId.trim() === '' ? { projectId } : { projectId, teamId };
       break;
     }
   }
@@ -72,6 +99,7 @@ export const promptIntegrationInput = async (
   });
   return {
     alias,
+    configuration,
     maskedSuffix: primarySecret.slice(-4).padStart(4, '*'),
     plaintext: Buffer.from(JSON.stringify(value), 'utf8'),
   };

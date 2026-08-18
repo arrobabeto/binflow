@@ -5,6 +5,10 @@
 ### Local MVP
 
 - PostgreSQL, Redis, MinIO and ClamAV through Docker Compose.
+- ClamAV uses the official Debian-based `clamav/clamav-debian:1.4.6` image so
+  the same Compose definition runs natively on Apple Silicon (`linux/arm64`)
+  and the production VPS target (`linux/amd64`); do not force an emulated
+  platform in Compose.
 - API, dashboard, worker, maintenance and one-shot CLI services are packaged in Docker from Phase 0; supervised host processes remain an optional development convenience.
 - Local and production profiles build the same versioned first-party images.
 - Telegram uses polling.
@@ -48,7 +52,46 @@ Before storing an integration, run `pnpm binflow secret init` from an interactiv
 
 Until the Phase 1 onboarding dashboard exists, initialize the pilot ownership scope with `pnpm binflow scope init --tenant webbin --project webbin`. This creates only draft tenant/project records and is idempotent; activation still requires the documented onboarding validations.
 
-Use the Phase 0 credential CLI documented in [public contracts](CONTRACTS.md#phase-0-credential-cli). Values are entered only through non-echoed prompts. Shell arguments, committed `.env` files and Compose YAML are not credential entry mechanisms.
+Any Phase 0 credential command that selects a project must pass both `--tenant`
+and `--project`; project keys are tenant-local and are never resolved globally.
+
+Use the Phase 0 credential CLI documented in [public contracts](CONTRACTS.md#phase-0-credential-cli). Values are entered only through non-echoed prompts. The GitHub App PEM is imported from a path selected inside the interactive flow after the operator places it outside the repository and restricts it with `chmod 600`. Shell arguments, committed `.env` files and Compose YAML are not credential entry mechanisms.
+
+After `integration set`, run `integration verify <credential-id>` for the candidate or `integration verify --all` for deterministic health/candidate reconciliation. Verification is safe to retry and externally read-only. A failed candidate does not displace the last active version; retryable failures preserve status. Operators may revoke an invalid candidate after diagnosis. No verification command deletes Telegram webhooks, sends Telegram messages or changes Webbin.
+
+Before applying the credential migrations, take and restore-test a database
+backup, inventory every active provider binding, and confirm that replacement
+OpenAI, Telegram, GitHub App and Vercel credentials are available for immediate
+interactive re-enrollment. Do not start the migration window without those
+inputs because legacy credentials intentionally become unavailable.
+
+Migration `0002` introduces separated configuration and new ownership semantics.
+Legacy encrypted payloads cannot be rewritten safely in SQL because the KEK is
+external and their JSON shapes differ from the new strict bundles. The migration
+therefore preserves every legacy row for audit, marks it and its secret reference
+revoked, emits a deterministic migration revocation event, and keeps a legacy
+GitHub row project-scoped. After migration, the
+operator re-enters every required provider credential through `integration set`
+and verifies the new candidate. No legacy ciphertext becomes active
+automatically. Rollback uses the prior application/database backup; the
+enum/scope migration is not destructively reversed in place.
+
+Migration `0003` additively stores redacted verification evidence on integration
+connections. Considered alone, older application images ignore that column.
+The complete release also includes the write-incompatible ownership change from
+`0002`, so rollback of the release always restores the pre-migration application
+and verified database backup together.
+
+Migration `0004` additively stores normalized external identities and latest
+successful-verification timestamps, prevents one Telegram bot from being active
+in multiple bindings, and replaces the independent project foreign key with the
+tenant/project composite binding. Rollback keeps these columns and constraints;
+restore the prior database backup only when reverting the full credential model.
+
+Migration `0005` adds composite tenant/project foreign keys to credentials and
+secret references and limits Phase 0 to one project connection per credential
+version. Apply it after `0004`; rollback keeps the constraints unless the full
+credential-model backup is restored.
 
 Production supplies the KEK as a Docker secret. Database records contain one random DEK and AES-256-GCM encrypted envelope per credential version; the KEK itself is never stored in PostgreSQL.
 
