@@ -1,6 +1,10 @@
 import { describe, expect, it, vi } from 'vitest';
 
-import type { Enrollment, ProjectManifest } from '@binflow/contracts';
+import type {
+  Enrollment,
+  ProjectManifest,
+  RequestDetail,
+} from '@binflow/contracts';
 
 import { buildApp } from '../src/app.js';
 
@@ -136,7 +140,92 @@ const sessionResolver = vi.fn(async () => ({
   sessionId: 'session-1',
 }));
 
+const workflowRequest: RequestDetail = {
+  capabilityId: 'create_blog_draft',
+  confirmedAt: null,
+  createdAt: '2026-08-18T00:00:00.000Z',
+  currentVersion: 1,
+  id: 'request-1',
+  interpretedInput: {
+    mode: 'brief',
+    projectId: 'project-1',
+    topic: 'A secure AI blog',
+  },
+  plan: { topic: 'A secure AI blog' },
+  projectId: 'project-1',
+  revision: 1,
+  state: 'AWAITING_PLAN_CONFIRMATION',
+  tenantId: 'tenant-1',
+  topic: 'A secure AI blog',
+  updatedAt: '2026-08-18T00:00:00.000Z',
+};
+
+const workflowSummary = {
+  capabilityId: workflowRequest.capabilityId,
+  createdAt: workflowRequest.createdAt,
+  currentVersion: workflowRequest.currentVersion,
+  id: workflowRequest.id,
+  projectId: workflowRequest.projectId,
+  revision: workflowRequest.revision,
+  state: workflowRequest.state,
+  tenantId: workflowRequest.tenantId,
+  topic: workflowRequest.topic,
+  updatedAt: workflowRequest.updatedAt,
+};
+
+const createWorkflowService = () => ({
+  cancelAsAdmin: vi.fn(async () => ({
+    capabilityId: workflowRequest.capabilityId,
+    createdAt: workflowRequest.createdAt,
+    currentVersion: workflowRequest.currentVersion,
+    id: workflowRequest.id,
+    projectId: workflowRequest.projectId,
+    revision: 2,
+    state: 'CANCELLED' as const,
+    tenantId: workflowRequest.tenantId,
+    topic: workflowRequest.topic,
+    updatedAt: workflowRequest.updatedAt,
+  })),
+  get: vi.fn(async () => workflowRequest),
+  list: vi.fn(async () => [workflowSummary]),
+});
+
 describe('client enrollment API', () => {
+  it('projects requests and applies guarded cancellation', async () => {
+    const workflowService = createWorkflowService();
+    const app = buildApp({
+      resolvePlatformOwnerSession: sessionResolver,
+      trustedOrigin: 'http://localhost:3000',
+      workflowService,
+    });
+    const list = await app.inject({ method: 'GET', url: '/api/v1/requests' });
+    expect(list.statusCode).toBe(200);
+    expect(list.json()).toMatchObject({ items: [{ id: 'request-1' }] });
+
+    const cancelled = await app.inject({
+      headers: {
+        'content-type': 'application/json',
+        'idempotency-key': '0123456789abcdef',
+        'if-match': '"1"',
+        origin: 'http://localhost:3000',
+      },
+      method: 'POST',
+      payload: {},
+      url: '/api/v1/requests/request-1/cancel',
+    });
+    expect(cancelled.statusCode).toBe(200);
+    expect(cancelled.headers.etag).toBe('"2"');
+    expect(cancelled.json()).toMatchObject({ state: 'CANCELLED' });
+    expect(workflowService.cancelAsAdmin).toHaveBeenCalledWith(
+      'request-1',
+      1,
+      'owner-1',
+      expect.any(String),
+      '0123456789abcdef',
+    );
+    await app.close();
+  });
+
   it('returns the mutable resource with a strong ETag', async () => {
     const service = createService();
     const app = buildApp({

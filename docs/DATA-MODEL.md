@@ -53,6 +53,9 @@ Role (`admin` or `client`), tenant, bot username, secret references, webhook/pol
 
 Hashed token, tenant/user/bot binding, expiry, consumed timestamp and creator.
 
+Migration `0013` adds explicit client-user and bot-credential binding. Tokens
+created before those bindings exist are revoked and must be regenerated.
+
 ## Command, audit and delivery foundation
 
 ### `idempotency_records`
@@ -173,6 +176,10 @@ Creation, test, activation, supersession, use, revoke and failure audit without 
 
 Normalized channel/thread metadata. Message bodies may have shorter retention than audit; attachments are referenced.
 
+The first MVP stores a redacted message kind and digest; structured client input
+lives in the immutable request version. `(bot_id, update_id)` and `(bot_id,
+external_user_id)` are unique replay and isolation boundaries.
+
 ### `requests`
 
 Stable user intention, capability, current state/version, tenant/project/user and terminal result.
@@ -180,6 +187,9 @@ Stable user intention, capability, current state/version, tenant/project/user an
 ### `request_versions`
 
 Immutable interpreted input, confirmed plan, frozen versions, base source revision, effective policy and superseded relationship.
+
+`request_actions` contains only hashed opaque tokens with actor, request
+version, action, expiry and consumption binding.
 
 ### `clarifications` and `plans`
 
@@ -190,6 +200,9 @@ Question/answer and structured plan history with confirmation timestamps.
 ### `graph_runs`
 
 Request version, graph version, thread/checkpoint identifiers, status, start/end and current node.
+
+`workflow_checkpoints` is the append-only first-MVP checkpointer with a
+monotonic sequence and structured state.
 
 ### `node_runs`
 

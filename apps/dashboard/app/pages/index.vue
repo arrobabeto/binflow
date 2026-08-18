@@ -27,6 +27,9 @@ const signOut = async () => {
           <UButton to="/clients" color="neutral" variant="soft"
             >Clients</UButton
           >
+          <UButton to="/requests" color="neutral" variant="soft"
+            >Requests</UButton
+          >
           <span class="text-sm text-muted">{{ session?.user.email }}</span>
           <UButton color="neutral" variant="ghost" @click="signOut"
             >Sign out</UButton
@@ -57,6 +60,10 @@ const signOut = async () => {
         <UCard>
           <p class="text-sm text-muted">Provider credentials</p>
           <UButton class="mt-3" to="/integrations">Open integrations</UButton>
+        </UCard>
+        <UCard>
+          <p class="text-sm text-muted">Workflow requests</p>
+          <UButton class="mt-3" to="/requests">Open requests</UButton>
         </UCard>
       </div>
     </main>

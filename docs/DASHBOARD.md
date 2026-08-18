@@ -83,6 +83,10 @@ permissions and approval behavior are read-only and cannot be edited in the UI.
 
 ## Requests
 
+Module 7 lists request ID, client/project, capability, topic, current version,
+state and timestamps. Detail shows redacted structured input, confirmed plan and
+checkpoint state, never raw Telegram updates, credentials or hidden reasoning.
+
 List filters:
 
 - Tenant/project.

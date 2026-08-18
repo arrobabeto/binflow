@@ -1,5 +1,5 @@
 {
-  "name": "@binflow/messaging",
+  "name": "@binflow/workflows",
   "version": "0.0.0",
   "private": true,
   "type": "module",
@@ -13,18 +13,14 @@
     "build": "tsc -p tsconfig.json",
     "check": "tsc -p tsconfig.json --noEmit",
     "lint": "eslint src --max-warnings=0",
-    "test": "vitest run"
+    "test": "vitest run test"
   },
   "dependencies": {
     "@binflow/contracts": "workspace:*",
+    "@binflow/db": "workspace:*",
     "@binflow/domain": "workspace:*",
-    "@binflow/integrations": "workspace:*",
-    "@binflow/secrets": "workspace:*",
-    "@chat-adapter/shared": "4.37.0",
-    "@chat-adapter/state-redis": "4.37.0",
-    "@chat-adapter/telegram": "4.37.0",
-    "chat": "4.37.0",
-    "zod": "4.4.3"
+    "drizzle-orm": "0.45.2",
+    "uuid": "13.0.0"
   },
   "devDependencies": {
     "@types/node": "24.13.3"

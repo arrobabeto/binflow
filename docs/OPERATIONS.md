@@ -189,6 +189,11 @@ history; restore the coordinated pre-release backup for a full release revert.
 
 ## Health
 
+Migration `0013` adds channel identities and the durable request kernel. Stop
+polling/webhook ingress and workers before applying it. Existing unscoped
+pairing tokens are revoked; generate a new link afterward. Rollback requires the
+pre-migration database backup and previous application images.
+
 Endpoints:
 
 - Liveness: process event loop is responsive.

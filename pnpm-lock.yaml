@@ -62,6 +62,9 @@ importers:
       '@binflow/secrets':
         specifier: workspace:*
         version: link:../../packages/secrets
+      '@binflow/workflows':
+        specifier: workspace:*
+        version: link:../../packages/workflows
       fastify:
         specifier: 5.11.3
         version: 5.11.3
@@ -156,15 +159,36 @@ importers:
 
   apps/worker:
     dependencies:
+      '@binflow/contracts':
+        specifier: workspace:*
+        version: link:../../packages/contracts
+      '@binflow/db':
+        specifier: workspace:*
+        version: link:../../packages/db
+      '@binflow/messaging':
+        specifier: workspace:*
+        version: link:../../packages/messaging
+      '@binflow/secrets':
+        specifier: workspace:*
+        version: link:../../packages/secrets
+      '@binflow/workflows':
+        specifier: workspace:*
+        version: link:../../packages/workflows
       bullmq:
         specifier: 6.0.11
         version: 6.0.11(ioredis@6.0.0)(pg@8.23.0)(redis@5.12.1)
+      drizzle-orm:
+        specifier: 0.45.2
+        version: 0.45.2(@types/pg@8.20.0)(kysely@0.29.5)(pg@8.23.0)
       ioredis:
         specifier: 6.0.0
         version: 6.0.0
       pino:
         specifier: 10.3.1
         version: 10.3.1
+      uuid:
+        specifier: 13.0.0
+        version: 13.0.0
     devDependencies:
       '@types/node':
         specifier: 24.13.3
@@ -370,6 +394,9 @@ importers:
 
   packages/messaging:
     dependencies:
+      '@binflow/contracts':
+        specifier: workspace:*
+        version: link:../contracts
       '@binflow/domain':
         specifier: workspace:*
         version: link:../domain
@@ -466,6 +493,28 @@ importers:
       zod:
         specifier: 4.4.3
         version: 4.4.3
+    devDependencies:
+      '@types/node':
+        specifier: 24.13.3
+        version: 24.13.3
+
+  packages/workflows:
+    dependencies:
+      '@binflow/contracts':
+        specifier: workspace:*
+        version: link:../contracts
+      '@binflow/db':
+        specifier: workspace:*
+        version: link:../db
+      '@binflow/domain':
+        specifier: workspace:*
+        version: link:../domain
+      drizzle-orm:
+        specifier: 0.45.2
+        version: 0.45.2(@types/pg@8.20.0)(kysely@0.29.5)(pg@8.23.0)
+      uuid:
+        specifier: 13.0.0
+        version: 13.0.0
     devDependencies:
       '@types/node':
         specifier: 24.13.3
@@ -6204,6 +6253,10 @@ packages:
 
   util-deprecate@1.0.2:
     resolution: {integrity: sha512-EPD5q1uXyFxJpCrLnCc1nHnq3gOa6DZBocAIiI2TaSCA7VCJ1UJDMagCzIkXNsUYfD1daK//LTEQ8xiIbrHtcw==}
+
+  uuid@13.0.0:
+    resolution: {integrity: sha512-XQegIaBTVUjSHliKqcnFqYypAd4S+WCYt5NIeRs6w/UAry7z8Y9j5ZwRRL4kzq9U3sD6v+85er9FvkEaBpji2w==}
+    hasBin: true
 
   uuid@14.0.1:
     resolution: {integrity: sha512-6ZxzVpzDXDa3bJWaHilVayA+BH/1zmxCJoVgvmqJnid/gPoKHxUrS/aC/T6LGQtNHT+XHG9fXPJB4d+IrU30Ew==}
@@ -12759,6 +12812,8 @@ snapshots:
       punycode: 2.3.1
 
   util-deprecate@1.0.2: {}
+
+  uuid@13.0.0: {}
 
   uuid@14.0.1: {}
 

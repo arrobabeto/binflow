@@ -15,6 +15,9 @@ import {
   pairingLinkResponseSchema,
   platformOwnerSessionSchema,
   projectManifestResponseSchema,
+  requestDetailSchema,
+  requestPageSchema,
+  requestSummarySchema,
   updateEnrollmentInputSchema,
   type HealthResponse,
   type PlatformOwnerSessionResponse,
@@ -27,6 +30,7 @@ import {
 import { DomainError } from '@binflow/domain';
 import type { IntegrationAdminService } from '@binflow/integration-admin';
 import type { EnrollmentService } from '@binflow/onboarding';
+import type { WorkflowService } from '@binflow/workflows';
 
 import { normalizeApiError } from './errors.js';
 
@@ -53,6 +57,7 @@ export const buildApp = (
       IntegrationAdminService,
       'create' | 'list' | 'revoke' | 'verify'
     >;
+    workflowService?: Pick<WorkflowService, 'cancelAsAdmin' | 'get' | 'list'>;
     trustedOrigin?: string;
   }> = {},
 ): FastifyInstance => {
@@ -65,6 +70,7 @@ export const buildApp = (
           requirePlatformOwnerSession(auth, headers, sessionOptions));
   const enrollmentService = options.enrollmentService;
   const integrationService = options.integrationService;
+  const workflowService = options.workflowService;
   const trustedOrigin = new URL(
     options.trustedOrigin ??
       process.env.BINFLOW_PUBLIC_URL ??
@@ -182,6 +188,15 @@ export const buildApp = (
     }
     return integrationService;
   };
+  const requireWorkflowService = (): NonNullable<typeof workflowService> => {
+    if (workflowService === undefined) {
+      throw new DomainError(
+        'internal_error',
+        'Workflow runtime is unavailable.',
+      );
+    }
+    return workflowService;
+  };
   const requireMutationHeaders = (
     headers: RequestHeaders,
     requireVersion = true,
@@ -242,6 +257,46 @@ export const buildApp = (
     const items = await requireService().list(session.actorId, request.id);
     return enrollmentPageSchema.parse({ items, nextCursor: null });
   });
+
+  app.get('/api/v1/requests', async (request) => {
+    const session = await requireSession(request);
+    const items = await requireWorkflowService().list(
+      session.actorId,
+      request.id,
+    );
+    return requestPageSchema.parse({ items, nextCursor: null });
+  });
+
+  app.get<{ Params: { id: string } }>(
+    '/api/v1/requests/:id',
+    async (request) => {
+      const session = await requireSession(request);
+      return requestDetailSchema.parse(
+        await requireWorkflowService().get(
+          request.params.id,
+          session.actorId,
+          request.id,
+        ),
+      );
+    },
+  );
+
+  app.post<{ Params: { id: string } }>(
+    '/api/v1/requests/:id/cancel',
+    async (request, reply) => {
+      const session = await requireSession(request, true);
+      const mutation = requireMutationHeaders(request.headers);
+      const result = await requireWorkflowService().cancelAsAdmin(
+        request.params.id,
+        mutation.expectedVersion,
+        session.actorId,
+        request.id,
+        mutation.idempotencyKey,
+      );
+      void reply.header('etag', `"${String(result.revision)}"`);
+      return requestSummarySchema.parse(result);
+    },
+  );
 
   app.get('/api/v1/admin/integrations', async (request) => {
     const session = await requireSession(request);

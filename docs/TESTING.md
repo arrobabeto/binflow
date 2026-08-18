@@ -20,6 +20,11 @@
 - Zod schemas and domain value objects.
 - Locale intersection and translation policy.
 - Capability access and approval matrices.
+- Pairing expiry/replay/wrong-bot behavior, cross-bot numeric-ID isolation,
+  unpaired discovery denial, localized commands, update replay, stale actions
+  and request create/confirm/cancel/resume after service reconstruction.
+- Request RLS, optimistic concurrency, terminal guards, immutable versions and
+  checkpoint monotonicity against the isolated `_test` database.
 - Exact capability registry version, immutable project binding, disabled-tool
   invisibility and manifest/binding fingerprint agreement.
 - Request-state transitions and terminal-state enforcement.

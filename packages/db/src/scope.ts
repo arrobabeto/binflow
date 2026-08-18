@@ -20,6 +20,10 @@ export type DatabaseExecutionScope =
       kind: 'system';
       operation: string;
       tenantId: string;
+    }>
+  | Readonly<{
+      kind: 'platform_system';
+      operation: string;
     }>;
 
 export type ScopedDatabase = DatabaseTransaction & {
@@ -112,6 +116,26 @@ export const withPlatformOwnerScope = async <T>(
       objectType: 'database_scope',
       reason,
     });
+    return action(transaction as ScopedDatabase);
+  });
+};
+
+export const withPlatformSystemScope = async <T>(
+  database: Database,
+  operation: string,
+  action: (database: ScopedDatabase) => Promise<T>,
+): Promise<T> => {
+  const normalizedOperation = validateText(operation, 'operation');
+  return database.transaction(async (transaction) => {
+    await transaction.execute(
+      sql`select set_config('app.tenant_id', '', true)`,
+    );
+    await transaction.execute(
+      sql`select set_config('app.platform_owner', 'true', true)`,
+    );
+    await transaction.execute(
+      sql`select set_config('app.system_operation', ${normalizedOperation}, true)`,
+    );
     return action(transaction as ScopedDatabase);
   });
 };

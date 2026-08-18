@@ -18,6 +18,7 @@
     "@binflow/integration-admin": "workspace:*",
     "@binflow/onboarding": "workspace:*",
     "@binflow/secrets": "workspace:*",
+    "@binflow/workflows": "workspace:*",
     "fastify": "5.11.3",
     "zod": "4.4.3"
   },

@@ -31,6 +31,7 @@ export {
 export * as schema from './schema.js';
 export {
   withPlatformOwnerScope,
+  withPlatformSystemScope,
   withSystemTenantScope,
   withTenantScope,
   type DatabaseExecutionScope,

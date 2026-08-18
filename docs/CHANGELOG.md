@@ -80,6 +80,9 @@ All notable changes to product behavior, architecture, contracts, security, oper
 - Added ADR-0020 and the code-owned `create_blog_draft@1` capability registry,
   immutable manifest-scoped project bindings, capability-catalog validation,
   read-only dashboard projection and migration `0012`.
+- Added ADR-0021, Telegram pairing/command ingress, localized tool routing,
+  durable request versions/actions/checkpoints, request API/dashboard projection
+  and migration `0013` for the workflow-kernel boundary.
 
 ### Changed
 

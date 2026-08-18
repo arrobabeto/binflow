@@ -442,6 +442,21 @@ POST   /api/v1/admin/integrations/:id/revoke
 POST   /api/v1/admin/enrollments/:id/catalog/sync
 ```
 
+Module 7 implements a redacted request projection with request ID,
+tenant/project, `create_blog_draft` capability, state, current version, topic
+and timestamps plus the optimistic concurrency revision. The implemented kernel states are `RECEIVED`, `NEEDS_INPUT`,
+`AWAITING_PLAN_CONFIRMATION`, `QUEUED`, `CANCELLED` and `FAILED_FINAL`;
+Module 8 adds execution/publication states.
+
+`POST /api/v1/requests/:requestId/cancel` requires `If-Match` and an
+idempotency key. Telegram actions call the same application service with a
+resolved channel actor and an opaque, single-use action token.
+
+The transport-neutral Telegram ingress input is `{ botId, updateId,
+externalUserId, chatId, text, receivedAt }`. It accepts direct messages only,
+deduplicates by bot/update and returns localized reply intents. It never accepts
+tenant/project IDs supplied by an update.
+
 Mutation endpoints require an idempotency key and optimistic concurrency version. Transport-specific schemas will be generated from shared Zod definitions.
 
 Enrollment creation and update use strict shared schemas. Supported locale
