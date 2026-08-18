@@ -51,6 +51,12 @@
   code completes login; trusted-device requests are rejected.
 - Initial TOTP enrollment revokes every other password-only session so assurance
   cannot be inherited retroactively.
+- Enrollment tests cover Phase 0 scope adoption, aggregate uniqueness, strict
+  configuration, optimistic concurrency, idempotent replay, legal state
+  transitions, stale evidence and fail-closed activation.
+- Pairing-link tests prove 24-hour expiry, hash-only persistence, redacted
+  idempotency receipts, one-time plaintext return/replay rejection and
+  tenant/project binding.
 - Session expiry, five-minute freshness, revocation, database-backed rate limits,
   Origin/CSRF enforcement and cookie flags are covered explicitly.
 - LangGraph PostgreSQL checkpointer compatibility.

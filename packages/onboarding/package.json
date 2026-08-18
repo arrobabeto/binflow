@@ -1,22 +1,26 @@
 {
-  "name": "@binflow/api",
+  "name": "@binflow/onboarding",
   "version": "0.0.0",
   "private": true,
   "type": "module",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    }
+  },
   "scripts": {
     "build": "tsc -p tsconfig.json",
     "check": "tsc -p tsconfig.json --noEmit",
-    "dev": "tsx watch src/server.ts",
     "lint": "eslint src --max-warnings=0",
-    "start": "node dist/server.js",
     "test": "vitest run"
   },
   "dependencies": {
-    "@binflow/auth": "workspace:*",
     "@binflow/contracts": "workspace:*",
+    "@binflow/db": "workspace:*",
     "@binflow/domain": "workspace:*",
-    "@binflow/onboarding": "workspace:*",
-    "fastify": "5.11.3"
+    "drizzle-orm": "0.45.2",
+    "uuid": "14.0.1"
   },
   "devDependencies": {
     "@types/node": "24.13.3"

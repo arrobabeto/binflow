@@ -20,6 +20,7 @@ COPY packages/domain/package.json packages/domain/package.json
 COPY packages/github/package.json packages/github/package.json
 COPY packages/integrations/package.json packages/integrations/package.json
 COPY packages/messaging/package.json packages/messaging/package.json
+COPY packages/onboarding/package.json packages/onboarding/package.json
 COPY packages/secrets/package.json packages/secrets/package.json
 COPY packages/vercel/package.json packages/vercel/package.json
 RUN pnpm install --frozen-lockfile

@@ -45,8 +45,23 @@ All notable changes to product behavior, architecture, contracts, security, oper
   modern dependency syntax is preserved without an incompatible ES2019 pass.
 - Added dashboard/auth readiness checks and made the production Caddy service
   wait for a healthy dashboard rather than only a started process.
+- Added ADR-0017 and the strict resumable enrollment/activation-evidence
+  contract, including Phase 0 scope adoption, fail-closed mutable validations
+  and hash-only one-time pairing links.
+- Added the enrollment database aggregate, immutable dependency-fingerprinted
+  validation attempts, pairing-token hashes, transactional audit/outbox events
+  and tenant/project constraints in migration `0009`.
+- Added the authenticated enrollment API and English dashboard screens for
+  client creation, resumable configuration, credential readiness validation
+  and one-time Telegram pairing-link delivery.
+- Added redacted pairing idempotency receipts so retries never persist or
+  redisplay the one-time plaintext token.
+- Included the onboarding workspace in the shared Docker dependency layer so
+  the same application image builds locally and for the future VPS release.
 
 ### Changed
+
+- Removed a duplicate auth-schema re-export with no observable contract change.
 
 - Replaced the AMD64-only ClamAV container with the official pinned Debian
   multi-architecture image so local Apple Silicon and production AMD64 hosts

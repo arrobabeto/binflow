@@ -10,10 +10,11 @@ import {
   pgTable,
   text,
   timestamp,
+  unique,
   uniqueIndex,
 } from 'drizzle-orm/pg-core';
 
-export * from './auth-schema.js';
+import type { EnrollmentConfiguration } from '@binflow/contracts';
 
 export * from './auth-schema.js';
 
@@ -58,6 +59,22 @@ export const outboxStatus = pgEnum('outbox_status', [
   'published',
   'failed',
 ]);
+export const enrollmentState = pgEnum('enrollment_state', [
+  'draft',
+  'configuring',
+  'validating',
+  'validation_failed',
+  'ready_for_pairing',
+  'pairing_pending',
+  'active',
+  'revalidation_required',
+  'suspended',
+  'archived',
+]);
+export const enrollmentValidationResult = pgEnum(
+  'enrollment_validation_result',
+  ['success', 'failed', 'blocked'],
+);
 
 export const tenants = pgTable(
   'tenants',
@@ -108,6 +125,145 @@ export const projects = pgTable(
     uniqueIndex('projects_id_tenant_unique').on(table.id, table.tenantId),
     index('projects_tenant_idx').on(table.tenantId),
     pgPolicy('projects_tenant_isolation', {
+      for: 'all',
+      using: sql`${table.tenantId} = nullif(current_setting('app.tenant_id', true), '') OR current_setting('app.platform_owner', true) = 'true'`,
+      withCheck: sql`${table.tenantId} = nullif(current_setting('app.tenant_id', true), '') OR current_setting('app.platform_owner', true) = 'true'`,
+    }),
+  ],
+).enableRLS();
+
+export const clientEnrollments = pgTable(
+  'client_enrollments',
+  {
+    id: text('id').primaryKey(),
+    tenantId: text('tenant_id')
+      .notNull()
+      .references(() => tenants.id),
+    projectId: text('project_id').notNull(),
+    state: enrollmentState('state').notNull().default('draft'),
+    currentStep: integer('current_step').notNull().default(1),
+    configuration: jsonb('configuration')
+      .$type<EnrollmentConfiguration>()
+      .notNull()
+      .default({}),
+    version: integer('version').notNull().default(1),
+    lastValidatedAt: timestamp('last_validated_at', { withTimezone: true }),
+    createdAt: timestamp('created_at', { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+    updatedAt: timestamp('updated_at', { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (table) => [
+    check(
+      'client_enrollments_current_step_check',
+      sql`${table.currentStep} >= 1 AND ${table.currentStep} <= 11`,
+    ),
+    check('client_enrollments_version_check', sql`${table.version} >= 1`),
+    uniqueIndex('client_enrollments_tenant_unique').on(table.tenantId),
+    uniqueIndex('client_enrollments_project_unique').on(table.projectId),
+    unique('client_enrollments_id_scope_unique').on(
+      table.id,
+      table.tenantId,
+      table.projectId,
+    ),
+    foreignKey({
+      columns: [table.projectId, table.tenantId],
+      foreignColumns: [projects.id, projects.tenantId],
+      name: 'client_enrollments_project_tenant_fk',
+    }),
+    pgPolicy('client_enrollments_tenant_isolation', {
+      for: 'all',
+      using: sql`${table.tenantId} = nullif(current_setting('app.tenant_id', true), '') OR current_setting('app.platform_owner', true) = 'true'`,
+      withCheck: sql`${table.tenantId} = nullif(current_setting('app.tenant_id', true), '') OR current_setting('app.platform_owner', true) = 'true'`,
+    }),
+  ],
+).enableRLS();
+
+export const enrollmentValidationAttempts = pgTable(
+  'enrollment_validation_attempts',
+  {
+    id: text('id').primaryKey(),
+    enrollmentId: text('enrollment_id').notNull(),
+    tenantId: text('tenant_id').notNull(),
+    projectId: text('project_id').notNull(),
+    checkName: text('check_name').notNull(),
+    checkVersion: integer('check_version').notNull(),
+    dependencyFingerprint: text('dependency_fingerprint').notNull(),
+    result: enrollmentValidationResult('result').notNull(),
+    evidence: jsonb('evidence').notNull().default({}),
+    errorCategory: text('error_category'),
+    errorCode: text('error_code'),
+    checkedAt: timestamp('checked_at', { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (table) => [
+    check(
+      'enrollment_validation_attempts_check_version_check',
+      sql`${table.checkVersion} >= 1`,
+    ),
+    index('enrollment_validation_attempts_enrollment_idx').on(
+      table.enrollmentId,
+      table.checkedAt,
+    ),
+    foreignKey({
+      columns: [table.enrollmentId, table.tenantId, table.projectId],
+      foreignColumns: [
+        clientEnrollments.id,
+        clientEnrollments.tenantId,
+        clientEnrollments.projectId,
+      ],
+      name: 'enrollment_validation_attempts_enrollment_scope_fk',
+    }),
+    foreignKey({
+      columns: [table.projectId, table.tenantId],
+      foreignColumns: [projects.id, projects.tenantId],
+      name: 'enrollment_validation_attempts_project_tenant_fk',
+    }),
+    pgPolicy('enrollment_validation_attempts_tenant_isolation', {
+      for: 'all',
+      using: sql`${table.tenantId} = nullif(current_setting('app.tenant_id', true), '') OR current_setting('app.platform_owner', true) = 'true'`,
+      withCheck: sql`${table.tenantId} = nullif(current_setting('app.tenant_id', true), '') OR current_setting('app.platform_owner', true) = 'true'`,
+    }),
+  ],
+).enableRLS();
+
+export const pairingTokens = pgTable(
+  'pairing_tokens',
+  {
+    id: text('id').primaryKey(),
+    enrollmentId: text('enrollment_id').notNull(),
+    tenantId: text('tenant_id').notNull(),
+    projectId: text('project_id').notNull(),
+    tokenHash: text('token_hash').notNull(),
+    createdBy: text('created_by').notNull(),
+    expiresAt: timestamp('expires_at', { withTimezone: true }).notNull(),
+    consumedAt: timestamp('consumed_at', { withTimezone: true }),
+    revokedAt: timestamp('revoked_at', { withTimezone: true }),
+    createdAt: timestamp('created_at', { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (table) => [
+    uniqueIndex('pairing_tokens_hash_unique').on(table.tokenHash),
+    index('pairing_tokens_enrollment_idx').on(table.enrollmentId),
+    foreignKey({
+      columns: [table.enrollmentId, table.tenantId, table.projectId],
+      foreignColumns: [
+        clientEnrollments.id,
+        clientEnrollments.tenantId,
+        clientEnrollments.projectId,
+      ],
+      name: 'pairing_tokens_enrollment_scope_fk',
+    }),
+    foreignKey({
+      columns: [table.projectId, table.tenantId],
+      foreignColumns: [projects.id, projects.tenantId],
+      name: 'pairing_tokens_project_tenant_fk',
+    }),
+    pgPolicy('pairing_tokens_tenant_isolation', {
       for: 'all',
       using: sql`${table.tenantId} = nullif(current_setting('app.tenant_id', true), '') OR current_setting('app.platform_owner', true) = 'true'`,
       withCheck: sql`${table.tenantId} = nullif(current_setting('app.tenant_id', true), '') OR current_setting('app.platform_owner', true) = 'true'`,
