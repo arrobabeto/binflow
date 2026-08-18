@@ -16,10 +16,13 @@
     "test": "vitest run"
   },
   "dependencies": {
+    "@binflow/blog": "workspace:*",
+    "@binflow/contracts": "workspace:*",
     "@binflow/domain": "workspace:*",
     "@binflow/integrations": "workspace:*",
     "@binflow/secrets": "workspace:*",
     "ai": "7.0.59",
+    "openai": "7.5.0",
     "zod": "4.4.3"
   },
   "devDependencies": {

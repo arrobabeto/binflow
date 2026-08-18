@@ -1,10 +1,18 @@
 # Telegram experience
 
+The global admin bot and every tenant client bot have separate credentials,
+state namespaces and ingress paths. The admin destination is established only
+through the hash-only one-time owner pairing flow in ADR-0023. Client tool use
+and admin-approval transitions enqueue durable notifications; notification
+delivery never authorizes or advances a request.
+
 ## Topology
 
 ### Admin bot
 
-One platform bot serves authenticated platform owners. It receives operational notifications and exposes idempotent approval actions.
+One platform bot serves the platform owner and receives operational
+notifications. Approval decisions remain in the fresh two-factor dashboard
+surface for the local-first MVP.
 
 ### Client bot
 
@@ -24,7 +32,9 @@ inside JSON evidence.
 ## Local and production transport
 
 - Local: long polling; startup verifies that no incompatible webhook is active and explicitly disables Chat SDK webhook deletion.
-- Production: HTTPS webhook with a unique secret token and restricted allowed updates.
+- Production cutover: HTTPS webhook with a unique secret token and restricted
+  allowed updates. The production profile remains disabled until that later VPS
+  ingress is implemented and validated.
 - A bot may use polling or webhook mode, never both simultaneously.
 - Credential verification is read-only: `getMe` confirms the expected bot identity and `getWebhookInfo` detects transport conflict. It never deletes/configures a webhook or sends a test message. Test delivery happens during onboarding after an authorized chat ID exists.
 

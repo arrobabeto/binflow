@@ -91,11 +91,28 @@ export const loadMasterKeyFile = async (
 export const isRuntimeMasterKeyPermissionAllowed = (
   keyPath: string,
   mode: number,
+  dockerMountReadonly = false,
 ): boolean => {
   const permissions = mode & 0o777;
-  return resolve(keyPath).startsWith('/run/secrets/')
-    ? permissions === 0o400 || permissions === 0o440 || permissions === 0o444
-    : permissions === 0o600;
+  if (resolve(keyPath).startsWith('/run/secrets/')) {
+    return (
+      permissions === 0o400 ||
+      permissions === 0o440 ||
+      permissions === 0o444 ||
+      (permissions === 0o600 && dockerMountReadonly)
+    );
+  }
+  return permissions === 0o600;
+};
+
+const isReadonlyMount = async (keyPath: string): Promise<boolean> => {
+  try {
+    const probe = await open(keyPath, 'r+');
+    await probe.close();
+    return false;
+  } catch (error) {
+    return (error as NodeJS.ErrnoException).code === 'EROFS';
+  }
 };
 
 /** Loads the KEK for a runtime process without weakening host-file policy. */
@@ -110,7 +127,17 @@ export const loadRuntimeMasterKeyFile = async (
   }
   const permissions = metadata.mode & 0o777;
   const isDockerSecret = resolve(keyPath).startsWith('/run/secrets/');
-  if (!isRuntimeMasterKeyPermissionAllowed(keyPath, permissions)) {
+  const dockerMountReadonly =
+    isDockerSecret && permissions === 0o600
+      ? await isReadonlyMount(keyPath)
+      : false;
+  if (
+    !isRuntimeMasterKeyPermissionAllowed(
+      keyPath,
+      permissions,
+      dockerMountReadonly,
+    )
+  ) {
     throw new Error(
       isDockerSecret
         ? 'The runtime master key must be mounted read-only.'

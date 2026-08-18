@@ -4,6 +4,28 @@ All notable changes to product behavior, architecture, contracts, security, oper
 
 ## Unreleased
 
+### Module 9 production readiness
+
+- Accepted ADR-0023 for secure admin-bot pairing, durable operational
+  notifications, readiness, reconciliation and the fail-closed contract for a
+  later VPS webhook cutover.
+- Added the Operations pairing screen, durable admin notifications, service
+  heartbeat readiness and a one-shot safe maintenance reconciler.
+- Made Docker Desktop's owner-only Compose secret mount compatible with the
+  runtime KEK guard while still requiring the mount itself to prove read-only.
+
+### Module 8 complete blog capability
+
+- Accepted ADR-0022 for deterministic bilingual generation, artifact storage,
+  exact GitHub/Vercel preview binding and approval-gated publication.
+- Added the Module 8 data, provider-port, approval and operational contracts
+  before implementation.
+- Implemented strict OpenAI bilingual generation and image accounting, GitHub
+  catalog/PR/check/merge operations, Vercel SHA-correlated preview/production
+  evidence, S3-compatible artifacts and the exact approval/revision loop.
+- Added embedding-backed catalog similarity with durable catalog, decision and
+  ranked-candidate evidence under tenant RLS.
+
 ### Added
 
 - Established the documentation-first repository baseline.

@@ -263,6 +263,17 @@ export const healthResponseSchema = z.object({
   timestamp: z.iso.datetime(),
 });
 
+export const readinessResponseSchema = z
+  .object({
+    checks: z.record(
+      z.string(),
+      z.enum(['ready', 'unavailable', 'stale', 'misconfigured']),
+    ),
+    status: z.enum(['ready', 'not_ready']),
+    timestamp: z.iso.datetime(),
+  })
+  .strict();
+
 export type SupportedLocale = z.infer<typeof supportedLocaleSchema>;
 export type TranslationPolicy = z.infer<typeof translationPolicySchema>;
 export type ProjectBudgetPolicy = z.infer<typeof projectBudgetPolicySchema>;
@@ -641,11 +652,68 @@ export const requestSummarySchema = z
 
 export const requestDetailSchema = requestSummarySchema.extend({
   confirmedAt: z.iso.datetime().nullable(),
+  execution: z
+    .object({
+      approvalStatus: z.string().nullable(),
+      branch: z.string().nullable(),
+      categoryKind: z.enum(['existing', 'likely_typo', 'new']).nullable(),
+      files: z.array(z.string()),
+      headCommitSha: z.string().nullable(),
+      previewDeploymentId: z.string().nullable(),
+      previewUrls: z.record(z.string(), z.string()),
+      pullRequestUrl: z.url().nullable(),
+      slug: z.string().nullable(),
+    })
+    .strict()
+    .nullable(),
   interpretedInput: createBlogDraftInputSchema.nullable(),
   plan: z.record(z.string(), z.unknown()).nullable(),
 });
 
+export const blogFaqSchema = z
+  .object({
+    pregunta: z.string().trim().min(1).max(300),
+    respuesta: z.string().trim().min(1).max(2_000),
+  })
+  .strict();
+
+export const localizedBlogArticleSchema = z
+  .object({
+    body: z.string().min(500).max(100_000),
+    categoria: z.string().trim().min(1).max(120),
+    descripcion: z.string().trim().min(40).max(300),
+    faq: z.array(blogFaqSchema).min(2).max(8),
+    imagenAlt: z.string().trim().min(10).max(300),
+    keywords: z.array(z.string().trim().min(1).max(100)).min(3).max(20),
+    seoTitulo: z.string().trim().min(10).max(80),
+    tiempoLectura: z.number().int().min(1).max(60),
+    titulo: z.string().trim().min(10).max(200),
+  })
+  .strict();
+
+export const generatedBlogBundleSchema = z
+  .object({
+    category: z.string().trim().min(1).max(120),
+    categoryKind: z.enum(['existing', 'likely_typo', 'new']),
+    en: localizedBlogArticleSchema,
+    es: localizedBlogArticleSchema,
+    imagePrompt: z.string().trim().min(20).max(2_000),
+    rationale: z
+      .object({
+        evidenceRefs: z.array(z.string().max(2_048)).max(20),
+        limitations: z.array(z.string().max(1_000)).max(10),
+        summary: z.string().min(1).max(2_000),
+      })
+      .strict(),
+    slug: z.string().regex(/^[a-z0-9]+(?:-[a-z0-9]+)*$/),
+  })
+  .strict();
+
 export const requestPageSchema = cursorPageSchema(requestSummarySchema);
+
+export const requestRevisionInputSchema = z
+  .object({ feedback: z.string().trim().min(1).max(4_000) })
+  .strict();
 
 export const telegramIngressSchema = z
   .object({
@@ -664,7 +732,12 @@ export const telegramReplySchema = z
       .array(
         z
           .object({
-            action: z.enum(['confirm_plan', 'cancel']),
+            action: z.enum([
+              'confirm_plan',
+              'approve_preview',
+              'request_revision',
+              'cancel',
+            ]),
             label: z.string().min(1),
             token: z.string().min(32),
           })
@@ -680,15 +753,37 @@ export const telegramReplySchema = z
 
 export const workflowResumeSignalSchema = z
   .object({
+    reason: z.enum(['execute', 'publish', 'reconcile']).default('execute'),
     requestId: z.string().min(1),
     requestVersionId: z.string().min(1),
     tenantId: z.string().min(1),
   })
   .strict();
 
+export const adminTelegramPairingLinkSchema = z
+  .object({
+    expiresAt: z.iso.datetime(),
+    pairingUrl: z.url(),
+  })
+  .strict();
+
+export const adminTelegramTargetSchema = z
+  .object({
+    botId: z.string().regex(/^\d+$/),
+    botUsername: z.string().min(1),
+    chatId: z.string().regex(/^-?\d+$/),
+    externalUserId: z.string().regex(/^\d+$/),
+    pairedAt: z.iso.datetime(),
+    status: z.literal('active'),
+  })
+  .strict()
+  .nullable();
+
 export type RequestState = z.infer<typeof requestStateSchema>;
 export type RequestSummary = z.infer<typeof requestSummarySchema>;
 export type RequestDetail = z.infer<typeof requestDetailSchema>;
+export type LocalizedBlogArticle = z.infer<typeof localizedBlogArticleSchema>;
+export type GeneratedBlogBundle = z.infer<typeof generatedBlogBundleSchema>;
 export type TelegramIngress = z.infer<typeof telegramIngressSchema>;
 export type TelegramReply = z.infer<typeof telegramReplySchema>;
 export type WorkflowResumeSignal = z.infer<typeof workflowResumeSignalSchema>;

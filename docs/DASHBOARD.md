@@ -113,6 +113,15 @@ Detail view:
 
 The dashboard never displays private chain-of-thought. It displays generated rationale, evidence and objective tool results.
 
+Module 8 returns preview URLs, exact file paths, PR/head/deployment identifiers,
+approval requirements and provider-safe failure details in request detail.
+Approve, reject, revise and cancel use the same idempotent application service
+as Telegram; the UI never calculates approval policy.
+
+The Operations settings screen creates the one-time admin Telegram pairing
+link and projects the redacted active target. Pairing requires a fresh
+two-factor session; a generated link is shown once and cannot be recovered.
+
 ## Approval behavior
 
 - Approval view shows project, capability, risk, request version, exact preview, checks, diff summary and expiry.

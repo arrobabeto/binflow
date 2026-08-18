@@ -649,6 +649,68 @@ export const pairingTokens = pgTable(
   ],
 ).enableRLS();
 
+export const adminPairingTokens = pgTable(
+  'admin_pairing_tokens',
+  {
+    id: text('id').primaryKey(),
+    botCredentialId: text('bot_credential_id')
+      .notNull()
+      .references(() => providerCredentials.id),
+    tokenHash: text('token_hash').notNull(),
+    createdBy: text('created_by').notNull(),
+    expiresAt: timestamp('expires_at', { withTimezone: true }).notNull(),
+    consumedAt: timestamp('consumed_at', { withTimezone: true }),
+    revokedAt: timestamp('revoked_at', { withTimezone: true }),
+    createdAt: timestamp('created_at', { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (table) => [
+    uniqueIndex('admin_pairing_tokens_hash_unique').on(table.tokenHash),
+    index('admin_pairing_tokens_bot_idx').on(table.botCredentialId),
+  ],
+);
+
+export const adminNotificationTargets = pgTable(
+  'admin_notification_targets',
+  {
+    id: text('id').primaryKey(),
+    botCredentialId: text('bot_credential_id')
+      .notNull()
+      .references(() => providerCredentials.id),
+    botId: text('bot_id').notNull(),
+    externalUserId: text('external_user_id').notNull(),
+    chatId: text('chat_id').notNull(),
+    status: text('status').notNull().default('active'),
+    verifiedAt: timestamp('verified_at', { withTimezone: true }).notNull(),
+    revokedAt: timestamp('revoked_at', { withTimezone: true }),
+    createdAt: timestamp('created_at', { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+    updatedAt: timestamp('updated_at', { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (table) => [
+    uniqueIndex('admin_notification_targets_bot_unique').on(
+      table.botCredentialId,
+    ),
+    uniqueIndex('admin_notification_targets_identity_unique').on(
+      table.botId,
+      table.externalUserId,
+    ),
+  ],
+);
+
+export const serviceHeartbeats = pgTable('service_heartbeats', {
+  service: text('service').primaryKey(),
+  instanceId: text('instance_id').notNull(),
+  metadata: jsonb('metadata').notNull().default({}),
+  lastSeenAt: timestamp('last_seen_at', { withTimezone: true })
+    .notNull()
+    .defaultNow(),
+});
+
 export const secretReferences = pgTable(
   'secret_references',
   {
@@ -1120,6 +1182,487 @@ export const workflowCheckpoints = pgTable(
       table.sequence,
     ),
     pgPolicy('workflow_checkpoints_tenant_isolation', {
+      for: 'all',
+      using: sql`${table.tenantId} = nullif(current_setting('app.tenant_id', true), '') OR current_setting('app.platform_owner', true) = 'true'`,
+      withCheck: sql`${table.tenantId} = nullif(current_setting('app.tenant_id', true), '') OR current_setting('app.platform_owner', true) = 'true'`,
+    }),
+  ],
+).enableRLS();
+
+export const contentCatalogSyncs = pgTable(
+  'content_catalog_syncs',
+  {
+    id: text('id').primaryKey(),
+    tenantId: text('tenant_id').notNull(),
+    projectId: text('project_id').notNull(),
+    sourceRevision: text('source_revision').notNull(),
+    itemCount: integer('item_count').notNull(),
+    status: text('status').notNull(),
+    completedAt: timestamp('completed_at', { withTimezone: true }).notNull(),
+    createdAt: timestamp('created_at', { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (table) => [
+    uniqueIndex('content_catalog_syncs_project_revision_unique').on(
+      table.projectId,
+      table.sourceRevision,
+    ),
+    foreignKey({
+      columns: [table.projectId, table.tenantId],
+      foreignColumns: [projects.id, projects.tenantId],
+      name: 'content_catalog_syncs_project_tenant_fk',
+    }),
+    pgPolicy('content_catalog_syncs_tenant_isolation', {
+      for: 'all',
+      using: sql`${table.tenantId} = nullif(current_setting('app.tenant_id', true), '') OR current_setting('app.platform_owner', true) = 'true'`,
+      withCheck: sql`${table.tenantId} = nullif(current_setting('app.tenant_id', true), '') OR current_setting('app.platform_owner', true) = 'true'`,
+    }),
+  ],
+).enableRLS();
+
+export const contentCatalogItems = pgTable(
+  'content_catalog_items',
+  {
+    id: text('id').primaryKey(),
+    tenantId: text('tenant_id').notNull(),
+    projectId: text('project_id').notNull(),
+    syncId: text('sync_id')
+      .notNull()
+      .references(() => contentCatalogSyncs.id),
+    sourceId: text('source_id').notNull(),
+    sourceRevision: text('source_revision').notNull(),
+    locale: text('locale').$type<SupportedLocale>().notNull(),
+    slug: text('slug').notNull(),
+    title: text('title').notNull(),
+    normalizedTitle: text('normalized_title').notNull(),
+    category: text('category').notNull(),
+    contentHash: text('content_hash').notNull(),
+    embedding: jsonb('embedding').$type<number[]>(),
+    status: text('status').notNull().default('published'),
+    createdAt: timestamp('created_at', { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+    updatedAt: timestamp('updated_at', { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (table) => [
+    uniqueIndex('content_catalog_items_project_source_locale_unique').on(
+      table.projectId,
+      table.sourceId,
+      table.locale,
+    ),
+    index('content_catalog_items_project_slug_idx').on(
+      table.projectId,
+      table.slug,
+    ),
+    foreignKey({
+      columns: [table.projectId, table.tenantId],
+      foreignColumns: [projects.id, projects.tenantId],
+      name: 'content_catalog_items_project_tenant_fk',
+    }),
+    pgPolicy('content_catalog_items_tenant_isolation', {
+      for: 'all',
+      using: sql`${table.tenantId} = nullif(current_setting('app.tenant_id', true), '') OR current_setting('app.platform_owner', true) = 'true'`,
+      withCheck: sql`${table.tenantId} = nullif(current_setting('app.tenant_id', true), '') OR current_setting('app.platform_owner', true) = 'true'`,
+    }),
+  ],
+).enableRLS();
+
+export const similarityChecks = pgTable(
+  'similarity_checks',
+  {
+    id: text('id').primaryKey(),
+    tenantId: text('tenant_id').notNull(),
+    projectId: text('project_id').notNull(),
+    requestVersionId: text('request_version_id').notNull(),
+    catalogSyncId: text('catalog_sync_id')
+      .notNull()
+      .references(() => contentCatalogSyncs.id),
+    intentHash: text('intent_hash').notNull(),
+    level: text('level').notNull(),
+    createdAt: timestamp('created_at', { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (table) => [
+    uniqueIndex('similarity_checks_request_version_unique').on(
+      table.requestVersionId,
+    ),
+    foreignKey({
+      columns: [table.requestVersionId, table.tenantId, table.projectId],
+      foreignColumns: [
+        requestVersions.id,
+        requestVersions.tenantId,
+        requestVersions.projectId,
+      ],
+      name: 'similarity_checks_request_version_scope_fk',
+    }),
+    pgPolicy('similarity_checks_tenant_isolation', {
+      for: 'all',
+      using: sql`${table.tenantId} = nullif(current_setting('app.tenant_id', true), '') OR current_setting('app.platform_owner', true) = 'true'`,
+      withCheck: sql`${table.tenantId} = nullif(current_setting('app.tenant_id', true), '') OR current_setting('app.platform_owner', true) = 'true'`,
+    }),
+  ],
+).enableRLS();
+
+export const candidateMatches = pgTable(
+  'candidate_matches',
+  {
+    id: text('id').primaryKey(),
+    tenantId: text('tenant_id').notNull(),
+    projectId: text('project_id').notNull(),
+    similarityCheckId: text('similarity_check_id')
+      .notNull()
+      .references(() => similarityChecks.id),
+    sourceId: text('source_id').notNull(),
+    slug: text('slug').notNull(),
+    title: text('title').notNull(),
+    scoreBasisPoints: integer('score_basis_points').notNull(),
+    rank: integer('rank').notNull(),
+    createdAt: timestamp('created_at', { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (table) => [
+    uniqueIndex('candidate_matches_check_rank_unique').on(
+      table.similarityCheckId,
+      table.rank,
+    ),
+    foreignKey({
+      columns: [table.projectId, table.tenantId],
+      foreignColumns: [projects.id, projects.tenantId],
+      name: 'candidate_matches_project_tenant_fk',
+    }),
+    check(
+      'candidate_matches_score_range',
+      sql`${table.scoreBasisPoints} >= -10000 AND ${table.scoreBasisPoints} <= 10000`,
+    ),
+    check('candidate_matches_rank_positive', sql`${table.rank} > 0`),
+    pgPolicy('candidate_matches_tenant_isolation', {
+      for: 'all',
+      using: sql`${table.tenantId} = nullif(current_setting('app.tenant_id', true), '') OR current_setting('app.platform_owner', true) = 'true'`,
+      withCheck: sql`${table.tenantId} = nullif(current_setting('app.tenant_id', true), '') OR current_setting('app.platform_owner', true) = 'true'`,
+    }),
+  ],
+).enableRLS();
+
+export const artifacts = pgTable(
+  'artifacts',
+  {
+    id: text('id').primaryKey(),
+    tenantId: text('tenant_id').notNull(),
+    projectId: text('project_id').notNull(),
+    requestId: text('request_id').notNull(),
+    requestVersionId: text('request_version_id').notNull(),
+    kind: text('kind').notNull(),
+    storageKey: text('storage_key').notNull(),
+    mime: text('mime').notNull(),
+    bytes: integer('bytes').notNull(),
+    sha256: text('sha256').notNull(),
+    status: text('status').notNull().default('active'),
+    retentionUntil: timestamp('retention_until', { withTimezone: true }),
+    createdAt: timestamp('created_at', { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+    deletedAt: timestamp('deleted_at', { withTimezone: true }),
+  },
+  (table) => [
+    uniqueIndex('artifacts_storage_key_unique').on(table.storageKey),
+    foreignKey({
+      columns: [table.requestVersionId, table.tenantId, table.projectId],
+      foreignColumns: [
+        requestVersions.id,
+        requestVersions.tenantId,
+        requestVersions.projectId,
+      ],
+      name: 'artifacts_request_version_scope_fk',
+    }),
+    pgPolicy('artifacts_tenant_isolation', {
+      for: 'all',
+      using: sql`${table.tenantId} = nullif(current_setting('app.tenant_id', true), '') OR current_setting('app.platform_owner', true) = 'true'`,
+      withCheck: sql`${table.tenantId} = nullif(current_setting('app.tenant_id', true), '') OR current_setting('app.platform_owner', true) = 'true'`,
+    }),
+  ],
+).enableRLS();
+
+export const repoChanges = pgTable(
+  'repo_changes',
+  {
+    id: text('id').primaryKey(),
+    tenantId: text('tenant_id').notNull(),
+    projectId: text('project_id').notNull(),
+    requestId: text('request_id').notNull(),
+    requestVersionId: text('request_version_id').notNull(),
+    baseSha: text('base_sha').notNull(),
+    headSha: text('head_sha').notNull(),
+    branch: text('branch').notNull(),
+    files: jsonb('files').$type<string[]>().notNull(),
+    artifactHashes: jsonb('artifact_hashes')
+      .$type<Record<string, string>>()
+      .notNull(),
+    createdAt: timestamp('created_at', { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (table) => [
+    uniqueIndex('repo_changes_request_version_unique').on(
+      table.requestVersionId,
+    ),
+    foreignKey({
+      columns: [table.requestVersionId, table.tenantId, table.projectId],
+      foreignColumns: [
+        requestVersions.id,
+        requestVersions.tenantId,
+        requestVersions.projectId,
+      ],
+      name: 'repo_changes_request_version_scope_fk',
+    }),
+    pgPolicy('repo_changes_tenant_isolation', {
+      for: 'all',
+      using: sql`${table.tenantId} = nullif(current_setting('app.tenant_id', true), '') OR current_setting('app.platform_owner', true) = 'true'`,
+      withCheck: sql`${table.tenantId} = nullif(current_setting('app.tenant_id', true), '') OR current_setting('app.platform_owner', true) = 'true'`,
+    }),
+  ],
+).enableRLS();
+
+export const pullRequests = pgTable(
+  'pull_requests',
+  {
+    id: text('id').primaryKey(),
+    tenantId: text('tenant_id').notNull(),
+    projectId: text('project_id').notNull(),
+    requestVersionId: text('request_version_id').notNull(),
+    repoChangeId: text('repo_change_id')
+      .notNull()
+      .references(() => repoChanges.id),
+    providerId: text('provider_id').notNull(),
+    url: text('url').notNull(),
+    baseSha: text('base_sha').notNull(),
+    headSha: text('head_sha').notNull(),
+    state: text('state').notNull(),
+    mergeCommitSha: text('merge_commit_sha'),
+    createdAt: timestamp('created_at', { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+    updatedAt: timestamp('updated_at', { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (table) => [
+    uniqueIndex('pull_requests_request_version_unique').on(
+      table.requestVersionId,
+    ),
+    uniqueIndex('pull_requests_provider_id_unique').on(table.providerId),
+    foreignKey({
+      columns: [table.requestVersionId, table.tenantId, table.projectId],
+      foreignColumns: [
+        requestVersions.id,
+        requestVersions.tenantId,
+        requestVersions.projectId,
+      ],
+      name: 'pull_requests_request_version_scope_fk',
+    }),
+    pgPolicy('pull_requests_tenant_isolation', {
+      for: 'all',
+      using: sql`${table.tenantId} = nullif(current_setting('app.tenant_id', true), '') OR current_setting('app.platform_owner', true) = 'true'`,
+      withCheck: sql`${table.tenantId} = nullif(current_setting('app.tenant_id', true), '') OR current_setting('app.platform_owner', true) = 'true'`,
+    }),
+  ],
+).enableRLS();
+
+export const deployments = pgTable(
+  'deployments',
+  {
+    id: text('id').primaryKey(),
+    tenantId: text('tenant_id').notNull(),
+    projectId: text('project_id').notNull(),
+    requestVersionId: text('request_version_id').notNull(),
+    providerId: text('provider_id').notNull(),
+    environment: text('environment').notNull(),
+    commitSha: text('commit_sha').notNull(),
+    state: text('state').notNull(),
+    urls: jsonb('urls').$type<Record<string, string>>().notNull(),
+    readyAt: timestamp('ready_at', { withTimezone: true }),
+    verifiedAt: timestamp('verified_at', { withTimezone: true }),
+    createdAt: timestamp('created_at', { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+    updatedAt: timestamp('updated_at', { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (table) => [
+    uniqueIndex('deployments_provider_id_environment_unique').on(
+      table.providerId,
+      table.environment,
+    ),
+    foreignKey({
+      columns: [table.requestVersionId, table.tenantId, table.projectId],
+      foreignColumns: [
+        requestVersions.id,
+        requestVersions.tenantId,
+        requestVersions.projectId,
+      ],
+      name: 'deployments_request_version_scope_fk',
+    }),
+    pgPolicy('deployments_tenant_isolation', {
+      for: 'all',
+      using: sql`${table.tenantId} = nullif(current_setting('app.tenant_id', true), '') OR current_setting('app.platform_owner', true) = 'true'`,
+      withCheck: sql`${table.tenantId} = nullif(current_setting('app.tenant_id', true), '') OR current_setting('app.platform_owner', true) = 'true'`,
+    }),
+  ],
+).enableRLS();
+
+export const approvals = pgTable(
+  'approvals',
+  {
+    id: text('id').primaryKey(),
+    tenantId: text('tenant_id').notNull(),
+    projectId: text('project_id').notNull(),
+    requestId: text('request_id').notNull(),
+    requestVersionId: text('request_version_id').notNull(),
+    role: text('role').notNull(),
+    decision: text('decision').notNull(),
+    artifactId: text('artifact_id').notNull(),
+    headCommitSha: text('head_commit_sha').notNull(),
+    deploymentId: text('deployment_id').notNull(),
+    approverId: text('approver_id').notNull(),
+    expiresAt: timestamp('expires_at', { withTimezone: true }).notNull(),
+    decidedAt: timestamp('decided_at', { withTimezone: true }).notNull(),
+    createdAt: timestamp('created_at', { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (table) => [
+    uniqueIndex('approvals_version_role_unique').on(
+      table.requestVersionId,
+      table.role,
+    ),
+    foreignKey({
+      columns: [table.requestVersionId, table.tenantId, table.projectId],
+      foreignColumns: [
+        requestVersions.id,
+        requestVersions.tenantId,
+        requestVersions.projectId,
+      ],
+      name: 'approvals_request_version_scope_fk',
+    }),
+    pgPolicy('approvals_tenant_isolation', {
+      for: 'all',
+      using: sql`${table.tenantId} = nullif(current_setting('app.tenant_id', true), '') OR current_setting('app.platform_owner', true) = 'true'`,
+      withCheck: sql`${table.tenantId} = nullif(current_setting('app.tenant_id', true), '') OR current_setting('app.platform_owner', true) = 'true'`,
+    }),
+  ],
+).enableRLS();
+
+export const publicationAttempts = pgTable(
+  'publication_attempts',
+  {
+    id: text('id').primaryKey(),
+    tenantId: text('tenant_id').notNull(),
+    projectId: text('project_id').notNull(),
+    requestId: text('request_id').notNull(),
+    requestVersionId: text('request_version_id').notNull(),
+    preconditions: jsonb('preconditions').notNull(),
+    status: text('status').notNull(),
+    mergeCommitSha: text('merge_commit_sha'),
+    result: jsonb('result').notNull().default({}),
+    createdAt: timestamp('created_at', { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+    completedAt: timestamp('completed_at', { withTimezone: true }),
+  },
+  (table) => [
+    foreignKey({
+      columns: [table.requestVersionId, table.tenantId, table.projectId],
+      foreignColumns: [
+        requestVersions.id,
+        requestVersions.tenantId,
+        requestVersions.projectId,
+      ],
+      name: 'publication_attempts_request_version_scope_fk',
+    }),
+    pgPolicy('publication_attempts_tenant_isolation', {
+      for: 'all',
+      using: sql`${table.tenantId} = nullif(current_setting('app.tenant_id', true), '') OR current_setting('app.platform_owner', true) = 'true'`,
+      withCheck: sql`${table.tenantId} = nullif(current_setting('app.tenant_id', true), '') OR current_setting('app.platform_owner', true) = 'true'`,
+    }),
+  ],
+).enableRLS();
+
+export const modelCalls = pgTable(
+  'model_calls',
+  {
+    id: text('id').primaryKey(),
+    tenantId: text('tenant_id').notNull(),
+    projectId: text('project_id').notNull(),
+    requestId: text('request_id').notNull(),
+    requestVersionId: text('request_version_id').notNull(),
+    node: text('node').notNull(),
+    provider: text('provider').notNull(),
+    model: text('model').notNull(),
+    inputHash: text('input_hash').notNull(),
+    outputArtifactId: text('output_artifact_id'),
+    providerRequestId: text('provider_request_id'),
+    inputTokens: integer('input_tokens').notNull().default(0),
+    outputTokens: integer('output_tokens').notNull().default(0),
+    estimatedCostCents: integer('estimated_cost_cents').notNull().default(0),
+    latencyMs: integer('latency_ms').notNull(),
+    status: text('status').notNull(),
+    createdAt: timestamp('created_at', { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (table) => [
+    foreignKey({
+      columns: [table.requestVersionId, table.tenantId, table.projectId],
+      foreignColumns: [
+        requestVersions.id,
+        requestVersions.tenantId,
+        requestVersions.projectId,
+      ],
+      name: 'model_calls_request_version_scope_fk',
+    }),
+    pgPolicy('model_calls_tenant_isolation', {
+      for: 'all',
+      using: sql`${table.tenantId} = nullif(current_setting('app.tenant_id', true), '') OR current_setting('app.platform_owner', true) = 'true'`,
+      withCheck: sql`${table.tenantId} = nullif(current_setting('app.tenant_id', true), '') OR current_setting('app.platform_owner', true) = 'true'`,
+    }),
+  ],
+).enableRLS();
+
+export const usageRecords = pgTable(
+  'usage_records',
+  {
+    id: text('id').primaryKey(),
+    tenantId: text('tenant_id').notNull(),
+    projectId: text('project_id').notNull(),
+    requestId: text('request_id').notNull(),
+    requestVersionId: text('request_version_id').notNull(),
+    capabilityId: text('capability_id').notNull(),
+    modelCalls: integer('model_calls').notNull(),
+    tokens: integer('tokens').notNull(),
+    estimatedCostCents: integer('estimated_cost_cents').notNull(),
+    createdAt: timestamp('created_at', { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (table) => [
+    uniqueIndex('usage_records_request_version_unique').on(
+      table.requestVersionId,
+    ),
+    foreignKey({
+      columns: [table.requestVersionId, table.tenantId, table.projectId],
+      foreignColumns: [
+        requestVersions.id,
+        requestVersions.tenantId,
+        requestVersions.projectId,
+      ],
+      name: 'usage_records_request_version_scope_fk',
+    }),
+    pgPolicy('usage_records_tenant_isolation', {
       for: 'all',
       using: sql`${table.tenantId} = nullif(current_setting('app.tenant_id', true), '') OR current_setting('app.platform_owner', true) = 'true'`,
       withCheck: sql`${table.tenantId} = nullif(current_setting('app.tenant_id', true), '') OR current_setting('app.platform_owner', true) = 'true'`,

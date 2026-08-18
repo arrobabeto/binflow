@@ -145,6 +145,7 @@ const workflowRequest: RequestDetail = {
   confirmedAt: null,
   createdAt: '2026-08-18T00:00:00.000Z',
   currentVersion: 1,
+  execution: null,
   id: 'request-1',
   interpretedInput: {
     mode: 'brief',
@@ -174,6 +175,11 @@ const workflowSummary = {
 };
 
 const createWorkflowService = () => ({
+  approveAsAdmin: vi.fn(async () => ({
+    ...workflowSummary,
+    revision: 2,
+    state: 'APPROVED_FOR_PUBLISH' as const,
+  })),
   cancelAsAdmin: vi.fn(async () => ({
     capabilityId: workflowRequest.capabilityId,
     createdAt: workflowRequest.createdAt,
@@ -186,8 +192,24 @@ const createWorkflowService = () => ({
     topic: workflowRequest.topic,
     updatedAt: workflowRequest.updatedAt,
   })),
+  createAdminPairingLink: vi.fn(async () => ({
+    expiresAt: '2026-08-19T00:00:00.000Z',
+    pairingUrl: 'https://t.me/AdminBot?start=abcdefghijklmnopqrstuvwxyz012345',
+  })),
   get: vi.fn(async () => workflowRequest),
+  getAdminTelegramTarget: vi.fn(async () => null),
   list: vi.fn(async () => [workflowSummary]),
+  rejectAsAdmin: vi.fn(async () => ({
+    ...workflowSummary,
+    revision: 2,
+    state: 'REVISION_REQUESTED' as const,
+  })),
+  reviseAsAdmin: vi.fn(async () => ({
+    ...workflowSummary,
+    currentVersion: 2,
+    revision: 2,
+    state: 'QUEUED' as const,
+  })),
 });
 
 describe('client enrollment API', () => {

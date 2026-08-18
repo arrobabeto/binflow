@@ -144,6 +144,13 @@ Before merge:
 
 After merge, wait for production deployment and verify expected commit, routes, metadata and status. A failure records the partial state and alerts the admin; it must not retry merge.
 
+The Module 8 executor implements this graph through typed provider ports. It
+persists a checkpoint after catalog sync, generation, artifact validation, PR
+creation, preview readiness, every approval and publication. Provider calls are
+never replayed from an in-memory position alone. A deployment-level live
+execution switch can stop all provider mutations without making a request or
+approval valid.
+
 ## Retry and idempotency
 
 Retryable: timeouts, provider rate limits, transient 5xx responses and delayed deployment events.

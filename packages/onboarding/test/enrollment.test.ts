@@ -316,7 +316,7 @@ describeDatabase('client enrollment lifecycle', () => {
           secretReferenceId: 'telegram-secret',
           status: 'active',
           tenantId: created.tenantId,
-          verificationEvidence: { username: 'CT_Webbin_bot' },
+          verificationEvidence: { username: 'BinflowClientFixture_bot' },
           version: 1,
         });
       },

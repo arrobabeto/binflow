@@ -30,6 +30,9 @@ const signOut = async () => {
           <UButton to="/requests" color="neutral" variant="soft"
             >Requests</UButton
           >
+          <UButton to="/operations" color="neutral" variant="soft"
+            >Operations</UButton
+          >
           <span class="text-sm text-muted">{{ session?.user.email }}</span>
           <UButton color="neutral" variant="ghost" @click="signOut"
             >Sign out</UButton
