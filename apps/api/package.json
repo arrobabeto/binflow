@@ -15,8 +15,11 @@
     "@binflow/auth": "workspace:*",
     "@binflow/contracts": "workspace:*",
     "@binflow/domain": "workspace:*",
+    "@binflow/integration-admin": "workspace:*",
     "@binflow/onboarding": "workspace:*",
-    "fastify": "5.11.3"
+    "@binflow/secrets": "workspace:*",
+    "fastify": "5.11.3",
+    "zod": "4.4.3"
   },
   "devDependencies": {
     "@types/node": "24.13.3"

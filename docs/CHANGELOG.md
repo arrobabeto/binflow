@@ -58,10 +58,24 @@ All notable changes to product behavior, architecture, contracts, security, oper
   redisplay the one-time plaintext token.
 - Included the onboarding workspace in the shared Docker dependency layer so
   the same application image builds locally and for the future VPS release.
+- Added ADR-0018 for one-time dashboard credential enrollment, API-only runtime
+  KEK access, keyed secret idempotency and optimistic credential revisions.
+- Added the authenticated integrations dashboard and API for redacted credential
+  inventory, strict one-time provider enrollment, candidate verification and
+  explicit revocation. Migration `0010` adds optimistic credential revisions.
+- Added the `integration-admin` application service so CLI and dashboard reuse
+  the same encrypted lifecycle and provider verifiers without exposing provider
+  evidence or configuration to the browser; the shared Docker dependency stage
+  includes the new workspace.
+- Added Docker/runtime KEK loading that preserves host `0600` enforcement while
+  accepting only the read-only permission modes used by `/run/secrets` mounts.
 
 ### Changed
 
 - Removed a duplicate auth-schema re-export with no observable contract change.
+- Corrected onboarding validation and pairing to resolve the client Telegram bot
+  as the documented tenant-owned credential instead of requiring a synthetic
+  project integration connection.
 
 - Replaced the AMD64-only ClamAV container with the official pinned Debian
   multi-architecture image so local Apple Silicon and production AMD64 hosts

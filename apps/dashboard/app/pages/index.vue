@@ -21,6 +21,9 @@ const signOut = async () => {
           <p class="font-semibold">Administrative control plane</p>
         </div>
         <div class="flex items-center gap-3">
+          <UButton to="/integrations" color="neutral" variant="soft"
+            >Integrations</UButton
+          >
           <UButton to="/clients" color="neutral" variant="soft"
             >Clients</UButton
           >
@@ -36,7 +39,7 @@ const signOut = async () => {
       <p class="mt-2 text-muted">
         Manage client enrollment, integration readiness and activation evidence.
       </p>
-      <div class="mt-8 grid gap-4 sm:grid-cols-3">
+      <div class="mt-8 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
         <UCard>
           <p class="text-sm text-muted">API</p>
           <p class="mt-2 text-xl font-semibold">
@@ -50,6 +53,10 @@ const signOut = async () => {
         <UCard>
           <p class="text-sm text-muted">Client onboarding</p>
           <UButton class="mt-3" to="/clients">Open clients</UButton>
+        </UCard>
+        <UCard>
+          <p class="text-sm text-muted">Provider credentials</p>
+          <UButton class="mt-3" to="/integrations">Open integrations</UButton>
         </UCard>
       </div>
     </main>

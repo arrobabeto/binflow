@@ -167,6 +167,36 @@ describeDatabase('credential lifecycle database invariants', () => {
     ).resolves.toMatchObject({ status: 'revoked' });
   });
 
+  it('increments the dashboard revision and rejects stale revocation', async () => {
+    const scope = await ensureDraftScope(database.db, {
+      projectKey: 'webbin',
+      tenantKey: 'webbin',
+    });
+    await storeTenantCredential('credential-etag', scope.tenantId);
+    await expect(
+      database.db.query.providerCredentials.findFirst({
+        where: eq(providerCredentials.id, 'credential-etag'),
+      }),
+    ).resolves.toMatchObject({ revision: 1, status: 'unverified' });
+
+    await recordCredentialVerificationSuccess(database.db, {
+      checkedAt: new Date('2026-08-11T00:00:00.000Z'),
+      credentialId: 'credential-etag',
+      evidence: { modelCount: 4 },
+    });
+    await expect(
+      revokeCredential(database.db, 'credential-etag', 1),
+    ).rejects.toMatchObject({ category: 'conflict_error' });
+    await expect(
+      revokeCredential(database.db, 'credential-etag', 2),
+    ).resolves.toBe(true);
+    await expect(
+      database.db.query.providerCredentials.findFirst({
+        where: eq(providerCredentials.id, 'credential-etag'),
+      }),
+    ).resolves.toMatchObject({ revision: 3, status: 'revoked' });
+  });
+
   it('persists only safe GitHub binding evidence and its external installation ID', async () => {
     const scope = await ensureDraftScope(database.db, {
       projectKey: 'webbin',

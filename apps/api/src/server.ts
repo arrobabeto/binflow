@@ -1,11 +1,21 @@
 import { buildApp } from './app.js';
 import { createApiAuthRuntime } from './auth.js';
 import { EnrollmentService } from '@binflow/onboarding';
+import { IntegrationAdminService } from '@binflow/integration-admin';
+import {
+  defaultMasterKeyPath,
+  loadRuntimeMasterKeyFile,
+} from '@binflow/secrets';
 
 const authRuntime = await createApiAuthRuntime();
 const app = buildApp({
   auth: authRuntime.auth,
   enrollmentService: new EnrollmentService(authRuntime.database),
+  integrationService: new IntegrationAdminService(authRuntime.database, () =>
+    loadRuntimeMasterKeyFile(
+      process.env.BINFLOW_KEK_FILE ?? defaultMasterKeyPath(),
+    ),
+  ),
 });
 
 const close = async (): Promise<void> => {

@@ -136,7 +136,14 @@ Encrypted secret envelope and lifecycle state. Each credential version stores ci
 
 ### `provider_credentials`
 
-Owner scope (`platform`, `tenant` or `project`), provider, non-secret configuration, normalized external identity when applicable, secret reference, masked suffix, version, status and tested/verified/used/revoked timestamps. Statuses are `unverified`, `active`, `invalid`, `superseded` and `revoked`. At most one version per owner scope/kind is active, and one Telegram bot ID can be active globally. First MVP requires an active OpenAI credential per tenant.
+Owner scope (`platform`, `tenant` or `project`), provider, non-secret
+configuration, normalized external identity when applicable, secret reference,
+masked suffix, immutable candidate version, optimistic resource revision,
+status and tested/verified/used/revoked timestamps. Statuses are `unverified`,
+`active`, `invalid`, `superseded` and `revoked`. At most one version per owner
+scope/kind is active, and one Telegram bot ID can be active globally. First MVP
+requires an active OpenAI credential per tenant. The client Telegram bot is
+tenant-owned and does not require a synthetic project binding.
 
 ### `credential_events`
 

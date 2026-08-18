@@ -3,6 +3,7 @@ import {
   type ApiErrorResponse,
 } from '@binflow/contracts';
 import { DomainError, type ErrorCategory } from '@binflow/domain';
+import { ZodError } from 'zod';
 
 const statusByCategory: Readonly<Record<ErrorCategory, number>> = {
   authentication_error: 401,
@@ -24,10 +25,16 @@ export const normalizeApiError = (
   const normalized =
     error instanceof DomainError
       ? error
-      : new DomainError(
-          'internal_error',
-          'The request could not be completed.',
-        );
+      : error instanceof ZodError
+        ? new DomainError(
+            'validation_error',
+            'The request payload is invalid.',
+            { code: 'invalid_request_payload' },
+          )
+        : new DomainError(
+            'internal_error',
+            'The request could not be completed.',
+          );
   const code = normalized.metadata.code ?? normalized.category;
   const body = apiErrorResponseSchema.parse({
     error: {

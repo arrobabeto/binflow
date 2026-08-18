@@ -393,8 +393,10 @@ POST   /api/v1/admin/enrollments/:id/activate
 POST   /api/v1/admin/enrollments/:id/suspend
 POST   /api/v1/admin/enrollments/:id/archive
 POST   /api/v1/admin/enrollments/:id/pairing-link
-POST   /api/v1/admin/integrations/:id/test
-POST   /api/v1/admin/integrations/:id/rotate
+GET    /api/v1/admin/integrations
+POST   /api/v1/admin/integrations
+POST   /api/v1/admin/integrations/:id/verify
+POST   /api/v1/admin/integrations/:id/revoke
 POST   /api/v1/admin/enrollments/:id/catalog/sync
 ```
 
@@ -420,6 +422,21 @@ later reads never expose the token.
 and business APIs. It returns only actor ID, email, `role: platform_owner`,
 `twoFactor: true` and current freshness; it never returns a cookie, session
 token, IP address or user agent.
+
+Integration creation accepts one strict discriminated provider payload. OpenAI
+requires tenant key/API key; client Telegram requires tenant key/token/expected
+username; admin Telegram requires token/expected username; GitHub App requires
+the Webbin tenant/project keys, App/client IDs, PEM and webhook secret; Vercel
+requires the Webbin tenant/project keys, token, project ID and optional team ID.
+Unknown or inapplicable fields are rejected. The response is a redacted
+credential summary and never includes provider configuration, evidence,
+ciphertext or a secret-derived value other than the four-character mask.
+
+`POST .../:id/verify` and `POST .../:id/revoke` require `If-Match` over the
+credential `revision`. Verification returns the redacted credential plus the
+stable verification outcome/error category; evidence remains server-side.
+Rotation posts a new candidate with the same kind/scope. Revocation is explicit;
+there is no endpoint that retrieves or decrypts an existing secret.
 
 ## Phase 0 credential CLI
 

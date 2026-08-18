@@ -19,6 +19,9 @@ const { data, refresh, status } = await useFetch<{
         </div>
         <div class="flex gap-2">
           <UButton color="neutral" variant="ghost" to="/">Overview</UButton>
+          <UButton color="neutral" variant="ghost" to="/integrations"
+            >Integrations</UButton
+          >
           <UButton to="/clients/new">Add client</UButton>
         </div>
       </div>

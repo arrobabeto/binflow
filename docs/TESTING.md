@@ -32,6 +32,11 @@
 - Candidate success/supersession, permanent invalidation, transient preservation and failed-rotation rollback.
 - Concurrent/out-of-order candidate activation cannot replace a newer active version.
 - Strict per-provider evidence schemas reject secret-bearing or extra fields before persistence/output.
+- Dashboard credential tests cover strict secret-bearing unions, keyed
+  idempotency fingerprints, redacted responses/events, optimistic revisions,
+  fresh-session gates and same-origin rejection.
+- Runtime KEK tests accept supported read-only Docker-secret modes, retain exact
+  `0600` for host files and reject any writable mount.
 
 ### Contract
 

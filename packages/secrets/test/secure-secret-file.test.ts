@@ -4,7 +4,11 @@ import { join } from 'node:path';
 
 import { afterEach, describe, expect, it } from 'vitest';
 
-import { loadSecureSecretFile } from '../src/master-key-file.js';
+import {
+  isRuntimeMasterKeyPermissionAllowed,
+  loadRuntimeMasterKeyFile,
+  loadSecureSecretFile,
+} from '../src/master-key-file.js';
 
 const temporaryDirectories: string[] = [];
 
@@ -63,6 +67,58 @@ describe('secure secret file import', () => {
 
     await expect(loadSecureSecretFile(path, repository)).rejects.toThrow(
       'outside the supported range',
+    );
+  });
+});
+
+describe('runtime master key loading', () => {
+  it('accepts only read-only Docker secret modes under /run/secrets', () => {
+    for (const mode of [0o400, 0o440, 0o444]) {
+      expect(
+        isRuntimeMasterKeyPermissionAllowed('/run/secrets/binflow_kek', mode),
+      ).toBe(true);
+    }
+    for (const mode of [0o600, 0o640, 0o644, 0o666]) {
+      expect(
+        isRuntimeMasterKeyPermissionAllowed('/run/secrets/binflow_kek', mode),
+      ).toBe(false);
+    }
+    expect(isRuntimeMasterKeyPermissionAllowed('/tmp/binflow-kek', 0o600)).toBe(
+      true,
+    );
+    expect(isRuntimeMasterKeyPermissionAllowed('/tmp/binflow-kek', 0o400)).toBe(
+      false,
+    );
+  });
+
+  it('accepts an exact 32-byte owner-only host key', async () => {
+    const { root } = await fixture();
+    const path = join(root, 'kek.key');
+    await writeFile(path, Buffer.alloc(32, 7), { mode: 0o600 });
+
+    const value = await loadRuntimeMasterKeyFile(path);
+    expect(value).toEqual(Buffer.alloc(32, 7));
+    value.fill(0);
+  });
+
+  it('rejects writable or broadly-readable host keys', async () => {
+    const { root } = await fixture();
+    const path = join(root, 'kek.key');
+    await writeFile(path, Buffer.alloc(32), { mode: 0o600 });
+    await chmod(path, 0o644);
+
+    await expect(loadRuntimeMasterKeyFile(path)).rejects.toThrow(
+      'permissions must be 0600',
+    );
+  });
+
+  it('rejects a host key with the wrong size', async () => {
+    const { root } = await fixture();
+    const path = join(root, 'kek.key');
+    await writeFile(path, Buffer.alloc(31), { mode: 0o600 });
+
+    await expect(loadRuntimeMasterKeyFile(path)).rejects.toThrow(
+      'exactly 32 bytes',
     );
   });
 });

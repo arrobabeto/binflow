@@ -170,6 +170,12 @@ attempts and hash-only pairing-token records with tenant/project RLS. It is
 additive. Rollback stops enrollment writers and keeps history; restoring a prior
 database backup is required if the release itself must be reversed.
 
+Migration `0010` adds the credential resource revision used by dashboard
+optimistic concurrency. It backfills revision `1` and is additive. The API now
+requires the existing SecretsProvider KEK mount (`BINFLOW_KEK_FILE`) while the
+dashboard must not receive that mount. Rollback stops credential writers and
+restores the coordinated pre-release application/database backup if required.
+
 ## Health
 
 Endpoints:

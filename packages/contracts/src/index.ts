@@ -34,6 +34,77 @@ export const credentialOwnerScopeSchema = z.enum([
   'project',
 ]);
 
+const integrationScopeKeySchema = z
+  .string()
+  .min(2)
+  .max(64)
+  .regex(/^[a-z0-9]+(?:-[a-z0-9]+)*$/);
+const credentialAliasSchema = z.string().trim().min(1).max(120);
+const telegramUsernameSchema = z
+  .string()
+  .trim()
+  .transform((value) => value.replace(/^@/, ''))
+  .pipe(z.string().regex(/^[A-Za-z0-9_]{5,32}$/));
+
+export const integrationCandidateInputSchema = z.discriminatedUnion('kind', [
+  z
+    .object({
+      alias: credentialAliasSchema,
+      apiKey: z.string().min(20).max(512),
+      kind: z.literal('openai'),
+      tenantKey: integrationScopeKeySchema,
+    })
+    .strict(),
+  z
+    .object({
+      alias: credentialAliasSchema,
+      botToken: z.string().min(20).max(256),
+      expectedUsername: telegramUsernameSchema,
+      kind: z.literal('telegram-admin'),
+    })
+    .strict(),
+  z
+    .object({
+      alias: credentialAliasSchema,
+      botToken: z.string().min(20).max(256),
+      expectedUsername: telegramUsernameSchema,
+      kind: z.literal('telegram-client'),
+      tenantKey: integrationScopeKeySchema,
+    })
+    .strict(),
+  z
+    .object({
+      alias: credentialAliasSchema,
+      appId: z.string().regex(/^\d+$/),
+      clientId: z.string().trim().min(1).max(100),
+      kind: z.literal('github-app'),
+      privateKey: z
+        .string()
+        .min(100)
+        .max(64 * 1024)
+        .refine(
+          (value) =>
+            value.includes('-----BEGIN') && value.includes('PRIVATE KEY-----'),
+          { message: 'A PEM private key is required.' },
+        ),
+      projectKey: integrationScopeKeySchema,
+      tenantKey: integrationScopeKeySchema,
+      webhookSecret: z.string().min(32).max(512),
+    })
+    .strict(),
+  z
+    .object({
+      alias: credentialAliasSchema,
+      kind: z.literal('vercel'),
+      projectId: z.string().trim().min(1).max(120),
+      projectKey: integrationScopeKeySchema,
+      teamId: z.string().trim().min(1).max(120).optional(),
+      tenantKey: integrationScopeKeySchema,
+      token: z.string().min(20).max(512),
+    })
+    .strict(),
+]);
+
 export const errorCategorySchema = z.enum([
   'validation_error',
   'authentication_error',
@@ -77,6 +148,42 @@ export const idempotencyKeySchema = z
   .regex(/^[\x21-\x7e]+$/);
 
 export const resourceVersionSchema = z.number().int().positive();
+
+export const credentialSummarySchema = z
+  .object({
+    alias: z.string().min(1),
+    bindingProjectKey: z.string().nullable(),
+    bindingTenantKey: z.string().nullable(),
+    createdAt: z.iso.datetime(),
+    id: z.string().min(1),
+    kind: integrationKindSchema,
+    maskedSuffix: z.string().length(4),
+    ownerScope: credentialOwnerScopeSchema,
+    projectId: z.string().nullable(),
+    revision: resourceVersionSchema,
+    status: integrationStatusSchema,
+    tenantId: z.string().nullable(),
+    testedAt: z.iso.datetime().nullable(),
+    usedAt: z.iso.datetime().nullable(),
+    verifiedAt: z.iso.datetime().nullable(),
+    version: resourceVersionSchema,
+  })
+  .strict();
+
+export const credentialPageSchema = z
+  .object({
+    items: z.array(credentialSummarySchema),
+    nextCursor: z.string().nullable(),
+  })
+  .strict();
+
+export const credentialVerificationResponseSchema = z
+  .object({
+    credential: credentialSummarySchema,
+    errorCategory: errorCategorySchema.optional(),
+    outcome: z.enum(['success', 'failed']),
+  })
+  .strict();
 
 export const adminOperationStatusSchema = z.enum([
   'pending',
@@ -143,6 +250,13 @@ export type ProjectProfile = z.infer<typeof projectProfileSchema>;
 export type IntegrationKind = z.infer<typeof integrationKindSchema>;
 export type IntegrationStatus = z.infer<typeof integrationStatusSchema>;
 export type CredentialOwnerScope = z.infer<typeof credentialOwnerScopeSchema>;
+export type IntegrationCandidateInput = z.infer<
+  typeof integrationCandidateInputSchema
+>;
+export type CredentialSummary = z.infer<typeof credentialSummarySchema>;
+export type CredentialVerificationResponse = z.infer<
+  typeof credentialVerificationResponseSchema
+>;
 export type ErrorCategory = z.infer<typeof errorCategorySchema>;
 export type ApiErrorResponse = z.infer<typeof apiErrorResponseSchema>;
 export type CursorQuery = z.infer<typeof cursorQuerySchema>;

@@ -3,10 +3,14 @@ import Fastify, { type FastifyInstance } from 'fastify';
 import {
   activationBlockersResponseSchema,
   createEnrollmentInputSchema,
+  credentialPageSchema,
+  credentialSummarySchema,
+  credentialVerificationResponseSchema,
   enrollmentPageSchema,
   enrollmentSchema,
   enrollmentValidationResponseSchema,
   healthResponseSchema,
+  integrationCandidateInputSchema,
   pairingLinkResponseSchema,
   platformOwnerSessionSchema,
   updateEnrollmentInputSchema,
@@ -19,6 +23,7 @@ import {
   type PlatformOwnerSession,
 } from '@binflow/auth';
 import { DomainError } from '@binflow/domain';
+import type { IntegrationAdminService } from '@binflow/integration-admin';
 import type { EnrollmentService } from '@binflow/onboarding';
 
 import { normalizeApiError } from './errors.js';
@@ -40,6 +45,10 @@ export const buildApp = (
       | 'update'
       | 'validate'
     >;
+    integrationService?: Pick<
+      IntegrationAdminService,
+      'create' | 'list' | 'revoke' | 'verify'
+    >;
     trustedOrigin?: string;
   }> = {},
 ): FastifyInstance => {
@@ -51,6 +60,7 @@ export const buildApp = (
       : (headers: Headers, sessionOptions) =>
           requirePlatformOwnerSession(auth, headers, sessionOptions));
   const enrollmentService = options.enrollmentService;
+  const integrationService = options.integrationService;
   const trustedOrigin = new URL(
     options.trustedOrigin ??
       process.env.BINFLOW_PUBLIC_URL ??
@@ -60,7 +70,15 @@ export const buildApp = (
     logger: {
       level: process.env.LOG_LEVEL ?? 'info',
       redact: {
-        paths: ['req.headers.authorization', 'req.headers.cookie'],
+        paths: [
+          'req.headers.authorization',
+          'req.headers.cookie',
+          'req.body.apiKey',
+          'req.body.botToken',
+          'req.body.privateKey',
+          'req.body.token',
+          'req.body.webhookSecret',
+        ],
         censor: '[REDACTED]',
       },
     },
@@ -149,6 +167,17 @@ export const buildApp = (
     }
     return enrollmentService;
   };
+  const requireIntegrationService = (): NonNullable<
+    typeof integrationService
+  > => {
+    if (integrationService === undefined) {
+      throw new DomainError(
+        'internal_error',
+        'Integration administration runtime is unavailable.',
+      );
+    }
+    return integrationService;
+  };
   const requireMutationHeaders = (
     headers: RequestHeaders,
     requireVersion = true,
@@ -209,6 +238,71 @@ export const buildApp = (
     const items = await requireService().list(session.actorId, request.id);
     return enrollmentPageSchema.parse({ items, nextCursor: null });
   });
+
+  app.get('/api/v1/admin/integrations', async (request) => {
+    const session = await requireSession(request);
+    const items = await requireIntegrationService().list(
+      session.actorId,
+      request.id,
+    );
+    return credentialPageSchema.parse({ items, nextCursor: null });
+  });
+
+  app.post('/api/v1/admin/integrations', async (request, reply) => {
+    const session = await requireSession(request, true);
+    const mutation = requireMutationHeaders(request.headers, false);
+    const credential = await requireIntegrationService().create(
+      integrationCandidateInputSchema.parse(request.body),
+      {
+        actorId: session.actorId,
+        correlationId: request.id,
+        idempotencyKey: mutation.idempotencyKey,
+      },
+    );
+    void reply.header('cache-control', 'no-store');
+    void reply.header('etag', `"${String(credential.revision)}"`);
+    return credentialSummarySchema.parse(credential);
+  });
+
+  app.post<{ Params: { id: string } }>(
+    '/api/v1/admin/integrations/:id/verify',
+    async (request, reply) => {
+      const session = await requireSession(request, true);
+      const mutation = requireMutationHeaders(request.headers);
+      const result = await requireIntegrationService().verify(
+        request.params.id,
+        mutation.expectedVersion,
+        {
+          actorId: session.actorId,
+          correlationId: request.id,
+          idempotencyKey: mutation.idempotencyKey,
+        },
+      );
+      void reply.header('cache-control', 'no-store');
+      void reply.header('etag', `"${String(result.credential.revision)}"`);
+      return credentialVerificationResponseSchema.parse(result);
+    },
+  );
+
+  app.post<{ Params: { id: string } }>(
+    '/api/v1/admin/integrations/:id/revoke',
+    async (request, reply) => {
+      const session = await requireSession(request, true);
+      const mutation = requireMutationHeaders(request.headers);
+      const credential = await requireIntegrationService().revoke(
+        request.params.id,
+        mutation.expectedVersion,
+        {
+          actorId: session.actorId,
+          correlationId: request.id,
+          idempotencyKey: mutation.idempotencyKey,
+        },
+      );
+      void reply.header('cache-control', 'no-store');
+      void reply.header('etag', `"${String(credential.revision)}"`);
+      return credentialSummarySchema.parse(credential);
+    },
+  );
 
   app.get<{ Params: { id: string } }>(
     '/api/v1/admin/enrollments/:id',
