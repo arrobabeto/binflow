@@ -26,6 +26,7 @@ COPY packages/onboarding/package.json packages/onboarding/package.json
 COPY packages/policies/package.json packages/policies/package.json
 COPY packages/secrets/package.json packages/secrets/package.json
 COPY packages/vercel/package.json packages/vercel/package.json
+COPY packages/workflows/package.json packages/workflows/package.json
 RUN pnpm install --frozen-lockfile
 
 FROM dependencies AS build

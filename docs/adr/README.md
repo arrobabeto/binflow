@@ -26,5 +26,6 @@ ADRs preserve why durable decisions exist. Accepted ADRs are binding until a lat
 | [0018](0018-dashboard-credential-enrollment-boundary.md)             | Dashboard credential enrollment boundary                       | Accepted |
 | [0019](0019-versioned-project-manifest-and-budget-policy.md)         | Versioned project manifest and budget policy                   | Accepted |
 | [0020](0020-code-owned-capability-catalog-and-project-binding.md)    | Code-owned capability catalog and project binding              | Accepted |
+| [0021](0021-telegram-ingress-and-durable-request-kernel.md)          | Telegram ingress and durable request kernel                    | Accepted |
 
 Use [0000-template.md](0000-template.md) for new decisions.

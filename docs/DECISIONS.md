@@ -24,3 +24,4 @@ This page summarizes active decisions. The linked ADR is authoritative.
 | Dashboard credential enrollment uses API-only KEK access and one-time secret submission                                 | Accepted | [ADR-0018](adr/0018-dashboard-credential-enrollment-boundary.md)             |
 | Project manifests bind immutable locale, provider, path and budget snapshots derived from a code-owned profile          | Accepted | [ADR-0019](adr/0019-versioned-project-manifest-and-budget-policy.md)         |
 | Capability definitions are code-owned and projects bind only immutable approved versions                                | Accepted | [ADR-0020](adr/0020-code-owned-capability-catalog-and-project-binding.md)    |
+| Telegram ingress resolves durable identities and uses a PostgreSQL-authoritative request kernel                         | Accepted | [ADR-0021](adr/0021-telegram-ingress-and-durable-request-kernel.md)          |

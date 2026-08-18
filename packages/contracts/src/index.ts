@@ -598,6 +598,100 @@ export type CapabilityCatalogItem = z.infer<typeof capabilityCatalogItemSchema>;
 export type CapabilityCatalogResponse = z.infer<
   typeof capabilityCatalogResponseSchema
 >;
+
+export const requestStateSchema = z.enum([
+  'RECEIVED',
+  'NEEDS_INPUT',
+  'AWAITING_PLAN_CONFIRMATION',
+  'QUEUED',
+  'GENERATING',
+  'APPLYING_CHANGE',
+  'VALIDATING',
+  'PREVIEW_DEPLOYING',
+  'PREVIEW_READY',
+  'REVISION_REQUESTED',
+  'AWAITING_CLIENT_APPROVAL',
+  'AWAITING_ADMIN_APPROVAL',
+  'APPROVED_FOR_PUBLISH',
+  'REVALIDATING',
+  'MERGING_OR_PUBLISHING',
+  'PRODUCTION_DEPLOYING',
+  'VERIFYING_PRODUCTION',
+  'COMPLETED',
+  'FAILED_RETRYABLE',
+  'FAILED_FINAL',
+  'CANCELLED',
+  'SUPERSEDED',
+]);
+
+export const requestSummarySchema = z
+  .object({
+    capabilityId: z.literal('create_blog_draft'),
+    createdAt: z.iso.datetime(),
+    currentVersion: z.number().int().positive(),
+    id: z.string().min(1),
+    projectId: z.string().min(1),
+    revision: z.number().int().positive(),
+    state: requestStateSchema,
+    tenantId: z.string().min(1),
+    topic: z.string().min(1).nullable(),
+    updatedAt: z.iso.datetime(),
+  })
+  .strict();
+
+export const requestDetailSchema = requestSummarySchema.extend({
+  confirmedAt: z.iso.datetime().nullable(),
+  interpretedInput: createBlogDraftInputSchema.nullable(),
+  plan: z.record(z.string(), z.unknown()).nullable(),
+});
+
+export const requestPageSchema = cursorPageSchema(requestSummarySchema);
+
+export const telegramIngressSchema = z
+  .object({
+    botId: z.string().regex(/^\d+$/),
+    chatId: z.string().regex(/^-?\d+$/),
+    externalUserId: z.string().regex(/^\d+$/),
+    receivedAt: z.iso.datetime(),
+    text: z.string().min(1).max(4096),
+    updateId: z.string().regex(/^\d+$/),
+  })
+  .strict();
+
+export const telegramReplySchema = z
+  .object({
+    actionTokens: z
+      .array(
+        z
+          .object({
+            action: z.enum(['confirm_plan', 'cancel']),
+            label: z.string().min(1),
+            token: z.string().min(32),
+          })
+          .strict(),
+      )
+      .default([]),
+    duplicate: z.boolean().default(false),
+    locale: supportedLocaleSchema,
+    requestId: z.string().min(1).nullable(),
+    text: z.string().min(1),
+  })
+  .strict();
+
+export const workflowResumeSignalSchema = z
+  .object({
+    requestId: z.string().min(1),
+    requestVersionId: z.string().min(1),
+    tenantId: z.string().min(1),
+  })
+  .strict();
+
+export type RequestState = z.infer<typeof requestStateSchema>;
+export type RequestSummary = z.infer<typeof requestSummarySchema>;
+export type RequestDetail = z.infer<typeof requestDetailSchema>;
+export type TelegramIngress = z.infer<typeof telegramIngressSchema>;
+export type TelegramReply = z.infer<typeof telegramReplySchema>;
+export type WorkflowResumeSignal = z.infer<typeof workflowResumeSignalSchema>;
 export type ProjectManifest = z.infer<typeof projectManifestSchema>;
 export type GlobalProfileSummary = z.infer<typeof globalProfileSummarySchema>;
 export type ProjectManifestResponse = z.infer<

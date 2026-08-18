@@ -836,6 +836,7 @@ export class EnrollmentService {
         }
         const bot = await database
           .select({
+            credentialId: schema.providerCredentials.id,
             evidence: schema.providerCredentials.verificationEvidence,
           })
           .from(schema.providerCredentials)
@@ -848,14 +849,45 @@ export class EnrollmentService {
             ),
           )
           .limit(1);
+        const activeBot = bot[0];
         const username = (
-          bot[0]?.evidence as { username?: unknown } | undefined
+          activeBot?.evidence as { username?: unknown } | undefined
         )?.username;
-        if (typeof username !== 'string' || username.length === 0)
+        if (
+          activeBot === undefined ||
+          typeof username !== 'string' ||
+          username.length === 0
+        )
           throw new DomainError(
             'credential_unavailable',
             'Telegram client bot is unavailable.',
           );
+        const existingUser = await database
+          .select({ id: schema.clientUsers.id })
+          .from(schema.clientUsers)
+          .where(eq(schema.clientUsers.enrollmentId, enrollmentId))
+          .limit(1);
+        const userId = existingUser[0]?.id ?? uuidv7();
+        if (existingUser.length === 0) {
+          await database.insert(schema.clientUsers).values({
+            ...(current.configuration.clientContactEmail === undefined
+              ? {}
+              : { contactEmail: current.configuration.clientContactEmail }),
+            displayName: `${current.tenantKey} client`,
+            enrollmentId,
+            id: userId,
+            projectId: current.projectId,
+            tenantId: current.tenantId,
+          });
+          await database.insert(schema.memberships).values({
+            id: uuidv7(),
+            projectId: current.projectId,
+            role: 'client',
+            status: 'pending_pairing',
+            tenantId: current.tenantId,
+            userId,
+          });
+        }
         const token = randomBytes(32).toString('base64url');
         const tokenHash = createHash('sha256').update(token).digest('hex');
         const now = this.clock.now();
@@ -878,6 +910,8 @@ export class EnrollmentService {
           projectId: current.projectId,
           tenantId: current.tenantId,
           tokenHash,
+          userId,
+          botCredentialId: activeBot.credentialId,
         });
         const nextVersion = current.version + 1;
         const transitioned = await database

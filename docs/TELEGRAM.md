@@ -12,6 +12,10 @@ Each first-MVP enrollment owns a dedicated bot. The bot resolves one tenant/proj
 
 Both bots use a shared `MessagingGateway` domain interface and independent Chat SDK instances/state namespaces.
 
+Local polling and production webhook handlers normalize updates before invoking
+the same transport-neutral application service. Only that service may consume
+pairing/action tokens or mutate requests.
+
 The Telegram numeric bot ID is globally unique among active credentials. The
 same bot cannot be activated as both admin and client or reused by another
 tenant; this identity is stored as a normalized external resource ID, not only
@@ -31,6 +35,9 @@ inside JSON evidence.
 3. Token is random, hashed, tenant/user/bot scoped, single-use and valid for 24 hours.
 4. Bot receives `/start`, validates the token and binds Telegram numeric user ID.
 5. Reuse, wrong bot, wrong user binding or expiration is rejected and audited.
+
+Enrollment creates one pending client user and membership before issuing a
+pairing link. Consumption records the active client bot credential ID.
 
 Unpaired users receive a localized access-denied message and cannot discover project data or tool names.
 

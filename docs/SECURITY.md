@@ -74,6 +74,17 @@ Never passed to the model:
 
 ### Telegram
 
+- Updates are authorized by verified bot identity plus numeric channel
+  identity, never username or message text.
+- Pairing/action plaintext tokens are return-once values; persistence contains
+  SHA-256 hashes only and fixed-length digests are compared in constant time.
+- Replay keys include bot ID, isolating identical update/user IDs from distinct
+  bots.
+- Cross-tenant outbox discovery and verified bot startup use the explicit
+  `platform_system` database scope. It accepts only a code-owned operation name,
+  is unavailable to HTTP request handlers and must emit business audit events
+  for every mutation it dispatches.
+
 - Tenant is resolved from the registered bot integration, never message text.
 - User is resolved from Telegram numeric user ID, never username/display name.
 - Pairing token is random, hashed, single-use, bot/user/tenant scoped and expires in 24 hours.

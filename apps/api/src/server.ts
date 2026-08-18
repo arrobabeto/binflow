@@ -2,6 +2,7 @@ import { buildApp } from './app.js';
 import { createApiAuthRuntime } from './auth.js';
 import { EnrollmentService } from '@binflow/onboarding';
 import { IntegrationAdminService } from '@binflow/integration-admin';
+import { WorkflowService } from '@binflow/workflows';
 import {
   defaultMasterKeyPath,
   loadRuntimeMasterKeyFile,
@@ -16,6 +17,7 @@ const app = buildApp({
       process.env.BINFLOW_KEK_FILE ?? defaultMasterKeyPath(),
     ),
   ),
+  workflowService: new WorkflowService(authRuntime.database),
 });
 
 const close = async (): Promise<void> => {

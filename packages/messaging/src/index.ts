@@ -9,6 +9,7 @@ import {
 import {
   createTelegramAdapter,
   TelegramAdapter,
+  type TelegramMessage,
   type TelegramUser,
   type TelegramWebhookInfo,
 } from '@chat-adapter/telegram';
@@ -16,6 +17,7 @@ import { Chat } from 'chat';
 import { z } from 'zod';
 
 import { DomainError } from '@binflow/domain';
+import type { TelegramIngress, TelegramReply } from '@binflow/contracts';
 import type {
   CredentialVerifier,
   CredentialVerifierInput,
@@ -39,6 +41,35 @@ export type TelegramRuntime = Readonly<{
   adapter: TelegramAdapter;
   chat: Chat<{ telegram: TelegramAdapter }>;
 }>;
+
+export interface TelegramIngressHandler {
+  handleTelegramUpdate(input: TelegramIngress): Promise<TelegramReply>;
+}
+
+export const registerClientTelegramHandlers = (
+  runtime: TelegramRuntime,
+  input: Readonly<{ botId: string; handler: TelegramIngressHandler }>,
+): void => {
+  runtime.chat.onDirectMessage(async (thread, message) => {
+    const raw = message.raw as TelegramMessage;
+    const externalUserId = raw.from?.id;
+    if (externalUserId === undefined) return;
+    const reply = await input.handler.handleTelegramUpdate({
+      botId: input.botId,
+      chatId: String(raw.chat.id),
+      externalUserId: String(externalUserId),
+      receivedAt: new Date(raw.date * 1000).toISOString(),
+      text: message.text,
+      updateId: String(raw.message_id),
+    });
+    const actions = reply.actionTokens
+      .map((action) => `${action.label}: /action ${action.token}`)
+      .join('\n');
+    await thread.post(
+      actions.length === 0 ? reply.text : `${reply.text}\n\n${actions}`,
+    );
+  });
+};
 
 export const createTelegramRuntime = async (
   config: TelegramRuntimeConfig,
