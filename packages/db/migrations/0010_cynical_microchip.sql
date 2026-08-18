@@ -1,0 +1,2 @@
+ALTER TABLE "provider_credentials" ADD COLUMN "revision" integer DEFAULT 1 NOT NULL;--> statement-breakpoint
+ALTER TABLE "provider_credentials" ADD CONSTRAINT "provider_credentials_revision_check" CHECK ("provider_credentials"."revision" >= 1);

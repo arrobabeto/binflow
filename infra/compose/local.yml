@@ -68,6 +68,7 @@ services:
     command: ['node', 'apps/api/dist/server.js']
     environment:
       BINFLOW_AUTH_SECRET_FILE: /run/secrets/auth_secret
+      BINFLOW_KEK_FILE: /run/secrets/binflow_kek
       BINFLOW_PUBLIC_URL: http://localhost:3000
       BINFLOW_SECURE_COOKIES: 'false'
       BINFLOW_VERSION: local
@@ -77,6 +78,7 @@ services:
       REDIS_URL: redis://redis:6379
     secrets:
       - auth_secret
+      - binflow_kek
     depends_on:
       postgres:
         condition: service_healthy
@@ -102,9 +104,12 @@ services:
       dockerfile: infra/docker/Dockerfile
     command: ['node', 'apps/worker/dist/main.js']
     environment:
+      BINFLOW_KEK_FILE: /run/secrets/binflow_kek
       DATABASE_URL: postgresql://binflow_app:binflow_local_app@postgres:5432/binflow
       LOG_LEVEL: info
       REDIS_URL: redis://redis:6379
+    secrets:
+      - binflow_kek
     depends_on:
       postgres:
         condition: service_healthy
@@ -150,9 +155,12 @@ services:
       dockerfile: infra/docker/Dockerfile
     command: ['node', 'apps/maintenance/dist/main.js']
     environment:
+      BINFLOW_KEK_FILE: /run/secrets/binflow_kek
       DATABASE_URL: postgresql://binflow_app:binflow_local_app@postgres:5432/binflow
       LOG_LEVEL: info
       REDIS_URL: redis://redis:6379
+    secrets:
+      - binflow_kek
     depends_on:
       postgres:
         condition: service_healthy
@@ -169,3 +177,5 @@ volumes:
 secrets:
   auth_secret:
     file: ${BINFLOW_AUTH_SECRET_PATH:-${HOME}/.config/binflow/auth-secret-v1.key}
+  binflow_kek:
+    file: ${BINFLOW_KEK_PATH:-${HOME}/.config/binflow/kek-v1.key}

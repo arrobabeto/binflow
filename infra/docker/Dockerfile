@@ -18,6 +18,7 @@ COPY packages/contracts/package.json packages/contracts/package.json
 COPY packages/db/package.json packages/db/package.json
 COPY packages/domain/package.json packages/domain/package.json
 COPY packages/github/package.json packages/github/package.json
+COPY packages/integration-admin/package.json packages/integration-admin/package.json
 COPY packages/integrations/package.json packages/integrations/package.json
 COPY packages/messaging/package.json packages/messaging/package.json
 COPY packages/onboarding/package.json packages/onboarding/package.json

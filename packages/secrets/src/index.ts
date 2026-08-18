@@ -9,4 +9,5 @@ export {
   defaultMasterKeyPath,
   loadSecureSecretFile,
   loadMasterKeyFile,
+  loadRuntimeMasterKeyFile,
 } from './master-key-file.js';

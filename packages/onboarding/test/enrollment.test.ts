@@ -159,7 +159,6 @@ describeDatabase('client enrollment lifecycle', () => {
           keyVersion: 1,
           nonce: 'nonce',
           provider: 'telegram-client',
-          projectId: created.projectId,
           tenantId: created.tenantId,
           wrapAuthTag: 'tag',
           wrappedDek: 'dek',
@@ -170,21 +169,12 @@ describeDatabase('client enrollment lifecycle', () => {
           id: 'telegram-credential',
           kind: 'telegram-client',
           maskedSuffix: '0000',
-          ownerScope: 'project',
-          projectId: created.projectId,
+          ownerScope: 'tenant',
           secretReferenceId: 'telegram-secret',
           status: 'active',
           tenantId: created.tenantId,
           verificationEvidence: { username: 'CT_Webbin_bot' },
           version: 1,
-        });
-        await scoped.insert(schema.integrationConnections).values({
-          credentialId: 'telegram-credential',
-          id: 'telegram-connection',
-          kind: 'telegram-client',
-          projectId: created.projectId,
-          status: 'active',
-          tenantId: created.tenantId,
         });
       },
     );

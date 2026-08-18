@@ -112,6 +112,10 @@ The dashboard never displays private chain-of-thought. It displays generated rat
 - Test, rotate and revoke are separate audited actions.
 - Rotation triggers project revalidation before dependent capabilities continue.
 - The browser never receives ciphertext, DEK or resolved secret values.
+- Candidate forms are strict per provider. GitHub accepts an explicitly selected
+  PEM file once and transmits its bounded contents, never a local filesystem path.
+- Verification displays only stable outcome/error and refreshed health metadata;
+  provider evidence remains server-side.
 
 ## Content catalog
 

@@ -41,6 +41,7 @@ export type CredentialForVerification = Readonly<{
   kind: IntegrationKind;
   ownerScope: CredentialOwnerScope;
   projectId?: string;
+  revision: number;
   secretContext: Readonly<{
     credentialId: string;
     keyVersion: number;
@@ -352,9 +353,11 @@ export const listCredentials = async (db: ScopedDatabase) =>
       maskedSuffix: providerCredentials.maskedSuffix,
       ownerScope: providerCredentials.ownerScope,
       projectId: providerCredentials.projectId,
+      revision: providerCredentials.revision,
       status: providerCredentials.status,
       tenantId: providerCredentials.tenantId,
       testedAt: providerCredentials.testedAt,
+      usedAt: providerCredentials.usedAt,
       verifiedAt: providerCredentials.verifiedAt,
       version: providerCredentials.version,
     })
@@ -380,6 +383,7 @@ export const getCredentialForVerification = async (
       nonce: secretReferences.nonce,
       ownerScope: providerCredentials.ownerScope,
       projectId: providerCredentials.projectId,
+      revision: providerCredentials.revision,
       status: providerCredentials.status,
       tenantId: providerCredentials.tenantId,
       version: providerCredentials.version,
@@ -479,6 +483,7 @@ export const getCredentialForVerification = async (
     kind: row.kind as IntegrationKind,
     ownerScope: row.ownerScope,
     ...(row.projectId === null ? {} : { projectId: row.projectId }),
+    revision: row.revision,
     secretContext: {
       credentialId: row.credentialId,
       keyVersion: row.keyVersion,
@@ -641,7 +646,10 @@ export const recordCredentialVerificationSuccess = async (
 
     const replaced = await tx
       .update(providerCredentials)
-      .set({ status: 'superseded' })
+      .set({
+        revision: sql`${providerCredentials.revision} + 1`,
+        status: 'superseded',
+      })
       .where(
         and(
           ...scopeConditions(credential),
@@ -675,6 +683,7 @@ export const recordCredentialVerificationSuccess = async (
       .set({
         ...(externalResourceId === undefined ? {} : { externalResourceId }),
         status: 'active',
+        revision: sql`${providerCredentials.revision} + 1`,
         testedAt: input.checkedAt,
         verifiedAt: input.checkedAt,
         verificationEvidence: input.evidence,
@@ -770,6 +779,7 @@ export const recordCredentialVerificationFailure = async (
       .update(providerCredentials)
       .set({
         ...(input.permanent ? { status: 'invalid' as const } : {}),
+        revision: sql`${providerCredentials.revision} + 1`,
         testedAt: input.checkedAt,
       })
       .where(
@@ -808,6 +818,7 @@ export const recordCredentialVerificationFailure = async (
 export const revokeCredential = async (
   db: ScopedDatabase,
   credentialId: string,
+  expectedRevision?: number,
 ): Promise<boolean> =>
   db.transaction(async (tx) => {
     await tx.execute(
@@ -817,11 +828,24 @@ export const revokeCredential = async (
       where: eq(providerCredentials.id, credentialId),
     });
     if (credential === undefined) return false;
+    if (
+      expectedRevision !== undefined &&
+      credential.revision !== expectedRevision
+    ) {
+      throw new DomainError(
+        'conflict_error',
+        'Credential changed after the dashboard resource was loaded.',
+      );
+    }
     if (credential.status === 'revoked') return true;
     const revokedAt = new Date();
     await tx
       .update(providerCredentials)
-      .set({ revokedAt, status: 'revoked' })
+      .set({
+        revision: sql`${providerCredentials.revision} + 1`,
+        revokedAt,
+        status: 'revoked',
+      })
       .where(eq(providerCredentials.id, credentialId));
     await tx
       .update(secretReferences)

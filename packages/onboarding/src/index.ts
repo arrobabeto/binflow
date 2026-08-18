@@ -666,20 +666,12 @@ export class EnrollmentService {
           .select({
             evidence: schema.providerCredentials.verificationEvidence,
           })
-          .from(schema.integrationConnections)
-          .innerJoin(
-            schema.providerCredentials,
-            eq(
-              schema.providerCredentials.id,
-              schema.integrationConnections.credentialId,
-            ),
-          )
+          .from(schema.providerCredentials)
           .where(
             and(
-              eq(schema.integrationConnections.projectId, current.projectId),
-              eq(schema.integrationConnections.kind, 'telegram-client'),
-              eq(schema.integrationConnections.status, 'active'),
-              eq(schema.integrationConnections.tenantId, current.tenantId),
+              eq(schema.providerCredentials.kind, 'telegram-client'),
+              eq(schema.providerCredentials.ownerScope, 'tenant'),
+              eq(schema.providerCredentials.tenantId, current.tenantId),
               eq(schema.providerCredentials.status, 'active'),
             ),
           )
@@ -865,6 +857,11 @@ export class EnrollmentService {
               eq(schema.providerCredentials.ownerScope, 'platform'),
               isNull(schema.providerCredentials.tenantId),
             ),
+            and(
+              eq(schema.providerCredentials.kind, 'telegram-client'),
+              eq(schema.providerCredentials.ownerScope, 'tenant'),
+              eq(schema.providerCredentials.tenantId, enrollment.tenantId),
+            ),
           ),
         ),
       );
@@ -888,11 +885,7 @@ export class EnrollmentService {
           eq(schema.integrationConnections.tenantId, enrollment.tenantId),
           eq(schema.integrationConnections.status, 'active'),
           eq(schema.providerCredentials.status, 'active'),
-          inArray(schema.integrationConnections.kind, [
-            'telegram-client',
-            'github-app',
-            'vercel',
-          ]),
+          inArray(schema.integrationConnections.kind, ['github-app', 'vercel']),
         ),
       );
     const match = (checkName: (typeof CREDENTIAL_CHECKS)[number]) => {
@@ -901,7 +894,7 @@ export class EnrollmentService {
       if (checkName === 'telegram_admin_credential')
         return direct.find((item) => item.kind === 'telegram-admin');
       if (checkName === 'telegram_client_credential')
-        return connected.find((item) => item.kind === 'telegram-client');
+        return direct.find((item) => item.kind === 'telegram-client');
       if (checkName === 'github_app_binding')
         return connected.find((item) => item.kind === 'github-app');
       return connected.find((item) => item.kind === 'vercel');

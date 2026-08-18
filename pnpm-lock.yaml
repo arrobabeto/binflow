@@ -53,12 +53,21 @@ importers:
       '@binflow/domain':
         specifier: workspace:*
         version: link:../../packages/domain
+      '@binflow/integration-admin':
+        specifier: workspace:*
+        version: link:../../packages/integration-admin
       '@binflow/onboarding':
         specifier: workspace:*
         version: link:../../packages/onboarding
+      '@binflow/secrets':
+        specifier: workspace:*
+        version: link:../../packages/secrets
       fastify:
         specifier: 5.11.3
         version: 5.11.3
+      zod:
+        specifier: 4.4.3
+        version: 4.4.3
     devDependencies:
       '@types/node':
         specifier: 24.13.3
@@ -279,6 +288,46 @@ importers:
       zod:
         specifier: 4.4.3
         version: 4.4.3
+    devDependencies:
+      '@types/node':
+        specifier: 24.13.3
+        version: 24.13.3
+
+  packages/integration-admin:
+    dependencies:
+      '@binflow/ai':
+        specifier: workspace:*
+        version: link:../ai
+      '@binflow/contracts':
+        specifier: workspace:*
+        version: link:../contracts
+      '@binflow/db':
+        specifier: workspace:*
+        version: link:../db
+      '@binflow/domain':
+        specifier: workspace:*
+        version: link:../domain
+      '@binflow/github':
+        specifier: workspace:*
+        version: link:../github
+      '@binflow/integrations':
+        specifier: workspace:*
+        version: link:../integrations
+      '@binflow/messaging':
+        specifier: workspace:*
+        version: link:../messaging
+      '@binflow/secrets':
+        specifier: workspace:*
+        version: link:../secrets
+      '@binflow/vercel':
+        specifier: workspace:*
+        version: link:../vercel
+      drizzle-orm:
+        specifier: 0.45.2
+        version: 0.45.2(@types/pg@8.20.0)(kysely@0.29.5)(pg@8.23.0)
+      uuid:
+        specifier: 14.0.1
+        version: 14.0.1
     devDependencies:
       '@types/node':
         specifier: 24.13.3

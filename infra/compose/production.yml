@@ -87,6 +87,7 @@ services:
     restart: unless-stopped
     environment:
       BINFLOW_AUTH_SECRET_FILE: /run/secrets/auth_secret
+      BINFLOW_KEK_FILE: /run/secrets/binflow_kek
       BINFLOW_PUBLIC_URL: https://${BINFLOW_DOMAIN}
       BINFLOW_SECURE_COOKIES: 'true'
       BINFLOW_VERSION: ${BINFLOW_VERSION}
@@ -95,6 +96,7 @@ services:
       PORT: '8080'
     secrets:
       - auth_secret
+      - binflow_kek
       - database_url
       - redis_url
     depends_on:

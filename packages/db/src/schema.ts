@@ -326,6 +326,7 @@ export const providerCredentials = pgTable(
     maskedSuffix: text('masked_suffix').notNull(),
     status: integrationStatus('status').notNull().default('unverified'),
     version: integer('version').notNull(),
+    revision: integer('revision').notNull().default(1),
     testedAt: timestamp('tested_at', { withTimezone: true }),
     verifiedAt: timestamp('verified_at', { withTimezone: true }),
     usedAt: timestamp('used_at', { withTimezone: true }),
@@ -339,6 +340,7 @@ export const providerCredentials = pgTable(
       'provider_credentials_owner_scope_check',
       sql`(${table.ownerScope} = 'platform' AND ${table.tenantId} IS NULL AND ${table.projectId} IS NULL) OR (${table.ownerScope} = 'tenant' AND ${table.tenantId} IS NOT NULL AND ${table.projectId} IS NULL) OR (${table.ownerScope} = 'project' AND ${table.tenantId} IS NOT NULL AND ${table.projectId} IS NOT NULL)`,
     ),
+    check('provider_credentials_revision_check', sql`${table.revision} >= 1`),
     index('provider_credentials_tenant_idx').on(table.tenantId),
     index('provider_credentials_project_idx').on(table.projectId),
     foreignKey({

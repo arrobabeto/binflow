@@ -116,6 +116,12 @@ the plaintext token.
 - Credential ownership is explicit: platform credentials use null tenant/project foreign keys and the reserved AAD tenant component `platform`; tenant/project credentials use the real tenant ID. `platform` is not a synthetic tenant and is accessible only through the audited platform-owner path.
 - Safe provider configuration is stored separately from the encrypted bundle. Secret parsing and plaintext lifetime remain inside the adapter and buffers are cleared in `finally` paths where possible.
 - Verification is externally read-only and persists only allowlisted evidence. Provider bodies, webhook URLs, native error messages, authorization headers, JWTs and ephemeral provider tokens are never stored or printed.
+- Only the Fastify API, worker and maintenance roles receive the runtime KEK;
+  the Nuxt dashboard container does not. Docker runtime mounts may expose secret
+  files as read-only `0400`, `0440` or `0444`; writable runtime secret files are
+  rejected. Local host key files remain exact `0600`.
+- Dashboard candidate idempotency binds secret input with an HMAC under the KEK.
+  Plaintext and unkeyed secret hashes never enter idempotency, audit or outbox.
 
 ## Prompt and model safety
 

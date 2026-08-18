@@ -87,3 +87,42 @@ export const loadMasterKeyFile = async (
   }
   return key;
 };
+
+export const isRuntimeMasterKeyPermissionAllowed = (
+  keyPath: string,
+  mode: number,
+): boolean => {
+  const permissions = mode & 0o777;
+  return resolve(keyPath).startsWith('/run/secrets/')
+    ? permissions === 0o400 || permissions === 0o440 || permissions === 0o444
+    : permissions === 0o600;
+};
+
+/** Loads the KEK for a runtime process without weakening host-file policy. */
+export const loadRuntimeMasterKeyFile = async (
+  keyPath: string,
+): Promise<Buffer> => {
+  const metadata = await stat(keyPath);
+  if (!metadata.isFile()) {
+    throw new Error(
+      'The runtime master key path must point to a regular file.',
+    );
+  }
+  const permissions = metadata.mode & 0o777;
+  const isDockerSecret = resolve(keyPath).startsWith('/run/secrets/');
+  if (!isRuntimeMasterKeyPermissionAllowed(keyPath, permissions)) {
+    throw new Error(
+      isDockerSecret
+        ? 'The runtime master key must be mounted read-only.'
+        : 'The runtime master key file permissions must be 0600.',
+    );
+  }
+  const key = await readFile(keyPath);
+  if (key.byteLength !== KEY_BYTES) {
+    key.fill(0);
+    throw new Error(
+      'The runtime master key file must contain exactly 32 bytes.',
+    );
+  }
+  return key;
+};
