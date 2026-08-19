@@ -4,6 +4,12 @@ All notable changes to product behavior, architecture, contracts, security, oper
 
 ## Unreleased
 
+### Dashboard contrast correction
+
+- Fixed the dashboard semantic action-color mapping so solid buttons retain a
+  visible palette background behind white text, with a regression test for the
+  generated Nuxt UI token contract.
+
 ### Module 9 production readiness
 
 - Accepted ADR-0023 for secure admin-bot pairing, durable operational

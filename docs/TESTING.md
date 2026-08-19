@@ -47,6 +47,8 @@
 - Dashboard credential tests cover strict secret-bearing unions, keyed
   idempotency fingerprints, redacted responses/events, optimistic revisions,
   fresh-session gates and same-origin rejection.
+- Dashboard theme tests assert that every solid semantic action color resolves
+  to a generated palette token, preventing invisible white action text.
 - Runtime KEK tests accept supported read-only Docker-secret modes, accept the
   Docker Desktop `0600` compatibility form only with a proven `EROFS` mount,
   retain exact `0600` for host files and reject any writable mount.
