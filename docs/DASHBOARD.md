@@ -157,7 +157,9 @@ Usage groups calls/cost by tenant, project, request, capability, node, provider,
 ## Accessibility and UX
 
 - Keyboard-operable controls and visible focus.
-- Semantic labels, status text in addition to color and WCAG AA contrast.
+- Semantic labels, status text in addition to color and WCAG AA contrast. Solid
+  action colors resolve to concrete Nuxt UI palette tokens so white action text
+  is never rendered over a transparent or white background.
 - Confirmation dialogs name the exact resource and consequence.
 - Long-running actions return immediately with trackable state.
 - Error messages state what failed, whether retry is automatic and who must act.
