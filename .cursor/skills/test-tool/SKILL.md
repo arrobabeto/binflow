@@ -10,7 +10,8 @@ changes, or when validating a client customization upload.
 ## Preconditions
 
 1. Read `docs/README.md`, the tool spec (`docs/specs/<tool>.md`), and
-   [`docs/TESTING.md`](../../../docs/TESTING.md).
+   [`docs/TESTING.md`](../../../docs/TESTING.md). Include ADR-0042 when the
+   tool syncs a content catalog (`catalog_sync` / shared GitHub port).
 2. Read [`references/discovery-checklist.md`](references/discovery-checklist.md)
    before generating scenarios.
 3. Do **not** edit the attached plan file.

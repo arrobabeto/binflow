@@ -203,12 +203,15 @@ Does **not** replace rows below; adds qualitative coverage for client copy, CTAs
 stuck states, and customization asks. Pilot reference:
 `docs/audits/delete_blog_draft-webbin-2026-08-28.md`.
 
-### Capability conformance (ADR-0038/0039)
+### Capability conformance (ADR-0038/0039/0042)
 
 - `packages/workflows/test/capability-conformance.test.ts` — every loaded catalog
   tool matches `graph.yaml` version, policies registry, contracts enum, migration
   SQL, and worker runtime registry; graph version resolves from `tool.yaml`.
 - Unknown capabilities fail closed in `resolveCapabilityRuntime` (no blog fallback).
+- Tools with a `catalog_sync` node must declare `parameters.catalogScope`
+  (`blog` \| `portfolio`) aligned with `catalogScopeForRuntimeKind` (ADR-0042).
+  GitHub catalog ports require explicit non-empty `contentKinds`.
 
 ### Telegram/input
 

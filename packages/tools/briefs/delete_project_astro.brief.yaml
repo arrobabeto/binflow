@@ -48,6 +48,8 @@ nodes:
     nodeKind: content.catalog_sync@1
     label: Sync content catalog
     acceptsClientCustomization: false
+    parameters:
+      catalogScope: portfolio
     permissions:
       - github:metadata:read
       - github:contents:read

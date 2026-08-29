@@ -4,6 +4,17 @@ All notable changes to product behavior, architecture, contracts, security, oper
 
 ## Unreleased
 
+### Tool isolation and shared catalog ports (ADR-0042)
+
+- `createGitHubContentCatalogPort` requires explicit non-empty `contentKinds`
+  (no blog+portfolio default).
+- Worker uses `createCapabilityCatalogPort` / `catalogContentKindsForRuntimeKind`
+  so blog and delete-blog sync blog only; project and delete-project sync
+  portfolio only (unchanged scopes vs prior hotfix).
+- `catalog_sync` nodes declare `parameters.catalogScope`; capability conformance
+  asserts alignment with runtime kind.
+- create-tool / test-tool skills document shared-port scope creep.
+
 ### Admin notification exactly-once delivery
 
 - Outbox drain for admin/client notices (and workflow resume) claims each
@@ -25,11 +36,10 @@ All notable changes to product behavior, architecture, contracts, security, oper
 
 ### GitHub catalog sync scoped by tool content kind
 
-- `createGitHubContentCatalogPort` accepts optional `contentKinds` (`blog` |
+- `createGitHubContentCatalogPort` requires non-empty `contentKinds` (`blog` |
   `portfolio`). Create/delete blog sync blog directories only; create/delete
-  project sync portfolio only. Fixes create-blog execute appearing stuck at
-  `catalog_sync` after delete-blog ingress added portfolio tree walks to the
-  shared GitHub catalog port.
+  project sync portfolio only. Fail-closed replaces the former optional dual
+  default (ADR-0042).
 
 ### Workflow worker stuck-state recovery
 

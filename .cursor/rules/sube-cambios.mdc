@@ -1,0 +1,16 @@
+---
+description: When the user says Sube cambios, ship to main then return to develop
+alwaysApply: true
+---
+
+# Sube cambios
+
+When the user says **Sube cambios** (exact phrase or clear equivalent), do this in order without asking for confirmation:
+
+1. Commit all current working-tree changes (follow git safety: no secrets, no `--amend` unless the user asked, HEREDOC commit message focused on why).
+2. Push a feature branch (never commit directly on `main` if a PR is needed).
+3. Open a PR targeting `main`.
+4. Merge the PR into `main` (squash, matching prior Binflow PRs, unless the user asked otherwise).
+5. Check out `develop`, fast-forward it to the merged `main`, and push `origin/develop` so work continues there.
+
+If there is nothing to commit, still sync `develop` to `main` if they drifted, then stay on `develop`.

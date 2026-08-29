@@ -29,6 +29,7 @@
 11. **Generic CTAs across mutation classes** — reusing `localeCopy.confirm` ("Crear borrador") on destructive/update tools; labels must be per capability and decision surface. See `client-facing-copy.md` § Inline CTAs.
 12. **Hardcoded capabilityVersion: 1** — after a catalog bump, `graphVersionForCapability` / `getTool(id, 1)` and request_versions inserts must use the definition version or omit version for latest. Symptom: `Unknown tool <id>@1` on plan confirm. See `post-ship-ops.md` §7.
 13. **Shared destructive client copy** — `renderDeleteAdminPendingNotice` / completion notices must pass `contentKind: 'blog' | 'portfolio'`; never reuse article wording for portfolio deletes.
+14. **Shared port scope creep** — never widen a shared GitHub/OpenAI/Vercel factory default for one tool (ADR-0042). Catalog sync declares `parameters.catalogScope: blog | portfolio`; `createGitHubContentCatalogPort` requires non-empty `contentKinds` via `createCapabilityCatalogPort` / `catalogContentKindsForRuntimeKind`. If semantics or side effects diverge (ingress persist vs execute ephemeral), fork `nodeKind` / `node.id` instead of editing a shared kind for one tool only.
 
 ## Destructive checklist (ADR-0040 gate)
 
