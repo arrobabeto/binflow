@@ -4,6 +4,16 @@ All notable changes to product behavior, architecture, contracts, security, oper
 
 ## Unreleased
 
+### Requests inbox stacked layout and approval tones
+
+- Requests page stacks **Needs admin approval** above **Requests** (no longer
+  side-by-side columns).
+- Request summaries expose nullable `approvalStatus` from `terminalResult`.
+  Lower-section cards render light green after admin approval / publish and
+  light red after admin rejection.
+- Approval queue no longer shows a “Next approval batch” control; the Requests
+  section paginates with **Previous requests batch** and **Next requests batch**.
+
 ### Dashboard navigation and tools catalog UX
 
 - Home client cards open enrollment via a top-right settings (cog) control

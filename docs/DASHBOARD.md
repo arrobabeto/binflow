@@ -175,12 +175,18 @@ Module 7 lists request ID, client/project, capability, topic, current version,
 state and timestamps. Detail shows redacted structured input, confirmed plan and
 checkpoint state, never raw Telegram updates, credentials or hidden reasoning.
 
-The requests inbox is two columns. The left column is requests in
-`AWAITING_ADMIN_APPROVAL`. The right column is every other state (in progress,
+The requests inbox is stacked vertically. The top section is requests in
+`AWAITING_ADMIN_APPROVAL`. The section below is every other state (in progress,
 completed, failed, cancelled, superseded). A client tag (`clientName`) sits
 above each request title on the list and on the detail page. **Open request**
 loads `/requests/:id` as a full document so the detail page renders only that
 request; it never renders the inbox list alongside the detail.
+
+Request summaries include `approvalStatus` from the request’s
+`terminalResult` when present. In the lower **Requests** section, cards use a
+light green surface after admin approval (`approved_for_publish` /
+`published`, or post-approval publish states) and a light red surface after
+admin rejection (`admin_rejected`). Pending approval cards stay neutral.
 
 Shared list controls:
 
@@ -192,11 +198,14 @@ Shared list controls:
   enrollments (`active`, `revalidation_required`) and from clients visible in
   the loaded request batches (label is tenant display name from requests, or a
   title-cased tenant key from enrollments). Changing the client filters both
-  columns.
-- Page size 10, 30 or 50 (default 10). Changing size resets both columns to the
-  newest batch.
-- Each column has **Next batch** when `nextCursor` is present. Next replaces
-  the current batch; it does not append.
+  sections.
+- Page size 10, 30 or 50 (default 10). Changing size resets the Requests section
+  to the newest batch. The approval queue shows the newest batch for the selected
+  page size (no separate “next approval batch” control).
+- The Requests section has **Previous requests batch** and **Next requests
+  batch**. Next is enabled when `nextCursor` is present; Previous is enabled
+  after the operator has advanced at least once. Both replace the current batch
+  (they do not append). Changing client or page size resets to the newest batch.
 
 Later list filters remain specified for capability, requester, date range, risk
 and failure class; they are not in this inbox slice.

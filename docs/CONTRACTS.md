@@ -602,7 +602,9 @@ GET    /api/v1/admin/telegram/target
 
 Module 7 implements a redacted request projection with request ID,
 tenant/project, `clientName`, `clientKey`, `create_blog_draft` capability, state,
-current version, topic and timestamps plus the optimistic concurrency revision.
+current version, topic, timestamps, optimistic concurrency revision, and
+nullable `approvalStatus` from `terminalResult` when present (for example
+`approved_for_publish`, `admin_rejected`, `published`).
 `GET /api/v1/requests` is a cursor page. Query: optional `projectId`, optional
 `needsAdminApproval` (`true` = `AWAITING_ADMIN_APPROVAL` only, `false` =
 every other state), `limit` in `{10,30,50}` (default 10), optional opaque

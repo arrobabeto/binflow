@@ -79,6 +79,39 @@ export const requestListSearchParams = (
   return params.toString();
 };
 
+export type RequestCardTone = 'default' | 'approved' | 'rejected';
+
+const postAdminApprovalStates = new Set<RequestSummary['state']>([
+  'APPROVED_FOR_PUBLISH',
+  'REVALIDATING',
+  'MERGING_OR_PUBLISHING',
+  'PRODUCTION_DEPLOYING',
+  'VERIFYING_PRODUCTION',
+]);
+
+/** Visual tone for inbox cards after an admin decision (or publish progress). */
+export const requestCardTone = (
+  request: Readonly<
+    Pick<RequestSummary, 'approvalStatus' | 'state'>
+  >,
+): RequestCardTone => {
+  if (request.approvalStatus === 'admin_rejected') return 'rejected';
+  if (
+    request.approvalStatus === 'approved_for_publish' ||
+    request.approvalStatus === 'published'
+  ) {
+    return 'approved';
+  }
+  if (postAdminApprovalStates.has(request.state)) return 'approved';
+  return 'default';
+};
+
+export const requestCardToneClass = (tone: RequestCardTone): string => {
+  if (tone === 'approved') return 'bg-emerald-50 ring-1 ring-emerald-100';
+  if (tone === 'rejected') return 'bg-rose-50 ring-1 ring-rose-100';
+  return '';
+};
+
 /** Request payloads arrive as parsed JSON, so no other value kinds occur. */
 const renderFieldValue = (field: unknown): string => {
   if (Array.isArray(field)) return field.map(String).join(', ');
