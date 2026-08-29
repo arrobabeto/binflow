@@ -1080,6 +1080,11 @@ export const capabilityIdSchema = z.enum([
 
 export const requestSummarySchema = z
   .object({
+    approvalStatus: z
+      .string()
+      .min(1)
+      .nullish()
+      .transform((value) => value ?? null),
     capabilityId: capabilityIdSchema,
     clientKey: z.string().min(1),
     clientName: z.string().min(1),

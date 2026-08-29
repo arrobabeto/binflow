@@ -39,6 +39,7 @@ const request = (
   overrides: Partial<RequestSummary> &
     Pick<RequestSummary, 'id' | 'projectId' | 'createdAt'>,
 ): RequestSummary => ({
+  approvalStatus: null,
   capabilityId: 'create_blog_draft',
   clientKey: 'client',
   clientName: 'Client',

@@ -351,11 +351,18 @@ type ResolvedIdentity = Readonly<{
   userId: string;
 }>;
 
+const readApprovalStatus = (terminalResult: unknown): string | null => {
+  if (terminalResult === null || typeof terminalResult !== 'object') return null;
+  const status = (terminalResult as Record<string, unknown>).approvalStatus;
+  return typeof status === 'string' && status.length > 0 ? status : null;
+};
+
 const toSummary = (
   row: typeof schema.requests.$inferSelect,
   tenant: Pick<typeof schema.tenants.$inferSelect, 'displayName' | 'key'>,
 ): RequestSummary =>
   requestSummarySchema.parse({
+    approvalStatus: readApprovalStatus(row.terminalResult),
     capabilityId: row.capabilityId,
     clientKey: tenant.key,
     clientName: tenant.displayName.trim() || tenant.key,

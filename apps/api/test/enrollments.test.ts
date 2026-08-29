@@ -142,6 +142,7 @@ const sessionResolver = vi.fn(async () => ({
 }));
 
 const workflowRequest: RequestDetail = {
+  approvalStatus: null,
   capabilityId: 'create_blog_draft',
   clientKey: 'webbin',
   clientName: 'Webbin',
@@ -167,6 +168,7 @@ const workflowRequest: RequestDetail = {
 };
 
 const workflowSummary = {
+  approvalStatus: workflowRequest.approvalStatus,
   capabilityId: workflowRequest.capabilityId,
   clientKey: workflowRequest.clientKey,
   clientName: workflowRequest.clientName,

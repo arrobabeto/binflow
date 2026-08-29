@@ -3,6 +3,8 @@ import type { Enrollment, RequestSummary } from '@binflow/contracts';
 import { requestListPageSizes } from '@binflow/contracts';
 import {
   allRequestInboxClients,
+  requestCardTone,
+  requestCardToneClass,
   requestInboxClientOptions,
   requestInboxProjectFilter,
   requestListSearchParams,
@@ -19,8 +21,9 @@ const selectedProjectId = ref<string>(
   queryProjectId.value ?? allRequestInboxClients,
 );
 const pageSize = ref<'10' | '30' | '50'>('10');
-const approvalCursor = ref<string | undefined>();
 const otherCursor = ref<string | undefined>();
+/** Cursors for pages before the current Requests batch (enables Previous). */
+const otherCursorHistory = ref<(string | undefined)[]>([]);
 
 watch(
   queryProjectId,
@@ -52,16 +55,18 @@ const listUrl = (needsAdminApproval: boolean, cursor?: string) =>
 
 const {
   data: approvalPage,
+  error: approvalError,
   refresh: refreshApproval,
-  status: approvalStatus,
+  status: approvalFetchStatus,
 } = await useFetch<{ items: RequestSummary[]; nextCursor: string | null }>(() =>
-  listUrl(true, approvalCursor.value),
+  listUrl(true),
 );
 
 const {
   data: otherPage,
+  error: otherError,
   refresh: refreshOther,
-  status: otherStatus,
+  status: otherFetchStatus,
 } = await useFetch<{ items: RequestSummary[]; nextCursor: string | null }>(() =>
   listUrl(false, otherCursor.value),
 );
@@ -70,18 +75,42 @@ const refreshInbox = async () => {
   await Promise.all([refreshApproval(), refreshOther()]);
 };
 
-watch([selectedProjectId, pageSize], () => {
-  approvalCursor.value = undefined;
+const resetRequestsPaging = () => {
   otherCursor.value = undefined;
+  otherCursorHistory.value = [];
+};
+
+watch([selectedProjectId, pageSize], () => {
+  resetRequestsPaging();
 });
 
-const loadNext = (column: 'approval' | 'other') => {
-  if (column === 'approval') {
-    approvalCursor.value = approvalPage.value?.nextCursor ?? undefined;
-    return;
-  }
-  otherCursor.value = otherPage.value?.nextCursor ?? undefined;
+const canGoPreviousRequests = computed(
+  () => otherCursorHistory.value.length > 0,
+);
+
+const loadNextRequests = () => {
+  const next = otherPage.value?.nextCursor;
+  if (next === null || next === undefined || next === '') return;
+  otherCursorHistory.value = [...otherCursorHistory.value, otherCursor.value];
+  otherCursor.value = next;
 };
+
+const loadPreviousRequests = () => {
+  if (otherCursorHistory.value.length === 0) return;
+  const history = [...otherCursorHistory.value];
+  const previous = history.pop();
+  otherCursorHistory.value = history;
+  otherCursor.value = previous;
+};
+
+const cardClass = (item: RequestSummary): string =>
+  requestCardToneClass(requestCardTone(item));
+
+const inboxLoading = computed(
+  () =>
+    approvalFetchStatus.value === 'pending' ||
+    otherFetchStatus.value === 'pending',
+);
 </script>
 
 <template>
@@ -90,13 +119,14 @@ const loadNext = (column: 'approval' | 'other') => {
       <div>
         <h1 class="text-3xl font-semibold tracking-tight">Workflow requests</h1>
         <p class="mt-2 text-muted">
-          Admin-approval queue on the left. Everything else on the right.
+          Needs admin approval on top. All other requests below — green after
+          admin approval, red after admin rejection.
         </p>
       </div>
       <UButton
         color="neutral"
         variant="soft"
-        :loading="approvalStatus === 'pending' || otherStatus === 'pending'"
+        :loading="inboxLoading"
         @click="refreshInbox"
         >Refresh</UButton
       >
@@ -116,82 +146,94 @@ const loadNext = (column: 'approval' | 'other') => {
         />
       </UFormField>
     </div>
-      <div
-        class="mt-8 grid gap-6 lg:grid-cols-[minmax(0,1fr)_1px_minmax(0,1fr)] lg:gap-8"
-      >
-        <section class="min-w-0">
-          <h2 class="text-lg font-semibold">Needs admin approval</h2>
-          <div class="mt-4 grid gap-4">
-            <UCard v-if="(approvalPage?.items.length ?? 0) === 0">
-              <p class="font-medium">No approval queue</p>
-              <p class="mt-1 text-sm text-muted">
-                New-category blogs appear here until you decide.
-              </p>
-            </UCard>
-            <UCard v-for="item in approvalPage?.items ?? []" :key="item.id">
-              <p class="text-xs font-medium tracking-wide text-muted uppercase">
-                {{ item.clientName }}
-              </p>
-              <div
-                class="mt-1 flex flex-wrap items-center justify-between gap-4"
-              >
-                <div>
-                  <div class="flex items-center gap-2">
-                    <p class="font-semibold">{{ item.topic ?? 'No topic' }}</p>
-                    <UBadge color="neutral" variant="soft">{{
-                      item.state
-                    }}</UBadge>
-                  </div>
-                  <p class="mt-1 text-sm text-muted">
-                    {{ item.capabilityId }} · version {{ item.currentVersion }}
-                  </p>
-                </div>
-                <a
-                  class="inline-flex items-center rounded-md border border-default px-2.5 py-1.5 text-sm font-medium hover:bg-elevated"
-                  :href="`/requests/${item.id}`"
-                  >Open request</a
-                >
+
+    <UAlert
+      v-if="approvalError || otherError"
+      class="mt-6"
+      color="error"
+      title="Could not load requests"
+      :description="
+        String(approvalError ?? otherError ?? 'Request list failed.')
+      "
+    />
+
+    <section class="mt-8 min-w-0">
+      <h2 class="text-lg font-semibold">Needs admin approval</h2>
+      <p v-if="approvalFetchStatus === 'pending'" class="mt-4 text-muted">
+        Loading approval queue…
+      </p>
+      <div v-else class="mt-4 grid gap-4">
+        <UCard
+          v-if="!approvalError && (approvalPage?.items.length ?? 0) === 0"
+        >
+          <p class="font-medium">No approval queue</p>
+          <p class="mt-1 text-sm text-muted">
+            New-category blogs appear here until you decide.
+          </p>
+        </UCard>
+        <UCard v-for="item in approvalPage?.items ?? []" :key="item.id">
+          <p class="text-xs font-medium tracking-wide text-muted uppercase">
+            {{ item.clientName }}
+          </p>
+          <div class="mt-1 flex flex-wrap items-center justify-between gap-4">
+            <div>
+              <div class="flex items-center gap-2">
+                <p class="font-semibold">{{ item.topic ?? 'No topic' }}</p>
+                <UBadge color="neutral" variant="soft">{{ item.state }}</UBadge>
               </div>
-            </UCard>
-          </div>
-        </section>
-        <div class="hidden bg-default lg:block" aria-hidden="true" />
-        <section class="min-w-0">
-          <h2 class="text-lg font-semibold">Other requests</h2>
-          <div class="mt-4 grid gap-4">
-            <UCard v-if="(otherPage?.items.length ?? 0) === 0">
-              <p class="font-medium">No other requests</p>
               <p class="mt-1 text-sm text-muted">
-                Paired clients can begin with /create_blog.
+                {{ item.capabilityId }} · version {{ item.currentVersion }}
               </p>
-            </UCard>
-            <UCard v-for="item in otherPage?.items ?? []" :key="item.id">
-              <p class="text-xs font-medium tracking-wide text-muted uppercase">
-                {{ item.clientName }}
-              </p>
-              <div
-                class="mt-1 flex flex-wrap items-center justify-between gap-4"
-              >
-                <div>
-                  <div class="flex items-center gap-2">
-                    <p class="font-semibold">{{ item.topic ?? 'No topic' }}</p>
-                    <UBadge color="neutral" variant="soft">{{
-                      item.state
-                    }}</UBadge>
-                  </div>
-                  <p class="mt-1 text-sm text-muted">
-                    {{ item.capabilityId }} · version {{ item.currentVersion }}
-                  </p>
-                </div>
-                <a
-                  class="inline-flex items-center rounded-md border border-default px-2.5 py-1.5 text-sm font-medium hover:bg-elevated"
-                  :href="`/requests/${item.id}`"
-                  >Open request</a
-                >
-              </div>
-            </UCard>
+            </div>
+            <UButton
+              :to="`/requests/${item.id}`"
+              color="neutral"
+              variant="outline"
+              >Open request</UButton
+            >
           </div>
-        </section>
+        </UCard>
+      </div>
+    </section>
+
+    <section class="mt-10 min-w-0 border-t border-default pt-10">
+      <h2 class="text-lg font-semibold">Requests</h2>
+      <p v-if="otherFetchStatus === 'pending'" class="mt-4 text-muted">
+        Loading requests…
+      </p>
+      <div v-else class="mt-4 grid gap-4">
+        <UCard v-if="!otherError && (otherPage?.items.length ?? 0) === 0">
+          <p class="font-medium">No other requests</p>
+          <p class="mt-1 text-sm text-muted">
+            Paired clients can begin with /create_blog.
+          </p>
+        </UCard>
+        <UCard
+          v-for="item in otherPage?.items ?? []"
+          :key="item.id"
+          :class="cardClass(item)"
+        >
+          <p class="text-xs font-medium tracking-wide text-muted uppercase">
+            {{ item.clientName }}
+          </p>
+          <div class="mt-1 flex flex-wrap items-center justify-between gap-4">
+            <div>
+              <div class="flex items-center gap-2">
+                <p class="font-semibold">{{ item.topic ?? 'No topic' }}</p>
+                <UBadge color="neutral" variant="soft">{{ item.state }}</UBadge>
+              </div>
+              <p class="mt-1 text-sm text-muted">
+                {{ item.capabilityId }} · version {{ item.currentVersion }}
+              </p>
+            </div>
+            <UButton
+              :to="`/requests/${item.id}`"
+              color="neutral"
+              variant="outline"
+              >Open request</UButton
+            >
+          </div>
+        </UCard>
       </div>
       <div
         class="mt-8 flex flex-wrap items-center justify-between gap-4 border-t border-default pt-6"
@@ -212,18 +254,19 @@ const loadNext = (column: 'approval' | 'other') => {
           <UButton
             color="neutral"
             variant="soft"
-            :disabled="!approvalPage?.nextCursor"
-            @click="loadNext('approval')"
-            >Next approval batch</UButton
+            :disabled="!canGoPreviousRequests"
+            @click="loadPreviousRequests"
+            >Previous requests batch</UButton
           >
           <UButton
             color="neutral"
             variant="soft"
             :disabled="!otherPage?.nextCursor"
-            @click="loadNext('other')"
-            >Next other batch</UButton
+            @click="loadNextRequests"
+            >Next requests batch</UButton
           >
         </div>
       </div>
+    </section>
   </main>
 </template>

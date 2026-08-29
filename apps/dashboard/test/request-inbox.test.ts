@@ -4,6 +4,8 @@ import {
   allRequestInboxClients,
   formatClientKeyLabel,
   labeledRecordFields,
+  requestCardTone,
+  requestCardToneClass,
   requestInboxClientOptions,
   requestInboxProjectFilter,
   requestListSearchParams,
@@ -122,5 +124,34 @@ describe('request inbox helpers', () => {
       { label: 'topic', value: 'Automatización' },
     ]);
     expect(labeledRecordFields(null)).toEqual([]);
+  });
+
+  it('tones request cards from admin approval status', () => {
+    expect(
+      requestCardTone({
+        approvalStatus: 'approved_for_publish',
+        state: 'APPROVED_FOR_PUBLISH',
+      }),
+    ).toBe('approved');
+    expect(
+      requestCardTone({
+        approvalStatus: 'published',
+        state: 'COMPLETED',
+      }),
+    ).toBe('approved');
+    expect(
+      requestCardTone({
+        approvalStatus: 'admin_rejected',
+        state: 'REVISION_REQUESTED',
+      }),
+    ).toBe('rejected');
+    expect(
+      requestCardTone({
+        approvalStatus: null,
+        state: 'QUEUED',
+      }),
+    ).toBe('default');
+    expect(requestCardToneClass('approved')).toContain('emerald');
+    expect(requestCardToneClass('rejected')).toContain('rose');
   });
 });
