@@ -2,6 +2,8 @@ kind: effect
 nodeKind: content.catalog_sync@1
 label: Sync content catalog
 acceptsClientCustomization: false
+parameters:
+  catalogScope: blog
 permissions:
   - github:metadata:read
   - github:contents:read

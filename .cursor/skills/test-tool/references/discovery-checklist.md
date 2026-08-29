@@ -27,6 +27,8 @@ Complete before generating scenarios. Record answers in the **Tool profile** tab
 
 - [ ] Runtime class (`blog-runtime`, `delete-blog-runtime`, `project-runtime`)
 - [ ] `capability-runtimes.ts` registry entry
+- [ ] If graph has `catalog_sync`: `parameters.catalogScope` is `blog` or `portfolio`
+  and matches `catalogScopeForRuntimeKind` (ADR-0042)
 - [ ] `recordFailure` behavior: `FAILED_RETRYABLE` vs `FAILED_FINAL`
 - [ ] Publish path: revalidate rules, verify production semantics
 

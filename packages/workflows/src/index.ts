@@ -94,9 +94,13 @@ export {
   matchesNaturalProject,
 } from './capability-ingress.js';
 export {
+  catalogContentKindsForRuntimeKind,
+  catalogScopeForRuntimeKind,
   listRegisteredExecutorIds,
   resolveBundleTitle,
   resolveCapabilityRuntime,
+  type CatalogContentScope,
+  type CapabilityRuntimeKind,
 } from './capability-runtimes.js';
 
 const ACTION_TTL_MS = 24 * 60 * 60 * 1000;

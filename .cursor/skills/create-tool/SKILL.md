@@ -5,11 +5,14 @@ implement → post-ship → conform.
 
 ## Preconditions
 
-1. Read `docs/README.md`, ADR-0030, ADR-0038, ADR-0039, and `packages/tools/README.md`.
+1. Read `docs/README.md`, ADR-0030, ADR-0038, ADR-0039, ADR-0042, and `packages/tools/README.md`.
 2. Confirm behavior is documented; add or amend an ADR when trust boundaries change.
 3. Destructive tools (`mutationClass: destructive`) require **ADR-0040** gap review
    before catalog registration (GitHub DELETE, verification semantics, tombstone,
    no Vercel preview unless explicitly documented).
+4. Shared ports (GitHub catalog, OpenAI, Vercel): declare scope per capability
+   (**ADR-0042**). Catalog tools need `parameters.catalogScope` and a
+   `catalogScopeForRuntimeKind` entry — never widen a shared factory default.
 
 ## Phase 0 — Interview (human gates)
 

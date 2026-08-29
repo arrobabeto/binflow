@@ -70,6 +70,9 @@ export const toolBriefGraphNodeSchema = z
     label: z.string().trim().min(1).max(160),
     model: z.string().trim().min(1).max(80).optional(),
     nodeKind: z.string().trim().min(1).max(120),
+    parameters: z
+      .record(z.string(), z.union([z.string(), z.number()]))
+      .optional(),
     permissions: z.array(z.string().trim().min(1).max(80)).optional(),
     rulesRef: z.string().trim().min(1).max(160).optional(),
     sortPrefix: z.string().trim().regex(/^\d+$/u),

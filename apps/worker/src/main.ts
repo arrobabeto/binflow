@@ -56,27 +56,38 @@ import {
   persistDeleteProjectCatalogSync,
   resolveBundleTitle,
   resolveCapabilityRuntime,
+  catalogContentKindsForRuntimeKind,
   type DeleteBlogCatalogLoader,
   type DeleteProjectCatalogLoader,
 } from '@binflow/workflows';
-
-const catalogContentKinds = (
-  kind: ReturnType<typeof resolveCapabilityRuntime>['kind'],
-): readonly ('blog' | 'portfolio')[] => {
-  switch (kind) {
-    case 'blog':
-    case 'delete_blog':
-      return ['blog'];
-    case 'project':
-    case 'delete_project':
-      return ['portfolio'];
-  }
-};
 
 const deleteNoticeContentKind = (
   kind: ReturnType<typeof resolveCapabilityRuntime>['kind'],
 ): 'blog' | 'portfolio' =>
   kind === 'delete_project' ? 'portfolio' : 'blog';
+
+type CatalogPortCredentials = Readonly<{
+  apiBaseUrl?: string;
+  credential: NonNullable<
+    Awaited<ReturnType<typeof getCredentialForVerification>>
+  >;
+  installationId: string;
+  masterKey: Buffer;
+  repositoryId: string;
+}>;
+
+/**
+ * Single factory for GitHub content catalog ports. Always scopes by capability
+ * kind (ADR-0042); never constructs an unscopeed port.
+ */
+const createCapabilityCatalogPort = (
+  capabilityKind: ReturnType<typeof resolveCapabilityRuntime>['kind'],
+  credentials: CatalogPortCredentials,
+) =>
+  createGitHubContentCatalogPort({
+    ...credentials,
+    contentKinds: catalogContentKindsForRuntimeKind(capabilityKind),
+  });
 
 const logger = pino({ level: process.env.LOG_LEVEL ?? 'info' });
 
@@ -149,8 +160,7 @@ const loadDeleteBlogCatalog: DeleteBlogCatalogLoader = async ({
         'credential_unavailable',
         'Verified GitHub installation evidence is unavailable.',
       );
-    const catalogPort = createGitHubContentCatalogPort({
-      contentKinds: ['blog'],
+    const catalogPort = createCapabilityCatalogPort('delete_blog', {
       credential: github,
       installationId: githubEvidence.installationId,
       masterKey,
@@ -214,8 +224,7 @@ const loadDeleteProjectCatalog: DeleteProjectCatalogLoader = async ({
         'credential_unavailable',
         'Verified GitHub installation evidence is unavailable.',
       );
-    const catalogPort = createGitHubContentCatalogPort({
-      contentKinds: ['portfolio'],
+    const catalogPort = createCapabilityCatalogPort('delete_project', {
       credential: github,
       installationId: githubEvidence.installationId,
       masterKey,
@@ -532,8 +541,7 @@ const processWorkflowJob = async (name: string, data: unknown) => {
       );
     };
     const capabilityRuntime = resolveCapabilityRuntime(context.capabilityId);
-    const catalog = createGitHubContentCatalogPort({
-      contentKinds: catalogContentKinds(capabilityRuntime.kind),
+    const catalog = createCapabilityCatalogPort(capabilityRuntime.kind, {
       credential: context.github,
       installationId: context.installationId,
       masterKey,

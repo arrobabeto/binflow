@@ -41,8 +41,9 @@ Check: plan confirm, URL confirm, preview, revision plan, cancel (where allowed)
 | Current node label matches activity | `open_deletion_pr` while failing at validate |
 | Destructive graph has no `wait_preview` | Create nodes on delete tool |
 | Checkpoints progress monotonically | Jump to `failed` without prior stage |
+| `catalog_sync` declares `catalogScope` matching runtime | Missing scope or blog tool syncing portfolio |
 
-**Refs:** [`graph-by-mutation.md`](../../create-tool/references/graph-by-mutation.md)
+**Refs:** [`graph-by-mutation.md`](../../create-tool/references/graph-by-mutation.md), ADR-0042
 
 ### Customization (customized mode only)
 

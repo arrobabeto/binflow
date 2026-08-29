@@ -38,6 +38,7 @@ Mark each layer before marking the tool done.
 | 15 | Graph coherence | `references/graph-by-mutation.md` — read nodes aloud; no create names on delete |
 | 16 | Ingress tests | `packages/workflows/test/*-ingress.test.ts` — NL conjugations, dispatch priority |
 | 17 | Inline CTAs | `references/client-facing-copy.md` — surface → action → label per locale; no create CTAs on destructive |
+| 18 | Shared code impact | Before changing a shared port: list `executorId`s / runtime kinds that call it; require opt-in scope (ADR-0042). For `catalog_sync`, set `parameters.catalogScope` and register in `catalogScopeForRuntimeKind`. |
 
 ## Verification commands
 

@@ -209,6 +209,11 @@ merge → verify production 404 (polling) → completed + catalog tombstone.
 - No `wait_preview`; client receives text-only notices during admin review.
 - `route_still_live` after merge is retryable (CDN lag).
 - Ingress live catalog sync prevents stale `*_not_found` false positives.
+- Catalog sync is scoped per capability (ADR-0042): blog/delete-blog walk blog
+  trees only; project/delete-project walk portfolio only. Nodes declare
+  `parameters.catalogScope`; the GitHub port requires explicit `contentKinds`
+  (no dual default). Ingress and execute may both sync; they share
+  `content.catalog_sync@1` with the same scope until a later ADR splits kinds.
 
 Automated tests: `packages/blog/test/delete-blog.test.ts`,
 `packages/projects/test/delete-project.test.ts`,

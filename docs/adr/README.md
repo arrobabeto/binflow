@@ -47,5 +47,6 @@ ADRs preserve why durable decisions exist. Accepted ADRs are binding until a lat
 | [0039](0039-tool-authoring-pipeline.md)                              | Tool authoring pipeline (brief, scaffolder, conformance)       | Accepted |
 | [0040](0040-destructive-content-capabilities.md)                     | Destructive content capabilities (delete project)              | Proposed |
 | [0041](0041-defer-delete-blog-redirects.md)                          | Defer delete-blog post-deletion redirects                      | Accepted |
+| [0042](0042-tool-isolation-and-shared-ports.md)                      | Tool isolation and fail-closed shared ports                    | Accepted |
 
 Use [0000-template.md](0000-template.md) for new decisions.

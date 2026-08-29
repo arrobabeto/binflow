@@ -3,12 +3,35 @@ import { DomainError } from '@binflow/domain';
 
 export type CapabilityRuntimeKind = 'blog' | 'delete_blog' | 'delete_project' | 'project';
 
+export type CatalogContentScope = 'blog' | 'portfolio';
+
 export type ResolvedCapabilityRuntime = Readonly<{
   consumerPrefix: CapabilityRuntimeKind;
   executorId: string;
   kind: CapabilityRuntimeKind;
   titleField: 'descriptor' | 'resolvedTitle' | 'titulo';
 }>;
+
+/**
+ * Declares which GitHub content trees a capability may sync. Shared catalog
+ * ports must never default to both; ADR-0042.
+ */
+export const catalogScopeForRuntimeKind = (
+  kind: CapabilityRuntimeKind,
+): CatalogContentScope => {
+  switch (kind) {
+    case 'blog':
+    case 'delete_blog':
+      return 'blog';
+    case 'project':
+    case 'delete_project':
+      return 'portfolio';
+  }
+};
+
+export const catalogContentKindsForRuntimeKind = (
+  kind: CapabilityRuntimeKind,
+): readonly CatalogContentScope[] => [catalogScopeForRuntimeKind(kind)];
 
 const runtimeByExecutorId = Object.freeze({
   'workflow.create_blog@1': Object.freeze({

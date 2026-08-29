@@ -1096,7 +1096,7 @@ export const resolveGitHubCatalogDirectories = (
 export const createGitHubContentCatalogPort = (
   input: Readonly<{
     apiBaseUrl?: string;
-    contentKinds?: readonly GitHubCatalogContentKind[];
+    contentKinds: readonly GitHubCatalogContentKind[];
     credential: CredentialVerifierInput['credential'];
     fetch?: typeof globalThis.fetch;
     installationId: string;
@@ -1104,10 +1104,13 @@ export const createGitHubContentCatalogPort = (
     repositoryId: string;
   }>,
 ): ContentCatalogPort => {
-  const contentKinds =
-    input.contentKinds === undefined
-      ? (['blog', 'portfolio'] as const)
-      : input.contentKinds;
+  const contentKinds = input.contentKinds;
+  if (contentKinds.length === 0)
+    throw new DomainError(
+      'validation_error',
+      'GitHub catalog sync requires an explicit non-empty contentKinds scope.',
+      { code: 'catalog_scope_required' },
+    );
   const configuration = configurationSchema.parse(
     input.credential.configuration,
   );

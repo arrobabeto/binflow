@@ -14,6 +14,7 @@ import {
 
 import { graphVersionForCapability } from '../src/capability-graph.js';
 import {
+  catalogScopeForRuntimeKind,
   listRegisteredExecutorIds,
   resolveCapabilityRuntime,
 } from '../src/capability-runtimes.js';
@@ -118,5 +119,20 @@ describe('capability conformance', () => {
     expect(() =>
       resolveCapabilityRuntime('unknown_capability'),
     ).toThrow(/Unknown capability/);
+  });
+
+  it('requires catalogScope on catalog_sync nodes aligned with runtime kind', async () => {
+    const tools = await listTools();
+    for (const loaded of tools) {
+      const catalogNodes = loaded.nodes.filter(
+        (node) => node.id === 'catalog_sync',
+      );
+      if (catalogNodes.length === 0) continue;
+      const runtime = resolveCapabilityRuntime(loaded.tool.id);
+      const expectedScope = catalogScopeForRuntimeKind(runtime.kind);
+      for (const node of catalogNodes) {
+        expect(node.parameters?.catalogScope).toBe(expectedScope);
+      }
+    }
   });
 });

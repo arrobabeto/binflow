@@ -96,6 +96,7 @@ const renderNodeYaml = (
   if (node.actor !== undefined) payload.actor = node.actor;
   if (node.effort !== undefined) payload.effort = node.effort;
   if (node.model !== undefined) payload.model = node.model;
+  if (node.parameters !== undefined) payload.parameters = node.parameters;
   if (node.permissions !== undefined) payload.permissions = node.permissions;
   if (node.rulesRef !== undefined) payload.rulesRef = node.rulesRef;
   if (node.ttlHours !== undefined) payload.ttlHours = node.ttlHours;
