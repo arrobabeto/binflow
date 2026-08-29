@@ -8,7 +8,9 @@ import {
   type ProjectManifest,
 } from '@binflow/contracts';
 import { DomainError } from '@binflow/domain';
-import { webbinCapabilityBinding } from '@binflow/policies';
+import {
+  resolveProjectCapabilityBindings,
+} from '@binflow/policies';
 
 export const astroRepoGlobalProfile = {
   id: 'astro_repo',
@@ -152,13 +154,36 @@ export const buildProjectManifest = (
   assertWebbinConfiguration(input.configuration);
   assertVerifiedBindings(input.verifiedBindings);
 
+  const enabledCapabilities = resolveProjectCapabilityBindings(
+    input.configuration,
+  );
+
+  const contentEditablePaths = [
+    'src/content/articulos/*.md',
+    'src/content/articulos-es/*.md',
+    'public/images/articles/*.avif',
+    'public/_redirects',
+    'src/content/proyectos/*.md',
+    'src/content/proyectos-es/*.md',
+    'public/images/projects/*.jpg',
+    'public/images/projects/*.avif',
+  ] as const;
+  const portfolioEditablePaths = [
+    'src/content/proyectos/*.md',
+    'src/content/proyectos-es/*.md',
+    'public/images/projects/*.jpg',
+    'public/images/projects/*.avif',
+  ] as const;
+
   const dependencyDocument = {
     budgetPolicy: input.configuration.budgetPolicy,
     clientConversationLocale: input.configuration.clientConversationLocale,
+    contentEditablePaths: [...contentEditablePaths],
     contentLocales: ['es', 'en'],
     defaultContentLocale: 'es',
     globalProfileVersion: astroRepoGlobalProfile.version,
-    enabledCapabilities: [webbinCapabilityBinding],
+    enabledCapabilities: [...enabledCapabilities],
+    portfolioEditablePaths: [...portfolioEditablePaths],
     projectId: input.projectId,
     requiredContentLocales: ['es', 'en'],
     slugLocale: 'es',
@@ -198,11 +223,7 @@ export const buildProjectManifest = (
           routePrefix: '/es/articulos',
         },
       },
-      editablePaths: [
-        'src/content/articulos/*.md',
-        'src/content/articulos-es/*.md',
-        'public/images/articles/*.avif',
-      ],
+      editablePaths: [...contentEditablePaths],
       frontmatterFields: [
         'titulo',
         'seoTitulo',
@@ -217,6 +238,66 @@ export const buildProjectManifest = (
         'faq',
       ],
       imageDirectory: 'public/images/articles',
+      portfolio: {
+        collections: {
+          en: {
+            directory: 'src/content/proyectos',
+            routePrefix: '/proyectos',
+          },
+          es: {
+            directory: 'src/content/proyectos-es',
+            routePrefix: '/es/proyectos',
+          },
+        },
+        editablePaths: [...portfolioEditablePaths],
+        enumFields: {
+          estado: ['Publicado', 'En progreso', 'Concepto'],
+          tipo: ['Sitio web', 'Landing page', 'Aplicacion web', 'Ecommerce'],
+        },
+        frontmatterFields: [
+          'descriptor',
+          'clienteTipo',
+          'industria',
+          'rol',
+          'tipo',
+          'estado',
+          'fecha',
+          'resumen',
+          'impacto',
+          'stack',
+          'url',
+          'imagen',
+          'confidencial',
+          'destacada',
+        ],
+        imageDirectory: 'public/images/projects',
+        requiredFrontmatter: [
+          'descriptor',
+          'clienteTipo',
+          'industria',
+          'rol',
+          'tipo',
+          'estado',
+          'fecha',
+          'resumen',
+          'impacto',
+          'stack',
+          'confidencial',
+          'destacada',
+        ],
+        sectionHeadings: {
+          en: {
+            challenge: 'Challenge',
+            outcome: 'Outcome',
+            solution: 'Solution',
+          },
+          es: {
+            challenge: 'Reto',
+            outcome: 'Resultado',
+            solution: 'Solución',
+          },
+        },
+      },
       source: 'github',
     },
     contentLocales: ['es', 'en'],
@@ -231,10 +312,10 @@ export const buildProjectManifest = (
         ? {}
         : { teamId: input.verifiedBindings.vercel.teamId }),
     },
-    enabledCapabilities: [webbinCapabilityBinding],
+    enabledCapabilities: [...enabledCapabilities],
     fingerprint,
     globalProfileVersion: astroRepoGlobalProfile.version,
-    graphVersion: 'workflow-kernel-pending@1',
+    graphVersion: 'stacks/astro-repo/create-blog@1',
     id: input.id,
     profile: 'astro_repo',
     projectId: input.projectId,

@@ -10,6 +10,7 @@ import type {
   ContentCatalogPort,
   RepositoryPublicationPort,
 } from '@binflow/blog';
+import type { ProjectManifest } from '@binflow/contracts';
 import { DomainError } from '@binflow/domain';
 import type {
   CredentialVerifier,
@@ -133,6 +134,7 @@ const mapGitHubError = (error: unknown): DomainError => {
     return new DomainError(
       'provider_final',
       'GitHub returned an unexpected response.',
+      { status: String(status) },
     );
   }
   return new DomainError(
@@ -337,10 +339,11 @@ export const createGitHubCredentialVerifier = (
                 request: { signal: AbortSignal.timeout(5_000) },
               });
             } catch {
-              auditFailure = new DomainError(
-                'provider_retryable',
-                'GitHub installation audit token cleanup failed.',
-              );
+              if (auditFailure === undefined && repositoryId === undefined)
+                auditFailure = new DomainError(
+                  'provider_retryable',
+                  'GitHub installation audit token cleanup failed.',
+                );
             }
           }
         }
@@ -418,10 +421,11 @@ export const createGitHubCredentialVerifier = (
                 request: { signal: AbortSignal.timeout(5_000) },
               });
             } catch {
-              repositoryFailure = new DomainError(
-                'provider_retryable',
-                'GitHub repository token cleanup failed.',
-              );
+              if (repositoryFailure === undefined && repository === undefined)
+                repositoryFailure = new DomainError(
+                  'provider_retryable',
+                  'GitHub repository token cleanup failed.',
+                );
             }
           }
         }
@@ -612,7 +616,7 @@ export const createGitHubRepositoryPublicationPort = (
             },
           });
         } catch {
-          if (failure === undefined)
+          if (failure === undefined && result === undefined)
             failure = new DomainError(
               'provider_retryable',
               'GitHub publication token cleanup failed.',
@@ -622,12 +626,7 @@ export const createGitHubRepositoryPublicationPort = (
     }
     if (failure !== undefined)
       throw failure instanceof DomainError ? failure : mapGitHubError(failure);
-    if (result === undefined)
-      throw new DomainError(
-        'internal_error',
-        'GitHub publication operation returned no result.',
-      );
-    return result;
+    return result as Value;
   };
 
   const authorization = (token: string) => ({
@@ -673,22 +672,96 @@ export const createGitHubRepositoryPublicationPort = (
   return {
     async createDraft(draft) {
       return withToken(async (requester, token) => {
-        const expectedFiles = draft.files.map((file) => file.path).sort();
+        const files = draft.files ?? [];
+        const deletions = draft.deletions ?? [];
+        if (files.length === 0 && deletions.length === 0)
+          throw new DomainError(
+            'validation_error',
+            'Draft requires files or deletions.',
+          );
+        const expectedFiles = [
+          ...files.map((file) => file.path),
+          ...deletions,
+        ].sort();
+        const isDeletionDraft = deletions.length > 0;
         const existing = await findExistingPull(requester, token, draft.branch);
         if (existing !== undefined) {
-          const files = (
+          const prFiles = (
             await listPullFiles(requester, token, existing.number)
           ).sort();
-          if (JSON.stringify(files) !== JSON.stringify(expectedFiles))
+          if (JSON.stringify(prFiles) !== JSON.stringify(expectedFiles))
             throw new DomainError(
               'conflict_error',
               'Existing request PR has an unexpected file set.',
             );
+          let headSha = existing.head.sha;
+          for (const file of files) {
+            const current = await requester(
+              'GET /repos/{owner}/{repo}/contents/{path}',
+              {
+                headers: authorization(token),
+                owner,
+                path: file.path,
+                ref: draft.branch,
+                repo,
+              },
+            );
+            const currentSha = z
+              .object({ sha: z.string().min(1) })
+              .parse(current.data).sha;
+            const response = await requester(
+              'PUT /repos/{owner}/{repo}/contents/{path}',
+              {
+                branch: draft.branch,
+                content: Buffer.from(file.bytes).toString('base64'),
+                headers: authorization(token),
+                message: `Update bilingual blog draft for ${draft.requestId}`,
+                owner,
+                path: file.path,
+                repo,
+                sha: currentSha,
+              },
+            );
+            headSha = contentWriteSchema.parse(response.data).commit.sha;
+          }
+          for (const path of deletions) {
+            const current = await requester(
+              'GET /repos/{owner}/{repo}/contents/{path}',
+              {
+                headers: authorization(token),
+                owner,
+                path,
+                ref: draft.branch,
+                repo,
+              },
+            );
+            const currentSha = z
+              .object({ sha: z.string().min(1) })
+              .parse(current.data).sha;
+            const response = await requester(
+              'DELETE /repos/{owner}/{repo}/contents/{path}',
+              {
+                branch: draft.branch,
+                headers: authorization(token),
+                message: `Delete blog content for ${draft.requestId}`,
+                owner,
+                path,
+                repo,
+                sha: currentSha,
+              },
+            );
+            headSha = contentWriteSchema.parse(response.data).commit.sha;
+          }
+          if (headSha === existing.head.sha)
+            throw new DomainError(
+              'conflict_error',
+              'Draft file update did not produce a new commit.',
+            );
           return {
             baseCommitSha: 'reconciled',
             branch: draft.branch,
-            files,
-            headCommitSha: existing.head.sha,
+            files: prFiles,
+            headCommitSha: headSha,
             pullRequestId: String(existing.number),
             pullRequestUrl: existing.html_url,
           };
@@ -711,21 +784,81 @@ export const createGitHubRepositoryPublicationPort = (
           sha: baseSha,
         });
         let headSha = baseSha;
-        for (const file of draft.files) {
+        const readPathSha = async (path: string): Promise<string | null> => {
+          try {
+            const current = await requester(
+              'GET /repos/{owner}/{repo}/contents/{path}',
+              {
+                headers: authorization(token),
+                owner,
+                path,
+                ref: draft.branch,
+                repo,
+              },
+            );
+            return z.object({ sha: z.string().min(1) }).parse(current.data).sha;
+          } catch (error) {
+            if (
+              error instanceof Error &&
+              'status' in error &&
+              (error as { status?: number }).status === 404
+            )
+              return null;
+            throw error;
+          }
+        };
+        for (const file of files) {
+          const existingSha = await readPathSha(file.path);
           const response = await requester(
             'PUT /repos/{owner}/{repo}/contents/{path}',
             {
               branch: draft.branch,
               content: Buffer.from(file.bytes).toString('base64'),
               headers: authorization(token),
-              message: `Add bilingual blog draft for ${draft.requestId}`,
+              message:
+                existingSha === null
+                  ? `Add bilingual blog draft for ${draft.requestId}`
+                  : `Update blog draft artifacts for ${draft.requestId}`,
               owner,
               path: file.path,
               repo,
+              ...(existingSha === null ? {} : { sha: existingSha }),
             },
           );
           headSha = contentWriteSchema.parse(response.data).commit.sha;
         }
+        const appliedDeletions: string[] = [];
+        for (const path of deletions) {
+          const currentSha = await readPathSha(path);
+          if (currentSha === null) continue;
+          const response = await requester(
+            'DELETE /repos/{owner}/{repo}/contents/{path}',
+            {
+              branch: draft.branch,
+              headers: authorization(token),
+              message: `Delete blog content for ${draft.requestId}`,
+              owner,
+              path,
+              repo,
+              sha: currentSha,
+            },
+          );
+          headSha = contentWriteSchema.parse(response.data).commit.sha;
+          appliedDeletions.push(path);
+        }
+        const appliedFiles = [
+          ...files.map((file) => file.path),
+          ...appliedDeletions,
+        ].sort();
+        if (
+          isDeletionDraft &&
+          appliedDeletions.length === 0 &&
+          files.length === 0
+        )
+          throw new DomainError(
+            'validation_error',
+            'Deletion draft found no removable repository paths.',
+          );
         const pullResponse = await requester(
           'POST /repos/{owner}/{repo}/pulls',
           {
@@ -735,7 +868,9 @@ export const createGitHubRepositoryPublicationPort = (
             headers: authorization(token),
             owner,
             repo,
-            title: `Blog draft: ${draft.slug}`,
+            title: isDeletionDraft
+              ? `Delete blog: ${draft.slug}`
+              : `Blog draft: ${draft.slug}`,
           },
         );
         const pull = pullRequestSchema.parse(pullResponse.data);
@@ -747,11 +882,42 @@ export const createGitHubRepositoryPublicationPort = (
         return {
           baseCommitSha: baseSha,
           branch: draft.branch,
-          files: expectedFiles,
+          files: appliedFiles,
           headCommitSha: headSha,
           pullRequestId: String(pull.number),
           pullRequestUrl: pull.html_url,
         };
+      });
+    },
+    async readFileAtRef(input) {
+      return withToken(async (requester, token) => {
+        try {
+          const response = await requester(
+            'GET /repos/{owner}/{repo}/contents/{path}',
+            {
+              headers: authorization(token),
+              owner,
+              path: input.path,
+              ref: input.ref,
+              repo,
+            },
+          );
+          const payload = z
+            .object({
+              content: z.string().min(1),
+              encoding: z.literal('base64'),
+            })
+            .parse(response.data);
+          return Buffer.from(payload.content, 'base64');
+        } catch (error) {
+          if (
+            error instanceof Error &&
+            'status' in error &&
+            (error as { status?: number }).status === 404
+          )
+            return null;
+          throw error;
+        }
       });
     },
     async revalidate(revalidation) {
@@ -771,7 +937,6 @@ export const createGitHubRepositoryPublicationPort = (
           await listPullFiles(requester, token, pullNumber)
         ).sort();
         if (
-          pull.state !== 'open' ||
           pull.head.sha !== revalidation.expectedHeadSha ||
           JSON.stringify(files) !==
             JSON.stringify([...revalidation.expectedFiles].sort())
@@ -780,6 +945,13 @@ export const createGitHubRepositoryPublicationPort = (
             'conflict_error',
             'GitHub PR changed after preview approval.',
           );
+        if (pull.merged === true) return;
+        if (pull.state !== 'open')
+          throw new DomainError(
+            'conflict_error',
+            'GitHub PR changed after preview approval.',
+          );
+        if (revalidation.requireCommitStatus === false) return;
         const status = combinedStatusSchema.parse(
           (
             await requester('GET /repos/{owner}/{repo}/commits/{ref}/status', {
@@ -879,9 +1051,52 @@ const frontmatterValue = (
   return match.replace(/^['"]|['"]$/gu, '');
 };
 
+export type GitHubCatalogContentKind = 'blog' | 'portfolio';
+
+type GitHubCatalogDirectory = Readonly<{
+  kind: GitHubCatalogContentKind;
+  locale: 'en' | 'es';
+  prefix: string;
+}>;
+
+export const resolveGitHubCatalogDirectories = (
+  manifest: ProjectManifest,
+  contentKinds: readonly GitHubCatalogContentKind[],
+): readonly GitHubCatalogDirectory[] => [
+  ...(contentKinds.includes('blog')
+    ? Object.entries(manifest.content.collections).flatMap(
+        ([locale, collection]) =>
+          collection === undefined
+            ? []
+            : [
+                {
+                  kind: 'blog' as const,
+                  locale: locale as 'en' | 'es',
+                  prefix: `${collection.directory}/`,
+                },
+              ],
+      )
+    : []),
+  ...(contentKinds.includes('portfolio')
+    ? Object.entries(manifest.content.portfolio?.collections ?? {}).flatMap(
+        ([locale, collection]) =>
+          collection === undefined
+            ? []
+            : [
+                {
+                  kind: 'portfolio' as const,
+                  locale: locale as 'en' | 'es',
+                  prefix: `${collection.directory}/`,
+                },
+              ],
+      )
+    : []),
+];
+
 export const createGitHubContentCatalogPort = (
   input: Readonly<{
     apiBaseUrl?: string;
+    contentKinds?: readonly GitHubCatalogContentKind[];
     credential: CredentialVerifierInput['credential'];
     fetch?: typeof globalThis.fetch;
     installationId: string;
@@ -889,6 +1104,10 @@ export const createGitHubContentCatalogPort = (
     repositoryId: string;
   }>,
 ): ContentCatalogPort => {
+  const contentKinds =
+    input.contentKinds === undefined
+      ? (['blog', 'portfolio'] as const)
+      : input.contentKinds;
   const configuration = configurationSchema.parse(
     input.credential.configuration,
   );
@@ -910,7 +1129,12 @@ export const createGitHubContentCatalogPort = (
     );
 
   return {
-    async sync() {
+    async sync(syncInput: Readonly<{ manifest: ProjectManifest }>) {
+      const manifest = syncInput.manifest;
+      const catalogDirectories = resolveGitHubCatalogDirectories(
+        manifest,
+        contentKinds,
+      );
       const plaintext = decryptSecret(
         input.credential.envelope,
         input.masterKey,
@@ -972,11 +1196,17 @@ export const createGitHubContentCatalogPort = (
           (entry) =>
             entry.type === 'blob' &&
             entry.path.endsWith('.md') &&
-            (entry.path.startsWith('src/content/articulos-es/') ||
-              entry.path.startsWith('src/content/articulos/')),
+            !entry.path.split('/').at(-1)?.startsWith('_') &&
+            catalogDirectories.some((directory) =>
+              entry.path.startsWith(directory.prefix),
+            ),
         );
         const items: CatalogItem[] = [];
         for (const entry of entries) {
+          const directory = catalogDirectories.find((candidate) =>
+            entry.path.startsWith(candidate.prefix),
+          );
+          if (directory === undefined) continue;
           const blob = blobSchema.parse(
             (
               await requester(
@@ -994,20 +1224,23 @@ export const createGitHubContentCatalogPort = (
             blob.content.replaceAll(/\s/gu, ''),
             'base64',
           ).toString('utf8');
-          const title = frontmatterValue(source, 'titulo');
-          const category = frontmatterValue(source, 'categoria');
+          const title =
+            directory.kind === 'portfolio'
+              ? frontmatterValue(source, 'descriptor')
+              : frontmatterValue(source, 'titulo');
+          const category =
+            directory.kind === 'portfolio'
+              ? frontmatterValue(source, 'industria')
+              : frontmatterValue(source, 'categoria');
           if (title === undefined || category === undefined)
             throw new DomainError(
               'provider_final',
               `Webbin catalog item ${entry.path} has invalid frontmatter.`,
             );
-          const locale = entry.path.startsWith('src/content/articulos-es/')
-            ? 'es'
-            : 'en';
           items.push({
             category,
             contentHash: createHash('sha256').update(source).digest('hex'),
-            locale,
+            locale: directory.locale,
             slug:
               entry.path.split('/').at(-1)?.replace(/\.md$/u, '') ?? entry.sha,
             sourceId: entry.path,
@@ -1027,7 +1260,7 @@ export const createGitHubContentCatalogPort = (
               request: { signal: AbortSignal.timeout(5_000) },
             });
           } catch {
-            if (failure === undefined)
+            if (failure === undefined && result === undefined)
               failure = new DomainError(
                 'provider_retryable',
                 'GitHub catalog token cleanup failed.',

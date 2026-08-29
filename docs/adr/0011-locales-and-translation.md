@@ -18,6 +18,11 @@ The dashboard is English. Client conversations support English, Spanish and Germ
 - A client cannot select a content locale unsupported by the project manifest.
 - Required locales cannot be skipped through conversation policy.
 - Translation preserves claims but adapts idiom, SEO, FAQ, alt text and links.
+  The English bundle’s `titulo`, `seoTitulo`, `descripcion`, `imagenAlt`,
+  keywords, FAQ questions and Markdown headings must be idiomatic English.
+  Copying the Spanish strings into the English collection is a validation
+  failure, not a successful translation. The shared slug remains
+  Spanish-derived.
 - German remains available but unvalidated until a compatible real pilot is accepted.
 
 ## Alternatives considered
@@ -28,4 +33,6 @@ The dashboard is English. Client conversations support English, Spanish and Germ
 
 ## Verification
 
-Contract tests cover locale intersections; E2E confirms Webbin always produces ES/EN and rejects German publication.
+Contract tests cover locale intersections and reject an English bundle that
+copies Spanish titles, SEO fields, FAQ questions or Markdown headings. E2E
+confirms Webbin always produces ES/EN and rejects German publication.

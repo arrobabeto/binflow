@@ -120,6 +120,55 @@
       "when": 1787045162025,
       "tag": "0016_youthful_ghost_rider",
       "breakpoints": true
+    },
+    {
+      "idx": 17,
+      "version": "7",
+      "when": 1787210000000,
+      "tag": "0017_tool_customizations",
+      "breakpoints": true
+    },
+    {
+      "idx": 18,
+      "version": "7",
+      "when": 1787300000000,
+      "tag": "0018_awaiting_revision_plan_confirmation",
+      "breakpoints": true
+    },
+    {
+      "idx": 19,
+      "version": "7",
+      "when": 1787400000000,
+      "tag": "0019_create_project_draft_capability",
+      "breakpoints": true
+    },
+    {
+      "idx": 20,
+      "version": "7",
+      "when": 1787450000000,
+      "tag": "0020_create_project_astro_capability",
+      "breakpoints": true
+    },
+    {
+      "idx": 21,
+      "version": "7",
+      "when": 1787600000000,
+      "tag": "0021_delete_blog_draft_capability",
+      "breakpoints": true
+    },
+    {
+      "idx": 22,
+      "version": "7",
+      "when": 1787700000000,
+      "tag": "0022_delete_blog_no_preview",
+      "breakpoints": true
+    },
+    {
+      "idx": 23,
+      "version": "7",
+      "when": 1787800000000,
+      "tag": "0023_delete_project_astro_capability",
+      "breakpoints": true
     }
   ]
 }

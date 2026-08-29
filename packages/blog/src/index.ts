@@ -3,10 +3,13 @@ import { createHash } from 'node:crypto';
 import sharp from 'sharp';
 
 import {
-  generatedBlogBundleSchema,
+  adaptedGeneratedBlogBundleSchema,
+  revisionPlanValidatedSchema,
   type CreateBlogDraftInput,
   type GeneratedBlogBundle,
   type ProjectManifest,
+  type RevisionOperation,
+  type RevisionPlan,
 } from '@binflow/contracts';
 import { DomainError } from '@binflow/domain';
 
@@ -22,7 +25,7 @@ export type CatalogItem = Readonly<{
 
 export type BlogFile = Readonly<{
   bytes: Uint8Array;
-  mime: 'text/markdown' | 'image/avif';
+  mime: 'text/markdown' | 'image/avif' | 'text/plain';
   path: string;
   sha256: string;
 }>;
@@ -45,8 +48,17 @@ export type DeploymentEvidence = Readonly<{
 }>;
 
 export type BlogExecutionInput = Readonly<{
+  customizationSection?: string;
+  editorial?: Readonly<{
+    editorialAudience?: string;
+    editorialVoice?: string;
+    prohibitedClaims?: readonly string[];
+    researchPolicy?: string;
+  }>;
   input: CreateBlogDraftInput;
   manifest: ProjectManifest;
+  onStage?: (node: string) => Promise<void>;
+  onTopicRefined?: (topic: string) => Promise<void>;
   requestId: string;
   requestVersionId: string;
 }>;
@@ -57,6 +69,7 @@ export type BlogExecutionResult = Readonly<{
   catalogRevision: string;
   deployment: DeploymentEvidence;
   files: readonly BlogFile[];
+  intent: string;
   publication: DraftPublication;
   similarity: SimilarityDecision;
 }>;
@@ -91,17 +104,42 @@ export interface BlogGenerationPort {
     input: Readonly<{
       catalog: readonly CatalogItem[];
       category: CategoryDecision;
+      customizationSection?: string;
+      editorial?: Readonly<{
+        editorialAudience?: string;
+        editorialVoice?: string;
+        prohibitedClaims?: readonly string[];
+        researchPolicy?: string;
+      }>;
       request: CreateBlogDraftInput;
     }>,
   ): Promise<GeneratedBlogBundle>;
   generateImage(prompt: string): Promise<Uint8Array>;
+  interpretRevision(
+    input: Readonly<{
+      bundle: GeneratedBlogBundle;
+      feedback: string;
+      locale?: string;
+    }>,
+  ): Promise<RevisionPlan>;
+  applyRevisionPatch(
+    input: Readonly<{
+      bundle: GeneratedBlogBundle;
+      customizationSection?: string;
+      plan: RevisionPlan;
+    }>,
+  ): Promise<GeneratedBlogBundle>;
+  proposeTopic(
+    input: Readonly<{ context: string; locale?: string }>,
+  ): Promise<string>;
 }
 
 export interface RepositoryPublicationPort {
   createDraft(
     input: Readonly<{
       branch: string;
-      files: readonly BlogFile[];
+      deletions?: readonly string[];
+      files?: readonly BlogFile[];
       requestId: string;
       slug: string;
     }>,
@@ -112,16 +150,37 @@ export interface RepositoryPublicationPort {
       pullRequestId: string;
     }>,
   ): Promise<Readonly<{ mergeCommitSha: string }>>;
+  readFileAtRef(
+    input: Readonly<{
+      path: string;
+      ref: string;
+    }>,
+  ): Promise<Uint8Array | null>;
   revalidate(
     input: Readonly<{
       expectedFiles: readonly string[];
       expectedHeadSha: string;
       pullRequestId: string;
+      /** When false, skip combined commit status (deletion PRs; no preview gate). Default true. */
+      requireCommitStatus?: boolean;
     }>,
   ): Promise<void>;
 }
 
 export interface DeploymentPort {
+  verifyAbsence(
+    input: Readonly<{
+      mergeCommitSha: string;
+      routes: readonly string[];
+    }>,
+  ): Promise<DeploymentEvidence>;
+  verifyDeletionRedirects(
+    input: Readonly<{
+      mergeCommitSha: string;
+      redirectTargets: Readonly<Record<string, string>>;
+      routes: readonly string[];
+    }>,
+  ): Promise<DeploymentEvidence>;
   waitForProduction(
     input: Readonly<{
       mergeCommitSha: string;
@@ -235,6 +294,7 @@ const jaccard = (left: Set<string>, right: Set<string>): number => {
   return intersection / union.size;
 };
 
+/** @deprecated Jaccard helper retained for unit tests; production uses decideSemanticSimilarity. */
 export const decideSimilarity = (
   input: CreateBlogDraftInput,
   catalog: readonly CatalogItem[],
@@ -418,7 +478,7 @@ export const renderWebbinArtifacts = async (
     publicationDate: string;
   }>,
 ): Promise<readonly BlogFile[]> => {
-  const bundle = generatedBlogBundleSchema.parse(input.bundle);
+  const bundle = adaptedGeneratedBlogBundleSchema.parse(input.bundle);
   const image = await toAvif(input.imageSource);
   await assertAvif(image);
   const esPath = `src/content/articulos-es/${bundle.slug}.md`;
@@ -455,6 +515,53 @@ export const renderWebbinArtifacts = async (
   return rawFiles.map((file) => ({ ...file, sha256: sha256(file.bytes) }));
 };
 
+export const applyDeterministicRevisionOps = (
+  bundle: GeneratedBlogBundle,
+  plan: RevisionPlan,
+): GeneratedBlogBundle => {
+  let next = structuredClone(bundle) as GeneratedBlogBundle;
+  for (const operation of plan.operations) {
+    if (operation.op === 'set_title') {
+      const localeArticle = next[operation.locale];
+      next = {
+        ...next,
+        [operation.locale]: {
+          ...localeArticle,
+          titulo: operation.titulo,
+          ...(operation.seoTitulo === undefined
+            ? {}
+            : { seoTitulo: operation.seoTitulo }),
+        },
+      };
+      continue;
+    }
+    if (operation.op === 'patch_metadata') {
+      const localeArticle = next[operation.locale];
+      next = {
+        ...next,
+        [operation.locale]: {
+          ...localeArticle,
+          ...operation.fields,
+        },
+      };
+    }
+  }
+  return next;
+};
+
+export type SurgicalRevisionInput = Readonly<{
+  priorBundle: GeneratedBlogBundle;
+  priorImage: Uint8Array;
+  priorHeadCommitSha?: string;
+  plan: RevisionPlan;
+  customizationSection?: string;
+  publicationDate: string;
+  manifest: ProjectManifest;
+  requestId: string;
+  requestVersionId: string;
+  onStage?: (node: string) => Promise<void>;
+}>;
+
 export class BlogExecutor {
   public constructor(
     private readonly catalog: ContentCatalogPort,
@@ -466,9 +573,27 @@ export class BlogExecutor {
   public async execute(
     input: BlogExecutionInput,
   ): Promise<BlogExecutionResult> {
+    await input.onStage?.('catalog_sync');
     const synchronized = await this.catalog.sync({ manifest: input.manifest });
+    let requestInput = input.input;
+    if (
+      requestInput.mode === 'brief' &&
+      requestInput.context !== undefined &&
+      requestInput.context.trim().length > 0
+    ) {
+      await input.onStage?.('interpret_brief');
+      const topic = await this.generation.proposeTopic({
+        context: requestInput.context,
+        ...(requestInput.sourceLocale === undefined
+          ? {}
+          : { locale: requestInput.sourceLocale }),
+      });
+      requestInput = { ...requestInput, topic };
+      await input.onTopicRefined?.(topic);
+    }
     const intent =
-      input.input.mode === 'brief' ? input.input.topic : input.input.title;
+      requestInput.mode === 'brief' ? requestInput.topic : requestInput.title;
+    await input.onStage?.('similarity');
     const vectors = await this.generation.embed([
       intent,
       ...synchronized.items.map((item) => item.title),
@@ -480,12 +605,18 @@ export class BlogExecutor {
         'A published article already has high topic overlap.',
         { code: 'high_content_overlap' },
       );
-    const category = decideCategory(input.input.category, synchronized.items);
-    const generated = generatedBlogBundleSchema.parse(
+    await input.onStage?.('category_decision');
+    const category = decideCategory(requestInput.category, synchronized.items);
+    await input.onStage?.('generate');
+    const generated = adaptedGeneratedBlogBundleSchema.parse(
       await this.generation.generate({
         catalog: synchronized.items,
         category,
-        request: input.input,
+        ...(input.customizationSection === undefined
+          ? {}
+          : { customizationSection: input.customizationSection }),
+        ...(input.editorial === undefined ? {} : { editorial: input.editorial }),
+        request: requestInput,
       }),
     );
     if (
@@ -499,16 +630,22 @@ export class BlogExecutor {
         'Generated category does not match the deterministic decision.',
       );
     const slug = slugifySpanish(generated.es.titulo);
-    const bundle = generatedBlogBundleSchema.parse({ ...generated, slug });
+    const bundle = adaptedGeneratedBlogBundleSchema.parse({
+      ...generated,
+      slug,
+    });
+    await input.onStage?.('prepare_image');
     const image = await this.generation.generateImage(bundle.imagePrompt);
     const publicationDate =
-      input.input.publicationDate ?? new Date().toISOString().slice(0, 10);
+      requestInput.publicationDate ?? new Date().toISOString().slice(0, 10);
+    await input.onStage?.('render_artifacts');
     const files = await renderWebbinArtifacts({
       bundle,
       imageSource: image,
       manifest: input.manifest,
       publicationDate,
     });
+    await input.onStage?.('create_draft');
     const branch = input.manifest.repository.branchPattern
       .replace('{capability}', 'create-blog')
       .replace('{request-id}', input.requestId)
@@ -532,6 +669,7 @@ export class BlogExecutor {
       `/es/articulos/${bundle.slug}`,
       `/articulos/${bundle.slug}`,
     ];
+    await input.onStage?.('wait_preview');
     const deployment = await this.deployments.waitForPreview({
       headCommitSha: publication.headCommitSha,
       routes,
@@ -563,9 +701,277 @@ export class BlogExecutor {
       catalogRevision: synchronized.revision,
       deployment,
       files,
+      intent,
       publication,
       similarity,
     };
+  }
+
+  public async applySurgicalRevision(
+    input: SurgicalRevisionInput,
+  ): Promise<
+    Readonly<{
+      bundle: GeneratedBlogBundle;
+      deployment: DeploymentEvidence;
+      files: readonly BlogFile[];
+      image: Uint8Array;
+      publication: DraftPublication;
+    }>
+  > {
+    if (input.plan.magnitude === 'full_regenerate')
+      throw new DomainError(
+        'validation_error',
+        'Surgical revision cannot apply full_regenerate plans.',
+      );
+    await input.onStage?.('apply_revision');
+    const needsAiPatch =
+      input.plan.magnitude === 'body_patch' ||
+      input.plan.operations.some(
+        (operation: RevisionOperation) => operation.op === 'patch_body',
+      );
+    let bundle: GeneratedBlogBundle;
+    if (needsAiPatch) {
+      bundle = adaptedGeneratedBlogBundleSchema.parse(
+        await this.generation.applyRevisionPatch({
+          bundle: input.priorBundle,
+          plan: input.plan,
+          ...(input.customizationSection === undefined
+            ? {}
+            : { customizationSection: input.customizationSection }),
+        }),
+      );
+    } else {
+      bundle = adaptedGeneratedBlogBundleSchema.parse(
+        applyDeterministicRevisionOps(input.priorBundle, input.plan),
+      );
+    }
+    if (input.plan.preservesSlug) {
+      bundle = adaptedGeneratedBlogBundleSchema.parse({
+        ...bundle,
+        slug: input.priorBundle.slug,
+        category: input.priorBundle.category,
+        categoryKind: input.priorBundle.categoryKind,
+        es: { ...bundle.es, categoria: input.priorBundle.es.categoria },
+        en: { ...bundle.en, categoria: input.priorBundle.en.categoria },
+      });
+    }
+    const replaceImage = input.plan.operations.find(
+      (operation: RevisionOperation) => operation.op === 'replace_image',
+    );
+    let image = input.priorImage;
+    if (input.plan.magnitude === 'image_only' || replaceImage !== undefined) {
+      await input.onStage?.('prepare_image');
+      const prompt =
+        replaceImage === undefined
+          ? bundle.imagePrompt
+          : `${bundle.imagePrompt}\nRevision: ${replaceImage.instruction}`;
+      image = await this.generation.generateImage(prompt);
+      bundle = adaptedGeneratedBlogBundleSchema.parse({
+        ...bundle,
+        imagePrompt: prompt,
+      });
+    }
+    await input.onStage?.('render_artifacts');
+    const files = await renderWebbinArtifacts({
+      bundle,
+      imageSource: image,
+      manifest: input.manifest,
+      publicationDate: input.publicationDate,
+    });
+    await input.onStage?.('create_draft');
+    const branch = input.manifest.repository.branchPattern
+      .replace('{capability}', 'create-blog')
+      .replace('{request-id}', input.requestId)
+      .replace('{slug}', bundle.slug);
+    const publication = await this.repository.createDraft({
+      branch,
+      files,
+      requestId: input.requestId,
+      slug: bundle.slug,
+    });
+    if (
+      input.priorHeadCommitSha !== undefined &&
+      publication.headCommitSha === input.priorHeadCommitSha
+    )
+      throw new DomainError(
+        'validation_error',
+        'Revision did not change draft files; refusing to bind the previous preview head.',
+      );
+    const routes = [
+      `/es/articulos/${bundle.slug}`,
+      `/articulos/${bundle.slug}`,
+    ];
+    await input.onStage?.('wait_preview');
+    const deployment = await this.deployments.waitForPreview({
+      headCommitSha: publication.headCommitSha,
+      routes,
+    });
+    if (
+      deployment.environment !== 'preview' ||
+      deployment.sha !== publication.headCommitSha ||
+      routes.some((route) => deployment.urls[route] === undefined)
+    )
+      throw new DomainError(
+        'policy_denied',
+        'Preview is not bound to the exact pull request head.',
+      );
+    return { bundle, deployment, files, image, publication };
+  }
+
+  public async interpretRevisionPlan(
+    input: Readonly<{
+      bundle: GeneratedBlogBundle;
+      feedback: string;
+      locale?: string;
+    }>,
+  ): Promise<RevisionPlan> {
+    return revisionPlanValidatedSchema.parse(
+      await this.generation.interpretRevision(input),
+    );
+  }
+
+  public async regenerateFromPlan(
+    input: Readonly<{
+      priorBundle: GeneratedBlogBundle;
+      plan: RevisionPlan;
+      request: CreateBlogDraftInput;
+      customizationSection?: string;
+      editorial?: BlogExecutionInput['editorial'];
+      publicationDate: string;
+      manifest: ProjectManifest;
+      requestId: string;
+      onStage?: (node: string) => Promise<void>;
+    }>,
+  ): Promise<
+    Readonly<{
+      bundle: GeneratedBlogBundle;
+      deployment: DeploymentEvidence;
+      files: readonly BlogFile[];
+      publication: DraftPublication;
+    }>
+  > {
+    await input.onStage?.('generate');
+    const category: CategoryDecision =
+      input.priorBundle.categoryKind === 'likely_typo'
+        ? {
+            category: input.priorBundle.category,
+            confidence: 1,
+            kind: 'likely_typo',
+            supplied: input.priorBundle.category,
+          }
+        : {
+            category: input.priorBundle.category,
+            kind: input.priorBundle.categoryKind,
+          };
+    const generated = adaptedGeneratedBlogBundleSchema.parse(
+      await this.generation.generate({
+        catalog: [],
+        category,
+        request: input.request,
+        ...(input.customizationSection === undefined
+          ? {}
+          : { customizationSection: input.customizationSection }),
+        ...(input.editorial === undefined ? {} : { editorial: input.editorial }),
+      }),
+    );
+    const slug = input.plan.preservesSlug
+      ? input.priorBundle.slug
+      : slugifySpanish(generated.es.titulo);
+    let bundle = adaptedGeneratedBlogBundleSchema.parse({
+      ...generated,
+      slug,
+      category: input.priorBundle.category,
+      categoryKind: input.priorBundle.categoryKind,
+      es: { ...generated.es, categoria: input.priorBundle.category },
+      en: { ...generated.en, categoria: input.priorBundle.category },
+    });
+    await input.onStage?.('prepare_image');
+    const image = await this.generation.generateImage(bundle.imagePrompt);
+    await input.onStage?.('render_artifacts');
+    const files = await renderWebbinArtifacts({
+      bundle,
+      imageSource: image,
+      manifest: input.manifest,
+      publicationDate: input.publicationDate,
+    });
+    await input.onStage?.('create_draft');
+    const branch = input.manifest.repository.branchPattern
+      .replace('{capability}', 'create-blog')
+      .replace('{request-id}', input.requestId)
+      .replace('{slug}', bundle.slug);
+    const publication = await this.repository.createDraft({
+      branch,
+      files,
+      requestId: input.requestId,
+      slug: bundle.slug,
+    });
+    const routes = [
+      `/es/articulos/${bundle.slug}`,
+      `/articulos/${bundle.slug}`,
+    ];
+    await input.onStage?.('wait_preview');
+    const deployment = await this.deployments.waitForPreview({
+      headCommitSha: publication.headCommitSha,
+      routes,
+    });
+    if (
+      deployment.environment !== 'preview' ||
+      deployment.sha !== publication.headCommitSha ||
+      routes.some((route) => deployment.urls[route] === undefined)
+    )
+      throw new DomainError(
+        'policy_denied',
+        'Preview is not bound to the exact pull request head.',
+      );
+    return { bundle, deployment, files, publication };
+  }
+
+  public async mergeApprovedPreview(
+    input: Readonly<{
+      deploymentId: string;
+      expectedFiles: readonly string[];
+      headCommitSha: string;
+      previewSha: string;
+      pullRequestId: string;
+    }>,
+  ): Promise<Readonly<{ mergeCommitSha: string }>> {
+    if (input.previewSha !== input.headCommitSha)
+      throw new DomainError('conflict_error', 'Preview approval is stale.');
+    await this.repository.revalidate({
+      expectedFiles: input.expectedFiles,
+      expectedHeadSha: input.headCommitSha,
+      pullRequestId: input.pullRequestId,
+    });
+    return this.repository.merge({
+      expectedHeadSha: input.headCommitSha,
+      pullRequestId: input.pullRequestId,
+    });
+  }
+
+  public async verifyProduction(
+    input: Readonly<{
+      mergeCommitSha: string;
+      routes: readonly string[];
+    }>,
+  ): Promise<
+    Readonly<{
+      deployment: DeploymentEvidence;
+      mergeCommitSha: string;
+    }>
+  > {
+    const deployment = await this.deployments.waitForProduction({
+      mergeCommitSha: input.mergeCommitSha,
+      routes: input.routes,
+    });
+    if (
+      deployment.environment !== 'production' ||
+      deployment.sha !== input.mergeCommitSha
+    )
+      throw new DomainError(
+        'provider_final',
+        'Production deployment does not contain the merge commit.',
+      );
+    return { deployment, mergeCommitSha: input.mergeCommitSha };
   }
 
   public async publish(
@@ -583,29 +989,12 @@ export class BlogExecutor {
       mergeCommitSha: string;
     }>
   > {
-    if (input.previewSha !== input.headCommitSha)
-      throw new DomainError('conflict_error', 'Preview approval is stale.');
-    await this.repository.revalidate({
-      expectedFiles: input.expectedFiles,
-      expectedHeadSha: input.headCommitSha,
-      pullRequestId: input.pullRequestId,
-    });
-    const merged = await this.repository.merge({
-      expectedHeadSha: input.headCommitSha,
-      pullRequestId: input.pullRequestId,
-    });
-    const deployment = await this.deployments.waitForProduction({
+    const merged = await this.mergeApprovedPreview(input);
+    return this.verifyProduction({
       mergeCommitSha: merged.mergeCommitSha,
       routes: input.routes,
     });
-    if (
-      deployment.environment !== 'production' ||
-      deployment.sha !== merged.mergeCommitSha
-    )
-      throw new DomainError(
-        'provider_final',
-        'Production deployment does not contain the merge commit.',
-      );
-    return { deployment, mergeCommitSha: merged.mergeCommitSha };
   }
 }
+
+export * from './delete-blog.js';

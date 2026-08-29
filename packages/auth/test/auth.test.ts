@@ -8,7 +8,8 @@ import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 
 import { createDatabase, runMigrations, schema } from '@binflow/db';
 import {
-  AUTH_SESSION_FRESH_SECONDS,
+  AUTH_SESSION_IDLE_SECONDS,
+  AUTH_SESSION_UPDATE_SECONDS,
   bootstrapPlatformOwner,
   createAuthSecretFile,
   createBinflowAuth,
@@ -224,10 +225,10 @@ describeDatabase('platform owner authentication', () => {
       .select({ expiresAt: schema.authSessions.expiresAt })
       .from(schema.authSessions)
       .limit(1);
-    const remainingHours =
-      (persistedSession[0]!.expiresAt.getTime() - Date.now()) / 3_600_000;
-    expect(remainingHours).toBeGreaterThan(11.9);
-    expect(remainingHours).toBeLessThanOrEqual(12);
+    const remainingMinutes =
+      (persistedSession[0]!.expiresAt.getTime() - Date.now()) / 60_000;
+    expect(remainingMinutes).toBeGreaterThan(29.9);
+    expect(remainingMinutes).toBeLessThanOrEqual(30);
     await expect(
       requirePlatformOwnerSession(auth, new Headers({ cookie: jar.header() })),
     ).rejects.toMatchObject({ category: 'authorization_error' });
@@ -465,7 +466,7 @@ describeDatabase('platform owner authentication', () => {
     expect(reused.status).toBeGreaterThanOrEqual(400);
   });
 
-  it('rejects a session outside the five-minute freshness window', async () => {
+  it('uses rolling 30-minute inactivity without a five-minute mutation gate', async () => {
     await bootstrap();
     const auth = runtime();
     const jar = new CookieJar();
@@ -475,9 +476,26 @@ describeDatabase('platform owner authentication', () => {
       { email: ownerEmail, password: ownerPassword },
       jar,
     );
+    expect(AUTH_SESSION_IDLE_SECONDS).toBe(30 * 60);
+    expect(AUTH_SESSION_UPDATE_SECONDS).toBe(60);
+
     await database.db.execute(sql`
       update auth_sessions
-      set created_at = now() - (${AUTH_SESSION_FRESH_SECONDS + 1} * interval '1 second')
+      set created_at = now() - interval '10 minutes',
+          updated_at = now() - interval '10 minutes'
+    `);
+
+    await expect(
+      requirePlatformOwnerSession(auth, new Headers({ cookie: jar.header() }), {
+        fresh: true,
+        twoFactor: false,
+      }),
+    ).resolves.toMatchObject({ fresh: true });
+
+    await database.db.execute(sql`
+      update auth_sessions
+      set expires_at = now() + interval '1 hour',
+          updated_at = now() - (${AUTH_SESSION_IDLE_SECONDS + 1} * interval '1 second')
     `);
 
     await expect(
@@ -486,8 +504,8 @@ describeDatabase('platform owner authentication', () => {
         twoFactor: false,
       }),
     ).rejects.toMatchObject({
-      category: 'authorization_error',
-      metadata: { code: 'fresh_session_required' },
+      category: 'authentication_error',
+      metadata: { code: 'session_idle_expired' },
     });
   });
 });

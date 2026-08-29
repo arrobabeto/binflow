@@ -8,7 +8,7 @@
 - Multi-tenant-ready isolation with one active project/user per enrollment.
 - Admin dashboard with password + TOTP authentication.
 - Managed onboarding for the `astro_repo` profile.
-- PostgreSQL, Redis/BullMQ, LangGraph checkpoints and S3-compatible artifacts.
+- PostgreSQL, Redis/BullMQ, workflow checkpoints and S3-compatible artifacts.
 - Per-client OpenAI credential; no global fallback.
 - Structured audit, model usage and cost records.
 - Local operation with production-ready container definitions.

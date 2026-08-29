@@ -4,7 +4,14 @@ import type {
   Enrollment,
   EnrollmentValidationAttempt,
   ProjectManifestResponse,
+  ToolCatalogResponse,
 } from '@binflow/contracts';
+import {
+  buildCapabilityBindings,
+  capabilityKey,
+  enabledCapabilityKeys,
+} from '../../lib/capability-bindings';
+import { createPendingPairingRefresh } from '../../lib/pending-pairing-refresh';
 
 const route = useRoute();
 const id = String(route.params.id);
@@ -22,6 +29,26 @@ const capabilityUrl = computed(() =>
 );
 const { data: capabilityState, refresh: refreshCapabilities } =
   await useFetch<CapabilityCatalogResponse>(capabilityUrl);
+const { data: toolCatalog } = await useFetch<ToolCatalogResponse>(
+  '/api/v1/tools',
+);
+const enabledToolKeys = ref<Set<string>>(new Set());
+const capabilityMessage = ref('');
+
+watch(
+  capabilityState,
+  (value) => {
+    enabledToolKeys.value = enabledCapabilityKeys(value);
+  },
+  { immediate: true },
+);
+
+const canAssignTools = computed(
+  () =>
+    manifestState.value?.manifest !== null &&
+    manifestState.value?.manifest !== undefined &&
+    enrollment.value?.projectId !== undefined,
+);
 const form = reactive({
   clientContactEmail: '',
   clientConversationLocale: 'en',
@@ -47,6 +74,30 @@ const attempts = ref<EnrollmentValidationAttempt[]>([]);
 const pairingUrl = ref('');
 const message = ref('');
 const busy = ref(false);
+
+let pairingRefresh: ReturnType<typeof createPendingPairingRefresh> | undefined;
+const onVisibilityChange = () => {
+  if (document.visibilityState === 'visible') pairingRefresh?.visible();
+};
+onMounted(() => {
+  pairingRefresh = createPendingPairingRefresh({
+    clearInterval: (timer) => {
+      globalThis.clearInterval(timer);
+    },
+    refresh,
+    setInterval: (callback, delay) => globalThis.setInterval(callback, delay),
+  });
+  pairingRefresh.setPending(enrollment.value?.state === 'pairing_pending');
+  document.addEventListener('visibilitychange', onVisibilityChange);
+});
+watch(
+  () => enrollment.value?.state,
+  (state) => pairingRefresh?.setPending(state === 'pairing_pending'),
+);
+onBeforeUnmount(() => {
+  pairingRefresh?.stop();
+  document.removeEventListener('visibilitychange', onVisibilityChange);
+});
 
 watchEffect(() => {
   const config = enrollment.value?.configuration;
@@ -170,6 +221,38 @@ const createPairing = () =>
     pairingUrl.value = result.pairingUrl;
     message.value = `Pairing link expires at ${result.expiresAt}. Copy it now; it will not be shown again.`;
   });
+const toggleTool = (toolId: string, version: number, enabled: boolean) => {
+  const key = capabilityKey(toolId, version);
+  const next = new Set(enabledToolKeys.value);
+  if (enabled) next.add(key);
+  else next.delete(key);
+  enabledToolKeys.value = next;
+};
+const saveCapabilities = () =>
+  run(async () => {
+    if (enrollment.value?.projectId === undefined) return;
+    const bindings = buildCapabilityBindings(
+      toolCatalog.value?.items ?? [],
+      enabledToolKeys.value,
+    );
+    if (bindings.length === 0) {
+      capabilityMessage.value = 'At least one tool must stay enabled.';
+      return;
+    }
+    capabilityState.value = await $fetch<CapabilityCatalogResponse>(
+      `/api/v1/projects/${enrollment.value.projectId}/capabilities`,
+      {
+        body: { bindings },
+        headers: {
+          'Content-Type': 'application/json',
+          'Idempotency-Key': crypto.randomUUID(),
+        },
+        method: 'PUT',
+      },
+    );
+    enabledToolKeys.value = enabledCapabilityKeys(capabilityState.value);
+    capabilityMessage.value = 'Tool assignment saved.';
+  });
 </script>
 
 <template>
@@ -261,6 +344,11 @@ const createPairing = () =>
           <UFormField class="sm:col-span-2" label="Audience"
             ><UTextarea v-model="form.editorialAudience" class="w-full"
           /></UFormField>
+          <div class="md:col-span-2">
+            <UButton to="/customizations" color="neutral" variant="soft"
+              >Customize tools</UButton
+            >
+          </div>
           <UFormField class="sm:col-span-2" label="Research policy"
             ><UTextarea v-model="form.researchPolicy" class="w-full"
           /></UFormField>
@@ -388,28 +476,43 @@ const createPairing = () =>
         </UCard>
         <UCard>
           <p class="font-semibold">Enabled tools</p>
+          <p class="mt-1 text-sm text-muted">
+            Assign code-owned capabilities after validation. Each change creates a
+            new manifest revision.
+          </p>
           <div
-            v-for="capability in capabilityState?.items ?? []"
-            :key="`${capability.id}@${capability.version}`"
-            class="mt-3 rounded-lg border border-default p-3 text-sm"
+            v-for="tool in toolCatalog?.items ?? []"
+            :key="`${tool.id}@${tool.version}`"
+            class="mt-3 flex items-start justify-between gap-3 rounded-lg border border-default p-3 text-sm"
           >
-            <div class="flex items-center justify-between gap-3">
-              <p class="font-medium">{{ capability.displayName }}</p>
-              <UBadge color="success" variant="soft">Enabled</UBadge>
+            <div>
+              <p class="font-medium">{{ tool.displayName }}</p>
+              <p class="mt-1 font-mono text-muted">
+                {{ tool.id }}@{{ tool.version }} · {{ tool.command }}
+              </p>
             </div>
-            <p class="mt-1 text-muted">
-              {{ capability.id }}@{{ capability.version }} ·
-              {{ capability.command }} · {{ capability.access }}
-            </p>
-            <p class="mt-1 text-muted">
-              Medium risk · exact preview and client approval required
-            </p>
+            <USwitch
+              :disabled="!canAssignTools || busy"
+              :model-value="
+                enabledToolKeys.has(capabilityKey(tool.id, tool.version))
+              "
+              @update:model-value="toggleTool(tool.id, tool.version, $event)"
+            />
           </div>
-          <p
-            v-if="(capabilityState?.items.length ?? 0) === 0"
-            class="mt-2 text-sm text-muted"
-          >
+          <p v-if="!canAssignTools" class="mt-3 text-sm text-muted">
             Validate the enrollment to bind the code-owned tool catalog.
+          </p>
+          <UButton
+            v-else
+            class="mt-4 w-full"
+            color="neutral"
+            variant="outline"
+            :loading="busy"
+            @click="saveCapabilities"
+            >Save tool assignment</UButton
+          >
+          <p v-if="capabilityMessage" class="mt-3 text-sm text-muted">
+            {{ capabilityMessage }}
           </p>
         </UCard>
         <UAlert v-if="message" :description="message" />

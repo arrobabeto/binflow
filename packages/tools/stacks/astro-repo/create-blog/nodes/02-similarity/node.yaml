@@ -1,0 +1,6 @@
+kind: agent
+nodeKind: content.similarity_embed@1
+label: Similarity analysis
+workload: embedding
+model: text-embedding-3-small
+acceptsClientCustomization: false

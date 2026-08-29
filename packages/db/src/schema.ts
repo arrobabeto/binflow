@@ -16,6 +16,7 @@ import {
 } from 'drizzle-orm/pg-core';
 
 import type {
+  CapabilityInput,
   CreateBlogDraftInput,
   EnrollmentConfiguration,
   ProjectManifest,
@@ -99,6 +100,7 @@ export const requestState = pgEnum('request_state', [
   'PREVIEW_DEPLOYING',
   'PREVIEW_READY',
   'REVISION_REQUESTED',
+  'AWAITING_REVISION_PLAN_CONFIRMATION',
   'AWAITING_CLIENT_APPROVAL',
   'AWAITING_ADMIN_APPROVAL',
   'APPROVED_FOR_PUBLISH',
@@ -1049,7 +1051,7 @@ export const requestVersions = pgTable(
     manifestVersionId: text('manifest_version_id').notNull(),
     capabilityVersion: integer('capability_version').notNull(),
     interpretedInput: jsonb('interpreted_input')
-      .$type<CreateBlogDraftInput>()
+      .$type<CapabilityInput>()
       .notNull(),
     plan: jsonb('plan').notNull(),
     confirmedAt: timestamp('confirmed_at', { withTimezone: true }),
@@ -1895,6 +1897,44 @@ export const processedEvents = pgTable(
       name: 'processed_events_project_tenant_fk',
     }),
     pgPolicy('processed_events_tenant_isolation', {
+      for: 'all',
+      using: sql`${table.tenantId} = nullif(current_setting('app.tenant_id', true), '') OR current_setting('app.platform_owner', true) = 'true'`,
+      withCheck: sql`${table.tenantId} = nullif(current_setting('app.tenant_id', true), '') OR current_setting('app.platform_owner', true) = 'true'`,
+    }),
+  ],
+).enableRLS();
+
+export const projectToolCustomizations = pgTable(
+  'project_tool_customizations',
+  {
+    id: text('id').primaryKey(),
+    tenantId: text('tenant_id').notNull(),
+    projectId: text('project_id').notNull(),
+    capabilityId: text('capability_id').notNull(),
+    version: integer('version').notNull(),
+    body: text('body').notNull(),
+    sha256: text('sha256').notNull(),
+    createdBy: text('created_by').notNull(),
+    createdAt: timestamp('created_at', { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (table) => [
+    uniqueIndex('project_tool_customizations_project_capability_version').on(
+      table.projectId,
+      table.capabilityId,
+      table.version,
+    ),
+    foreignKey({
+      columns: [table.projectId, table.tenantId],
+      foreignColumns: [projects.id, projects.tenantId],
+      name: 'project_tool_customizations_project_tenant_fk',
+    }),
+    check(
+      'project_tool_customizations_version_positive',
+      sql`${table.version} > 0`,
+    ),
+    pgPolicy('project_tool_customizations_tenant_isolation', {
       for: 'all',
       using: sql`${table.tenantId} = nullif(current_setting('app.tenant_id', true), '') OR current_setting('app.platform_owner', true) = 'true'`,
       withCheck: sql`${table.tenantId} = nullif(current_setting('app.tenant_id', true), '') OR current_setting('app.platform_owner', true) = 'true'`,

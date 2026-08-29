@@ -1,0 +1,29 @@
+edges:
+  - from: catalog_sync
+    to: resolve_target
+  - from: resolve_target
+    to: validate_deletion
+  - from: validate_deletion
+    to: render_deletion_artifacts
+  - from: render_deletion_artifacts
+    to: open_deletion_pr
+  - from: open_deletion_pr
+    to: awaiting_admin_approval
+  - from: awaiting_admin_approval
+    to: merge_or_publish
+    when: approval.client_publish
+  - from: merge_or_publish
+    to: verify_production
+  - from: verify_production
+    to: completed
+nodes:
+  - id: catalog_sync
+  - id: resolve_target
+  - id: validate_deletion
+  - id: render_deletion_artifacts
+  - id: open_deletion_pr
+  - id: awaiting_admin_approval
+  - id: merge_or_publish
+  - id: verify_production
+  - id: completed
+version: stacks/astro-repo/delete-blog@1

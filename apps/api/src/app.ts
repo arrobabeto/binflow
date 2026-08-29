@@ -19,10 +19,18 @@ import {
   projectManifestResponseSchema,
   readinessResponseSchema,
   requestDetailSchema,
+  requestListQuerySchema,
   requestPageSchema,
   requestRevisionInputSchema,
   requestSummarySchema,
+  toolAssignmentsResponseSchema,
+  toolCatalogResponseSchema,
+  toolCustomizationDetailSchema,
+  toolCustomizationSummarySchema,
+  toolGraphResponseSchema,
   updateEnrollmentInputSchema,
+  updateProjectCapabilitiesInputSchema,
+  uploadToolCustomizationInputSchema,
   type HealthResponse,
   type PlatformOwnerSessionResponse,
 } from '@binflow/contracts';
@@ -34,6 +42,7 @@ import {
 import { DomainError } from '@binflow/domain';
 import type { IntegrationAdminService } from '@binflow/integration-admin';
 import type { EnrollmentService } from '@binflow/onboarding';
+import type { ToolCatalogService } from '@binflow/tools';
 import type { WorkflowService } from '@binflow/workflows';
 
 import { normalizeApiError } from './errors.js';
@@ -55,6 +64,7 @@ export const buildApp = (
       | 'evaluateActivation'
       | 'list'
       | 'update'
+      | 'updateCapabilities'
       | 'validate'
     >;
     integrationService?: Pick<
@@ -62,6 +72,15 @@ export const buildApp = (
       'create' | 'list' | 'revoke' | 'verify'
     >;
     readinessCheck?: () => Promise<unknown>;
+    toolCatalogService?: Pick<
+      ToolCatalogService,
+      | 'getCurrentCustomization'
+      | 'getGraph'
+      | 'getTemplate'
+      | 'listAssignments'
+      | 'listCatalog'
+      | 'uploadCustomization'
+    >;
     workflowService?: Pick<
       WorkflowService,
       | 'approveAsAdmin'
@@ -85,6 +104,7 @@ export const buildApp = (
           requirePlatformOwnerSession(auth, headers, sessionOptions));
   const enrollmentService = options.enrollmentService;
   const integrationService = options.integrationService;
+  const toolCatalogService = options.toolCatalogService;
   const workflowService = options.workflowService;
   const readinessCheck = options.readinessCheck;
   const trustedOrigin = new URL(
@@ -227,6 +247,17 @@ export const buildApp = (
     }
     return workflowService;
   };
+  const requireToolCatalogService = (): NonNullable<
+    typeof toolCatalogService
+  > => {
+    if (toolCatalogService === undefined) {
+      throw new DomainError(
+        'internal_error',
+        'Tool catalog runtime is unavailable.',
+      );
+    }
+    return toolCatalogService;
+  };
   const requireMutationHeaders = (
     headers: RequestHeaders,
     requireVersion = true,
@@ -290,11 +321,18 @@ export const buildApp = (
 
   app.get('/api/v1/requests', async (request) => {
     const session = await requireSession(request);
-    const items = await requireWorkflowService().list(
-      session.actorId,
-      request.id,
+    const parsed = requestListQuerySchema.parse(request.query);
+    const query = {
+      limit: parsed.limit,
+      ...(parsed.cursor === undefined ? {} : { cursor: parsed.cursor }),
+      ...(parsed.needsAdminApproval === undefined
+        ? {}
+        : { needsAdminApproval: parsed.needsAdminApproval }),
+      ...(parsed.projectId === undefined ? {} : { projectId: parsed.projectId }),
+    };
+    return requestPageSchema.parse(
+      await requireWorkflowService().list(session.actorId, request.id, query),
     );
-    return requestPageSchema.parse({ items, nextCursor: null });
   });
 
   app.get('/api/v1/admin/telegram/target', async (request) => {
@@ -490,6 +528,26 @@ export const buildApp = (
     },
   );
 
+  app.put<{ Params: { projectId: string } }>(
+    '/api/v1/projects/:projectId/capabilities',
+    async (request) => {
+      const session = await requireSession(request, true);
+      const mutation = requireMutationHeaders(request.headers, false);
+      void mutation;
+      return capabilityCatalogResponseSchema.parse(
+        await requireService().updateCapabilities(
+          request.params.projectId,
+          updateProjectCapabilitiesInputSchema.parse(request.body),
+          {
+            actorId: session.actorId,
+            correlationId: request.id,
+            idempotencyKey: mutation.idempotencyKey,
+          },
+        ),
+      );
+    },
+  );
+
   app.get<{ Params: { id: string } }>(
     '/api/v1/admin/enrollments/:id/manifest',
     async (request) => {
@@ -601,6 +659,88 @@ export const buildApp = (
       return activationBlockersResponseSchema.parse(result);
     },
   );
+
+  app.get('/api/v1/tools', async (request) => {
+    await requireSession(request);
+    return toolCatalogResponseSchema.parse(
+      await requireToolCatalogService().listCatalog(),
+    );
+  });
+
+  app.get<{ Params: { toolId: string } }>(
+    '/api/v1/tools/:toolId/graph',
+    async (request) => {
+      await requireSession(request);
+      return toolGraphResponseSchema.parse(
+        await requireToolCatalogService().getGraph(request.params.toolId),
+      );
+    },
+  );
+
+  app.get<{ Params: { toolId: string } }>(
+    '/api/v1/tools/:toolId/customization-template',
+    async (request, reply) => {
+      await requireSession(request);
+      const template = await requireToolCatalogService().getTemplate(
+        request.params.toolId,
+      );
+      void reply.header('content-type', 'text/markdown; charset=utf-8');
+      return template;
+    },
+  );
+
+  app.get<{ Params: { toolId: string } }>(
+    '/api/v1/tools/:toolId/assignments',
+    async (request) => {
+      await requireSession(request);
+      return toolAssignmentsResponseSchema.parse(
+        await requireToolCatalogService().listAssignments(request.params.toolId),
+      );
+    },
+  );
+
+  app.get<{
+    Querystring: { capabilityId?: string; projectId?: string };
+  }>('/api/v1/tool-customizations/current', async (request) => {
+    const session = await requireSession(request);
+    const projectId = request.query.projectId;
+    const capabilityId = request.query.capabilityId;
+    if (projectId === undefined || capabilityId === undefined)
+      throw new DomainError(
+        'validation_error',
+        'projectId and capabilityId are required.',
+      );
+    const current = await requireToolCatalogService().getCurrentCustomization(
+      projectId,
+      capabilityId,
+      session.actorId,
+      request.id,
+    );
+    if (current === null) return null;
+    return toolCustomizationDetailSchema.parse(current);
+  });
+
+  app.post('/api/v1/tool-customizations', async (request) => {
+    const session = await requireSession(request, true);
+    const mutation = requireMutationHeaders(request.headers, false);
+    const body = uploadToolCustomizationInputSchema.parse(request.body);
+    const [enrollment] = (
+      await requireService().list(session.actorId, request.id)
+    ).filter((item) => item.projectId === body.projectId);
+    if (enrollment === undefined)
+      throw new DomainError(
+        'validation_error',
+        'Project was not found for customization upload.',
+      );
+    void mutation;
+    return toolCustomizationSummarySchema.parse(
+      await requireToolCatalogService().uploadCustomization(body, {
+        actorId: session.actorId,
+        correlationId: request.id,
+        tenantId: enrollment.tenantId,
+      }),
+    );
+  });
 
   return app;
 };

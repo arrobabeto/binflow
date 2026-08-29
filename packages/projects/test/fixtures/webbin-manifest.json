@@ -1,0 +1,47 @@
+{
+  "content": {
+    "editablePaths": [
+      "src/content/proyectos/*.md",
+      "src/content/proyectos-es/*.md",
+      "public/images/projects/*.jpg",
+      "public/images/projects/*.avif"
+    ],
+    "portfolio": {
+      "collections": {
+        "en": {
+          "directory": "src/content/proyectos",
+          "routePrefix": "/proyectos"
+        },
+        "es": {
+          "directory": "src/content/proyectos-es",
+          "routePrefix": "/es/proyectos"
+        }
+      },
+      "editablePaths": [
+        "src/content/proyectos/*.md",
+        "src/content/proyectos-es/*.md",
+        "public/images/projects/*.jpg",
+        "public/images/projects/*.avif"
+      ],
+      "enumFields": {
+        "estado": ["Publicado", "En progreso", "Concepto"],
+        "tipo": ["Sitio web", "Landing page", "Aplicacion web", "Ecommerce"]
+      },
+      "frontmatterFields": ["descriptor", "tipo", "estado"],
+      "imageDirectory": "public/images/projects",
+      "requiredFrontmatter": ["descriptor", "tipo", "estado", "confidencial", "destacada"],
+      "sectionHeadings": {
+        "en": {
+          "challenge": "Challenge",
+          "outcome": "Outcome",
+          "solution": "Solution"
+        },
+        "es": {
+          "challenge": "Reto",
+          "outcome": "Resultado",
+          "solution": "Solución"
+        }
+      }
+    }
+  }
+}

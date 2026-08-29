@@ -20,9 +20,10 @@ import {
 import { DomainError } from '@binflow/domain';
 import { loadSecureSecretFile } from '@binflow/secrets';
 
-export const AUTH_SESSION_EXPIRES_SECONDS = 60 * 60 * 12;
-export const AUTH_SESSION_FRESH_SECONDS = 60 * 5;
-export const AUTH_SESSION_UPDATE_SECONDS = 60 * 60;
+export const AUTH_SESSION_IDLE_SECONDS = 60 * 30;
+export const AUTH_SESSION_EXPIRES_SECONDS = AUTH_SESSION_IDLE_SECONDS;
+export const AUTH_SESSION_FRESH_SECONDS = 0;
+export const AUTH_SESSION_UPDATE_SECONDS = 60;
 export const AUTH_SECRET_MIN_CHARACTERS = 32;
 
 export const defaultAuthSecretPath = (): string =>
@@ -274,20 +275,21 @@ export const requirePlatformOwnerSession = async (
       'Two-factor enrollment is required.',
     );
   }
-  const createdAt = new Date(resolved.session.createdAt);
-  const fresh =
-    Date.now() - createdAt.getTime() <= AUTH_SESSION_FRESH_SECONDS * 1000;
-  if (options.fresh === true && !fresh) {
+  const updatedAt = new Date(resolved.session.updatedAt);
+  const active =
+    Number.isFinite(updatedAt.getTime()) &&
+    Date.now() - updatedAt.getTime() <= AUTH_SESSION_IDLE_SECONDS * 1000;
+  if (!active) {
     throw new DomainError(
-      'authorization_error',
-      'A fresh session is required.',
-      { code: 'fresh_session_required' },
+      'authentication_error',
+      'The dashboard session expired after inactivity.',
+      { code: 'session_idle_expired' },
     );
   }
   return {
     actorId: resolved.user.id,
     email: resolved.user.email,
-    fresh,
+    fresh: true,
     sessionId: resolved.session.id,
   };
 };

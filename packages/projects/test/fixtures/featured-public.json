@@ -1,0 +1,45 @@
+{
+  "slug": "featured-public-saas-site",
+  "confidencial": false,
+  "destacada": true,
+  "fecha": "2026-03-15",
+  "url": "https://vaton.io/",
+  "imagePrompt": "Bright abstract SaaS dashboard scene without logos.",
+  "rationale": {
+    "summary": "Featured public portfolio entry with named product context.",
+    "evidenceRefs": ["https://vaton.io/"],
+    "limitations": []
+  },
+  "es": {
+    "descriptor": "Sitio SaaS público con onboarding guiado",
+    "clienteTipo": "B2B SaaS",
+    "industria": "Software",
+    "rol": "Design and development",
+    "tipo": "Sitio web",
+    "estado": "Publicado",
+    "resumen": "Sitio orientado a conversión con onboarding claro para equipos técnicos.",
+    "impacto": "Publicó una experiencia coherente para evaluar el producto sin depender de demos manuales.",
+    "stack": ["Astro", "TypeScript", "Tailwind CSS"],
+    "sections": {
+      "challenge": "El producto necesitaba una presencia pública clara que explicara el valor sin depender de llamadas comerciales para cada visitante. La navegación anterior mezclaba mensajes genéricos y no enseñaba el flujo principal del producto. También debía mantener una voz técnica creíble para compradores B2B.",
+      "solution": "Se diseñó y desarrolló un sitio con arquitectura de contenido clara, secciones orientadas a casos de uso y llamadas a la acción alineadas con el recorrido de evaluación. El stack Astro permitió páginas rápidas, componentes reutilizables y despliegues controlados.",
+      "outcome": "El sitio publicado presenta el producto con una narrativa directa y enlaces verificables. No se reportan métricas de conversión verificadas en este caso."
+    }
+  },
+  "en": {
+    "descriptor": "Public SaaS site with guided onboarding",
+    "clienteTipo": "B2B SaaS",
+    "industria": "Software",
+    "rol": "Design and development",
+    "tipo": "Sitio web",
+    "estado": "Publicado",
+    "resumen": "Conversion-focused site with a clear onboarding story for technical teams.",
+    "impacto": "Shipped a coherent evaluation experience without relying on manual demos for every visitor.",
+    "stack": ["Astro", "TypeScript", "Tailwind CSS"],
+    "sections": {
+      "challenge": "The product needed a public presence that explained value without requiring a sales call for every visitor. The previous navigation mixed generic messaging and did not show the core product flow. The site also had to sound credible to technical B2B buyers.",
+      "solution": "A content architecture with use-case sections and evaluation CTAs was designed and built. Astro enabled fast pages, reusable components and controlled deployments.",
+      "outcome": "The published site presents the product with direct narrative and verifiable links. No verified conversion metrics are reported for this case."
+    }
+  }
+}

@@ -1,0 +1,7 @@
+kind: effect
+nodeKind: content.catalog_sync@1
+label: Sync content catalog
+acceptsClientCustomization: false
+permissions:
+  - github:metadata:read
+  - github:contents:read

@@ -1,0 +1,13 @@
+{
+  "mode": "brief",
+  "projectId": "019fef7e-63d1-755d-bbed-1fca769353c5",
+  "brief": "Headless Nuxt site with Calendly booking for language courses.",
+  "url": "https://www.example.com/",
+  "tipo": "Sitio web",
+  "estado": "Publicado",
+  "fecha": "2026-06-01",
+  "destacada": false,
+  "confidencial": true,
+  "stack": ["Nuxt 3", "Vue", "Orbitype"],
+  "sourceLocale": "es"
+}

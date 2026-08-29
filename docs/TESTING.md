@@ -31,8 +31,8 @@
 - Category normalization/classification inputs.
 - Path/field allowlists and manifest validation.
 - Blog capability category normalization, overlap blocking, bilingual
-  frontmatter rendering, exact three-file path policy, true AVIF validation,
-  budget ceilings and approval invalidation.
+  frontmatter rendering, English title/heading adaptation, exact three-file
+  path policy, true AVIF validation, budget ceilings and approval invalidation.
 - Budget, retention, idempotency and pairing-token rules.
 - Global-profile narrowing, Webbin ES/EN/source/slug invariants and rejection of
   German or `ask_each_action` for the pilot.
@@ -46,9 +46,16 @@
 - Strict per-provider evidence schemas reject secret-bearing or extra fields before persistence/output.
 - Dashboard credential tests cover strict secret-bearing unions, keyed
   idempotency fingerprints, redacted responses/events, optimistic revisions,
-  fresh-session gates and same-origin rejection.
+  non-idle session gates and same-origin rejection.
 - Dashboard theme tests assert that every solid semantic action color resolves
   to a generated palette token, preventing invisible white action text.
+- Dashboard authentication regressions prove that successful TOTP and backup
+  verification force a revalidated document navigation to the authenticated
+  route instead of reusing an anonymous Nuxt session payload.
+- Dashboard session regressions prove rolling 30-minute server expiry,
+  automatic idle sign-out, restored-page revalidation and no usable protected
+  navigation after expiry. Incomplete SSR session payloads are treated as
+  unauthenticated rather than throwing.
 - Runtime KEK tests accept supported read-only Docker-secret modes, accept the
   Docker Desktop `0600` compatibility form only with a proven `EROFS` mount,
   retain exact `0600` for host files and reject any writable mount.
@@ -57,11 +64,28 @@
 
 - OpenAI structured outputs, refusal and usage normalization.
 - Chat SDK Telegram messages, commands, buttons, files and transport modes.
+- Telegram adapter tests prove that `/start <token>` and other bot commands use
+  the slash-command dispatcher, preserve their arguments and receive the same
+  authorized application reply as ordinary direct messages.
+- Telegram adapter tests prove that action tokens render as inline buttons
+  rather than `/action` text for plan and preview, that publication-complete
+  notices use live-origin URL buttons, that `callback_query` dispatch uses the
+  clicking user and token as `/action <token>`, and that typed `/action`
+  remains a working fallback.
+- Blog and contract tests reject an English bundle that copies Spanish
+  `titulo`, `seoTitulo`, FAQ questions or Markdown headings.
 - GitHub App auth, trees/commits, PR, checks and merge response normalization.
+  PR revalidation is a void GitHub operation and must not be treated as a missing
+  publication result.
 - GitHub installation repository restriction and permission-downscoped token issuance.
 - Read-only OpenAI model visibility, Telegram identity/transport and GitHub App/installation verification with redacted evidence.
 - GitHub `installation_audit` token has no write permission, enumerates only for the exact audit operation and is revoked/discarded.
-- Vercel deployment/SHA correlation.
+- Vercel deployment/SHA correlation. Production route URLs use
+  `https://webbin.com.mx`. Unique `*.vercel.app` deployment hostnames
+  are never client-visible production URLs.
+- GitHub publication tests revalidate an already-merged PR whose head and files
+  still match the approved preview, and persist the merge commit before a
+  later production-wait failure.
 - Vercel credential identity and exact project/team, GitHub repository and production-branch verification without project mutation.
 - S3-compatible artifact lifecycle.
 - Production OpenAI, GitHub and Vercel adapters against controlled HTTP mocks;
@@ -79,12 +103,15 @@
 - Pairing-link tests prove 24-hour expiry, hash-only persistence, redacted
   idempotency receipts, one-time plaintext return/replay rejection and
   tenant/project binding.
+- Client pairing tests prove that identity creation precedes response delivery,
+  delivery failure remains pending, success idempotently records Telegram
+  delivery and moves the enrollment to active with audit/outbox evidence.
 - Manifest tests cover immutable snapshots, identical-fingerprint reuse,
   changed-fingerprint supersession, serialized project-local versions,
   provider-derived external bindings and atomic validation/audit/outbox writes.
-- Session expiry, five-minute freshness, revocation, database-backed rate limits,
+- Session idle expiry, one-minute rolling refresh, revocation, database-backed rate limits,
   Origin/CSRF enforcement and cookie flags are covered explicitly.
-- LangGraph PostgreSQL checkpointer compatibility.
+- TypeScript workflow PostgreSQL checkpoint compatibility.
 
 ### Integration
 
@@ -95,6 +122,17 @@
 - Graph → fake GitHub PR → fake deployment → approval → merge.
 - Full fake-provider request-to-publication flow, including conditional admin
   approval and production route evidence.
+- Request list filters by `projectId` and `needsAdminApproval`, pages with a
+  stable cursor, and projects `clientName`/`clientKey` without secrets.
+- Dashboard cancellation commits the terminal state and exactly one localized
+  `client.notification_requested` outbox event; an idempotent replay of the same
+  cancel call adds no second event, an unresolvable conversation locale adds
+  none, and client-initiated `/cancel` adds none because it answers in-thread.
+- Execute failure leaves append-only stage checkpoints, redacted `failure` in
+  `RequestDetail`, and a durable `request.failed_final` admin-notification
+  outbox event. Stage projection never exposes secrets or raw checkpoint JSON.
+  A retryable execute appends new checkpoint sequences and does not reuse
+  `(graph_run_id, sequence)`.
 - Duplicate webhook/action/queue delivery.
 - Revoked credential, expired approval and budget exhaustion.
 - Attachment deletion after terminal state.
@@ -129,6 +167,7 @@ client bot
 → ES/EN Markdown + AVIF
 → isolated branch and PR
 → checks + Vercel preview
+→ revision plan confirm / surgical or full apply
 → revision/approval
 → merge
 → production verification
@@ -145,13 +184,72 @@ mutation adapter was constructed.
 
 ## Required scenario matrix
 
+### Client-realistic tool audit (test-tool skill)
+
+After a tool ships (or after UX/copy changes), run
+[`.cursor/skills/test-tool/SKILL.md`](../.cursor/skills/test-tool/SKILL.md) at
+`standard` depth. Parameters: `toolId`, `auditMode` (`base` | `customized`),
+`clientKey`, `locale`, `environment`.
+
+The skill:
+
+1. Builds a scenario matrix from mutation class (see
+   `references/scenario-generators.md`).
+2. Runs automated baseline (tools, workflows, policies, conformance).
+3. Optionally executes live Telegram scenarios (`local-live`).
+4. Writes `docs/audits/<toolId>[-<clientKey>]-<YYYY-MM-DD>.md`.
+
+Does **not** replace rows below; adds qualitative coverage for client copy, CTAs,
+stuck states, and customization asks. Pilot reference:
+`docs/audits/delete_blog_draft-webbin-2026-08-28.md`.
+
+### Capability conformance (ADR-0038/0039)
+
+- `packages/workflows/test/capability-conformance.test.ts` — every loaded catalog
+  tool matches `graph.yaml` version, policies registry, contracts enum, migration
+  SQL, and worker runtime registry; graph version resolves from `tool.yaml`.
+- Unknown capabilities fail closed in `resolveCapabilityRuntime` (no blog fallback).
+
 ### Telegram/input
 
 - Natural-language request resolves correctly.
 - Empty `/create_blog` returns instructions/categories.
 - Incomplete request asks only for topic.
+- A blog message over 500 characters stores the full text in `context` with a
+  provisional topic (ADR-0031); only messages over 10 000 characters are
+  rejected. `interpret_brief` runs before similarity when context is present.
+- `/create_project` and natural portfolio briefs enter `NEEDS_INPUT` until base
+  facts (`name`, `YYYY-MM` fecha, `projectDescription`) plus required
+  customization `content_schema` fields close (ADR-0035/0037); follow-up
+  messages continue the same request. Upload rejects unknown content_schema
+  types and reserved base field ids. Slash-command photos persist like DMs;
+  photo-only text must not close string fields as `[image]`. Covers encode as
+  AVIF; `read_project_url` feeds typed page evidence into generate.
+- `/delete_project` and NL delete-project (verb + portfolio cue) resolve title/URL,
+  sync portfolio catalog from GitHub at ingress, and require admin approval after
+  deletion PR (no client preview CTAs). NL dispatch runs before create-project when
+  both match.
+- `/delete_blog` — same destructive pattern for blog articles (see
+  `docs/specs/delete-blog-draft.md`).
 - Unpaired or different-tenant identity is rejected.
 - Attachment MIME mismatch, oversized file and unsafe URL are rejected.
+- After preview **Request changes**, free-text feedback queues
+  `interpret_revision`; confirm/adjust/cancel revision-plan actions behave per
+  ADR-0032. `FAILED_RETRYABLE` is shown as retrying; exhausted retries become
+  `FAILED_FINAL`.
+
+### Revision (ADR-0032)
+
+- Title-attractiveness feedback yields `title_locales`; after confirm, body hash
+  and cover digest are unchanged.
+- Body delete/edit/add instructions yield `body_patch` and run through
+  `apply_revision` without full regenerate when coherence allows.
+- Thematically distant title proposes `full_regenerate` and does not mutate
+  until confirmed.
+- `body_patch` changes only the declared locale body; `image_only` regenerates
+  cover without rewriting body markdown.
+- Cancel revision restores `AWAITING_CLIENT_APPROVAL` on the prior version.
+- Schema-invalid revision plans fail as `provider_final` (not opaque retry loops).
 
 ### Category
 

@@ -25,7 +25,10 @@ Node defaults:
 | Embeddings                                                       | `text-embedding-3-small` |
 | Image generation/editing                                         | `gpt-image-2`            |
 
-Models and parameters are node configuration, validated during onboarding and frozen per request. There is no silent model or credential fallback.
+Models and parameters are declared per agent node in `@binflow/tools`
+(`node.yaml`), validated against a code-owned allowlist, and frozen per request.
+There is no silent model or credential fallback. Client customization markdown
+cannot set model or effort.
 
 Requirements:
 
@@ -53,7 +56,12 @@ The Phase 0 credential check authenticates against the model catalog and confirm
 
 ## Telegram
 
-Chat SDK Telegram adapter behind `MessagingGateway`.
+Chat SDK Telegram adapter behind `MessagingGateway`. Every client notice that
+carries action tokens — plan confirmation, preview ready, revision and cancel —
+is a Chat SDK card so Telegram receives an inline keyboard. Worker-originated
+notices use that same card renderer. Callback queries are acknowledged by the
+adapter and then handled as the same `/action` ingress as typed tokens. Visible
+copy never includes `/action <token>`.
 
 Phase 0 verification calls `getMe` and `getWebhookInfo`, requires a bot identity and exact expected username, and checks that local polling is not blocked by an existing webhook. It never calls `deleteWebhook`, `setWebhook` or `sendMessage`. Onboarding later sends a test message after an authorized chat ID exists. Production additionally sets and verifies a tenant-scoped webhook and secret. Incoming updates deduplicate by bot integration and `update_id`.
 
@@ -102,6 +110,7 @@ Subscribed GitHub App event validation is deferred to production webhook activat
 - Open/update one PR.
 - Read head SHA, checks, conflict state and mergeability.
 - Merge only after approval service issues an internal publish command.
+- Re-read an already-merged PR as a successful merge when the approved head and files still match.
 
 The blog executor obtains an operation-enum token; callers cannot provide an
 arbitrary permission map. A retry first searches for the exact request branch
@@ -143,11 +152,21 @@ The adapter stores:
 - Relevant build error summary.
 
 Approval is unavailable unless deployment is ready and bound to the PR head SHA.
+`waitForPreview` / `waitForProduction` poll the deployments API by
+`githubCommitSha` until READY or the deadline. Transient network failures and
+429/5xx responses keep polling; authentication, authorization, missing project,
+deployment ERROR/CANCELED, and invalid list payloads fail closed.
+Merge revalidation reads the open PR, file set, combined commit status and then
+squash-merges only when the approved head SHA is unchanged. A successful
+revalidation returns no payload and is not a publication failure.
 
 Preview and production reconciliation filter by the configured project/team,
 Git commit SHA and target. A route check records the HTTP result without
 persisting response bodies. Protected routes require the separately configured
-preview-safe access mechanism during live acceptance.
+preview-safe access mechanism during live acceptance. Production completion
+evidence and Telegram publication messages use the verified public project
+domain `https://webbin.com.mx`; preview messages keep the unique Vercel
+deployment origin. Unique production deployment hostnames are not client-visible.
 
 Preview and production environment variables are separate. Webbin preview must not send Web3Forms submissions to the real destination. Production publication occurs by merging Git and verifying the resulting production deployment, not by promoting an unrelated URL.
 
@@ -176,7 +195,8 @@ Rules:
 
 - Spanish and English always share the slug.
 - Spanish is the slug locale.
-- English is idiomatic adaptation.
+- English is idiomatic adaptation, including `titulo`, `seoTitulo` and
+  Markdown headings. Copying Spanish titles into the English file is invalid.
 - Full editorial frontmatter is required even where the raw Astro schema marks a field optional.
 - Current categories are synchronized; at baseline they include `SOP` and `Web App`.
 - New categories require admin approval.

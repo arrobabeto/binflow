@@ -41,7 +41,8 @@ Until the Phase 1 dashboard wizard is available, the Phase 0 interactive CLI may
 ### 2. Technical profile
 
 - `astro_repo` is the only first-MVP option.
-- Production domain and optional preview domain expectations.
+- Production domain and optional preview domain expectations. For Webbin the
+  client-visible live origin is `https://webbin.com.mx`.
 
 ### 3. Content and locale contract
 
@@ -106,10 +107,11 @@ materializes an immutable locale and budget snapshot, and records the exact
 manifest fingerprint/version as enrollment evidence. An unchanged fingerprint
 is reused; a changed draft creates the next version. Capability binding is
 materialized from the code-owned registry in the same validation transaction.
-For Webbin the only allowed binding is `create_blog_draft@1` with
-`client_publish`; it cannot be supplied or widened by a model or administrator.
-The named `capability_catalog` validation evidence must match the manifest and
-binding snapshot before activation.
+Projects may bind any registered capability version with an allowed access level
+(`disabled`, `client_publish`, `admin_required`, `admin_only`). A model cannot
+invent executors. Client style for a tool is supplied separately via
+customization markdown (ADR-0030). The named `capability_catalog` validation
+evidence must match the manifest and binding snapshot before activation.
 
 ### 9. Content catalog
 
@@ -130,7 +132,14 @@ binding snapshot before activation.
 - Create the client user.
 - Generate one-time 24-hour deep link.
 - Wait for correct bot/user pairing.
-- Activate only when all required validation checks remain current.
+- Deliver the localized pairing confirmation and activate when configuration,
+  credentials, manifest, capability catalog, pairing and Telegram delivery
+  evidence remain current.
+
+Content catalog synchronization, the reversible GitHub branch operation and
+Vercel preview/SHA correlation bind to the first real request and remain
+mandatory before approval/publication. They no longer require a synthetic
+onboarding mutation.
 
 ## Validation record
 

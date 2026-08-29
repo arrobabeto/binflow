@@ -1,0 +1,4 @@
+kind: compute
+label: Build manifest-driven deletion file set
+nodeKind: project.render_deletion@1
+acceptsClientCustomization: false

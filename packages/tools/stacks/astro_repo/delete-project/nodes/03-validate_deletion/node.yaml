@@ -1,0 +1,4 @@
+kind: compute
+label: Validate deletion scope
+nodeKind: project.validate_deletion@1
+acceptsClientCustomization: false

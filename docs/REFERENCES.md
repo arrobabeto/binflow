@@ -43,9 +43,9 @@ References support implementation but do not override Binflow's accepted ADRs an
 
 ## Workflows and security
 
-- [LangGraph persistence](https://docs.langchain.com/oss/javascript/langgraph/persistence)
-- [LangGraph interrupts](https://docs.langchain.com/oss/javascript/langgraph/interrupts)
+- [BullMQ documentation](https://docs.bullmq.io/)
 - [OWASP Secrets Management Cheat Sheet](https://cheatsheetseries.owasp.org/cheatsheets/Secrets_Management_Cheat_Sheet.html)
+- [OWASP Prompt Injection](https://genai.owasp.org/llmrisk/llm01-prompt-injection/)
 
 ## Pilot repository evidence
 

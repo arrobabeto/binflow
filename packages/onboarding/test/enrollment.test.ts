@@ -73,7 +73,7 @@ describeDatabase('client enrollment lifecycle', () => {
     defaultContentLocale: 'es' as const,
     editorialAudience: 'Technical owners',
     editorialVoice: 'Direct and useful',
-    productionDomain: 'https://webbin.dev',
+    productionDomain: 'https://webbin.com.mx',
     prohibitedClaims: ['Unverified outcomes'],
     requiredLocales: ['es', 'en'] as const,
     researchPolicy: 'Use primary sources.',
@@ -441,6 +441,11 @@ describeDatabase('client enrollment lifecycle', () => {
           capabilityId: 'create_blog_draft',
           capabilityVersion: 1,
         },
+        {
+          access: 'client_publish',
+          capabilityId: 'create_project_astro',
+          capabilityVersion: 1,
+        },
       ],
       status: 'validated',
       version: 1,
@@ -494,7 +499,7 @@ describeDatabase('client enrollment lifecycle', () => {
     ).toHaveLength(2);
     expect(
       await database.db.select().from(schema.projectCapabilityBindings),
-    ).toHaveLength(2);
+    ).toHaveLength(4);
     await expect(
       database.db
         .update(schema.projectLocales)

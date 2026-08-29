@@ -16,6 +16,7 @@ const enrollment: Enrollment = {
   lastValidatedAt: null,
   projectId: 'project-1',
   projectKey: 'webbin',
+  projectProfile: 'astro_repo',
   state: 'draft',
   tenantId: 'tenant-1',
   tenantKey: 'webbin',
@@ -63,7 +64,7 @@ const manifest: ProjectManifest = {
   ],
   fingerprint: 'a'.repeat(64),
   globalProfileVersion: 'astro_repo@1',
-  graphVersion: 'workflow-kernel-pending@1',
+  graphVersion: 'stacks/astro-repo/create-blog@1',
   id: 'manifest-1',
   profile: 'astro_repo',
   projectId: 'project-1',
@@ -142,10 +143,13 @@ const sessionResolver = vi.fn(async () => ({
 
 const workflowRequest: RequestDetail = {
   capabilityId: 'create_blog_draft',
+  clientKey: 'webbin',
+  clientName: 'Webbin',
   confirmedAt: null,
   createdAt: '2026-08-18T00:00:00.000Z',
   currentVersion: 1,
   execution: null,
+  failure: null,
   id: 'request-1',
   interpretedInput: {
     mode: 'brief',
@@ -155,6 +159,7 @@ const workflowRequest: RequestDetail = {
   plan: { topic: 'A secure AI blog' },
   projectId: 'project-1',
   revision: 1,
+  stages: [],
   state: 'AWAITING_PLAN_CONFIRMATION',
   tenantId: 'tenant-1',
   topic: 'A secure AI blog',
@@ -163,6 +168,8 @@ const workflowRequest: RequestDetail = {
 
 const workflowSummary = {
   capabilityId: workflowRequest.capabilityId,
+  clientKey: workflowRequest.clientKey,
+  clientName: workflowRequest.clientName,
   createdAt: workflowRequest.createdAt,
   currentVersion: workflowRequest.currentVersion,
   id: workflowRequest.id,
@@ -181,16 +188,9 @@ const createWorkflowService = () => ({
     state: 'APPROVED_FOR_PUBLISH' as const,
   })),
   cancelAsAdmin: vi.fn(async () => ({
-    capabilityId: workflowRequest.capabilityId,
-    createdAt: workflowRequest.createdAt,
-    currentVersion: workflowRequest.currentVersion,
-    id: workflowRequest.id,
-    projectId: workflowRequest.projectId,
+    ...workflowSummary,
     revision: 2,
     state: 'CANCELLED' as const,
-    tenantId: workflowRequest.tenantId,
-    topic: workflowRequest.topic,
-    updatedAt: workflowRequest.updatedAt,
   })),
   createAdminPairingLink: vi.fn(async () => ({
     expiresAt: '2026-08-19T00:00:00.000Z',
@@ -198,7 +198,7 @@ const createWorkflowService = () => ({
   })),
   get: vi.fn(async () => workflowRequest),
   getAdminTelegramTarget: vi.fn(async () => null),
-  list: vi.fn(async () => [workflowSummary]),
+  list: vi.fn(async () => ({ items: [workflowSummary], nextCursor: null })),
   rejectAsAdmin: vi.fn(async () => ({
     ...workflowSummary,
     revision: 2,
@@ -223,6 +223,21 @@ describe('client enrollment API', () => {
     const list = await app.inject({ method: 'GET', url: '/api/v1/requests' });
     expect(list.statusCode).toBe(200);
     expect(list.json()).toMatchObject({ items: [{ id: 'request-1' }] });
+    expect(workflowService.list).toHaveBeenCalledWith(
+      'owner-1',
+      expect.any(String),
+      { limit: 10 },
+    );
+    const paged = await app.inject({
+      method: 'GET',
+      url: '/api/v1/requests?limit=10&needsAdminApproval=true',
+    });
+    expect(paged.statusCode).toBe(200);
+    expect(workflowService.list).toHaveBeenCalledWith(
+      'owner-1',
+      expect.any(String),
+      { limit: 10, needsAdminApproval: true },
+    );
 
     const cancelled = await app.inject({
       headers: {

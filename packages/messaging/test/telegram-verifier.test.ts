@@ -162,6 +162,39 @@ describe('Telegram credential verifier', () => {
     });
   });
 
+  it('starts send-only runtimes without polling transport checks', async () => {
+    const methods: string[] = [];
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async (input: string | URL | Request) => {
+        const method = new URL(String(input)).pathname.split('/').at(-1)!;
+        methods.push(method);
+        const result =
+          method === 'getMe'
+            ? { id: 42, is_bot: true, username: 'Binflow_Client_Bot' }
+            : { pending_update_count: 0, url: '' };
+        return new Response(JSON.stringify({ ok: true, result }), {
+          status: 200,
+        });
+      }),
+    );
+
+    const runtime = await createTelegramRuntime({
+      apiBaseUrl: 'https://telegram.test',
+      botToken: 'bot-token',
+      ingress: 'send-only',
+      redisUrl: 'redis://localhost:6379',
+      role: 'client',
+      scopeKey: 'tenant-webbin',
+      userName: 'binflow_client_bot',
+    });
+    await runtime.chat.initialize();
+
+    expect(runtime.adapter).toBeDefined();
+    expect(methods).toEqual(['getMe']);
+    await runtime.chat.shutdown();
+  });
+
   it('fails runtime startup before polling when a webhook appeared', async () => {
     vi.stubGlobal(
       'fetch',

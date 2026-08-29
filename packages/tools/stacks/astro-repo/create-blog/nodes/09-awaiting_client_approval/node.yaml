@@ -1,0 +1,6 @@
+kind: interrupt
+nodeKind: await.client_approval@1
+label: Client preview approval
+acceptsClientCustomization: false
+actor: client
+ttlHours: 24

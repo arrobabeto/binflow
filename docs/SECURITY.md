@@ -13,6 +13,8 @@ Untrusted:
 - Model output, rationale and proposed tool arguments.
 - External webhook delivery order and duplication.
 - User-provided URLs and document metadata.
+- Client tool customization markdown uploaded through the dashboard, including
+  allowlisted `## content_schema` YAML (compiled in code; unknown types rejected).
 
 Trusted only after verification:
 
@@ -44,6 +46,7 @@ provider secrets.
 | Forged/replayed webhook          | HTTPS, provider signature/secret, delivery dedupe, expiration                                                       |
 | Callback replay                  | Opaque server action ID, user/project/version binding, expiration, idempotency                                      |
 | Prompt injection                 | Treat external text as data, bounded capability context, output validation outside model                            |
+| Customization markdown injection | Size/token caps, template section validation, malware scan, compose as untrusted style layer; path/schema/approval guards remain code-owned |
 | LLM proposes forbidden operation | Tool registry allowlist and deterministic policy rejection                                                          |
 | Cross-tenant disclosure          | RLS, scoped repositories, tenant artifact prefixes, isolation tests                                                 |
 | Secret leakage                   | Envelope encryption, redaction, no secrets in queue/checkpoint/log/model contexts                                   |
@@ -66,13 +69,21 @@ provider secrets.
 - TOTP setup and verification are mandatory before managing integrations, secrets or approvals.
 - Backup codes are shown once and stored protected.
 - Cookies are secure, HTTP-only, same-site and short-lived with server-side revocation.
-- Sensitive actions require a fresh/re-authenticated session.
+- Sensitive actions require a non-idle TOTP-verified server session.
 - Runtime HTTP sign-up and password-reset email are disabled. A single owner is
   created by the interactive, advisory-lock-serialized local bootstrap command.
-- Password bounds are 12–128 characters. Sessions expire after 12 hours, refresh
-  at most hourly, use no cookie cache and are fresh for five minutes.
+- Password bounds are 12–128 characters. Sessions expire after 30 minutes of
+  inactivity, refresh at most once per minute and use no cookie cache. The
+  first MVP has no separate five-minute freshness window.
 - TOTP is the only online factor and trusted-device bypass is rejected. Backup
   codes are single-use and disclosed only during enrollment/regeneration.
+- After a successful TOTP or backup-code login challenge, authenticated
+  navigation performs a full session revalidation before rendering a protected
+  route. A stale anonymous client cache cannot override the newly issued
+  server-side session or create a login loop.
+- Protected documents are `no-store`. The browser signs out after 30 minutes
+  without deliberate interaction and revalidates the authoritative session on
+  restored navigation or foreground return before the dashboard remains usable.
 - Completing initial TOTP enrollment revokes all earlier password-only sessions
   before the verified session is issued.
 - Auth rate-limit counters are PostgreSQL-backed and the application trusts
@@ -82,12 +93,18 @@ provider secrets.
 
 ### Telegram
 
-An admin Telegram chat is an authorization target only after a fresh-2FA owner
+An admin Telegram chat is an authorization target only after a non-idle,
+TOTP-verified owner
 creates a one-time pairing link and the exact verified admin bot consumes it.
 Unpaired `/start` messages, usernames and chat titles provide no authority.
 
 - Updates are authorized by verified bot identity plus numeric channel
   identity, never username or message text.
+- Slash-command, ordinary direct-message and inline-button dispatch are
+  transport concerns; all three enter the identical schema, bot-identity and
+  pairing/action-token authorization boundary before any state mutation.
+  Button clicks authorize the `callback_query` user, not the bot that posted
+  the original message.
 - Pairing/action plaintext tokens are return-once values; persistence contains
   SHA-256 hashes only and fixed-length digests are compared in constant time.
 - Replay keys include bot ID, isolating identical update/user IDs from distinct
@@ -118,11 +135,13 @@ resource versions. Authentication cookies alone never select a tenant or grant
 a capability.
 
 Enrollment activation is fail-closed over named, versioned and dependency-bound
-validation evidence. Credential health cannot substitute for Telegram test
-delivery, reversible repository/deployment probes, manifest/catalog checks or
-pairing. Pairing secrets are random, hash-only at rest, scoped and returned
-once. Pairing idempotency persists only a redacted receipt; replay cannot recover
-the plaintext token.
+configuration, credential, manifest, capability, client-pairing and delivered
+Telegram-response evidence. Content catalog, reversible repository operations
+and deployment/SHA correlation remain mandatory request-time gates before
+approval or publication; credential health cannot substitute for them. Pairing
+secrets are random, hash-only at rest, scoped and returned once. Pairing
+idempotency persists only a redacted receipt; replay cannot recover the
+plaintext token.
 
 Project manifests are produced only by the code-owned profile validator.
 Administrator input may narrow locales, paths and budgets but cannot supply

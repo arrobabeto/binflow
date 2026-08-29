@@ -1,0 +1,6 @@
+kind: effect
+label: Verify production routes return 404
+nodeKind: deployment.verify_absence@1
+acceptsClientCustomization: false
+permissions:
+  - vercel:deployments:read

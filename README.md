@@ -17,7 +17,7 @@ pnpm test
 pnpm build
 ```
 
-The API and dashboard can then run with `pnpm dev`, or every first-party process can be built through the local Compose profile. The API health contract is available at `http://localhost:8080/api/v1/health`; the dashboard uses port `3000`.
+The API and dashboard can then run with `pnpm dev`, or every first-party process can be built through the local Compose profile. Blog generation after plan confirmation needs the live-execution kill switch: use `pnpm run dev:live` (sets `BINFLOW_LIVE_EXECUTION_ENABLED=true`) instead of plain `pnpm dev`. The API health contract is available at `http://localhost:8080/api/v1/health`; the dashboard uses port `3000`.
 
 Credential values are never placed in `.env` or command arguments. After PostgreSQL is healthy, initialize the external master key and draft pilot scope:
 

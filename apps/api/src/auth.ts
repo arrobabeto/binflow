@@ -2,6 +2,7 @@ import { readFile } from 'node:fs/promises';
 
 import {
   createBinflowAuthRuntime,
+  defaultAuthSecretPath,
   type BinflowAuthRuntime,
 } from '@binflow/auth';
 
@@ -19,10 +20,14 @@ export const createApiAuthRuntime = async (): Promise<BinflowAuthRuntime> =>
     databaseUrl: await readDatabaseUrl(),
     production: process.env.BINFLOW_SECURE_COOKIES === 'true',
     ...(process.env.BINFLOW_AUTH_SECRET === undefined
-      ? {}
+      ? {
+          secretFile:
+            process.env.BINFLOW_AUTH_SECRET_FILE ?? defaultAuthSecretPath(),
+        }
       : { secret: process.env.BINFLOW_AUTH_SECRET }),
-    ...(process.env.BINFLOW_AUTH_SECRET_FILE === undefined
-      ? {}
-      : { secretFile: process.env.BINFLOW_AUTH_SECRET_FILE }),
+    ...(process.env.BINFLOW_AUTH_SECRET !== undefined &&
+    process.env.BINFLOW_AUTH_SECRET_FILE !== undefined
+      ? { secretFile: process.env.BINFLOW_AUTH_SECRET_FILE }
+      : {}),
     trustedOrigins: [process.env.BINFLOW_PUBLIC_URL ?? 'http://localhost:3000'],
   });

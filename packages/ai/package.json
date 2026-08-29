@@ -17,10 +17,12 @@
   },
   "dependencies": {
     "@binflow/blog": "workspace:*",
+    "@binflow/projects": "workspace:*",
     "@binflow/contracts": "workspace:*",
     "@binflow/domain": "workspace:*",
     "@binflow/integrations": "workspace:*",
     "@binflow/secrets": "workspace:*",
+    "@binflow/tools": "workspace:*",
     "ai": "7.0.59",
     "openai": "7.5.0",
     "zod": "4.4.3"

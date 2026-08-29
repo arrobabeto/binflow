@@ -14,6 +14,7 @@
     "check": "turbo run check",
     "check:workspaces": "node scripts/check-workspaces.mjs",
     "dev": "turbo run dev --parallel",
+    "dev:live": "BINFLOW_LIVE_EXECUTION_ENABLED=true turbo run dev --parallel",
     "db:generate": "pnpm --filter @binflow/db generate",
     "db:migrate": "pnpm --filter @binflow/db migrate",
     "format": "prettier --write .",

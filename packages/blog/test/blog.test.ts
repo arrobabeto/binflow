@@ -148,6 +148,30 @@ describe('blog policy and rendering', () => {
     ]);
     expect((await sharp(files[2]?.bytes).metadata()).format).toBe('heif');
   });
+
+  it('rejects an English bundle that copies Spanish titles', async () => {
+    const png = await sharp({
+      create: { background: '#182030', channels: 3, height: 768, width: 1024 },
+    })
+      .png()
+      .toBuffer();
+    await expect(
+      renderWebbinArtifacts({
+        bundle: {
+          ...bundle,
+          en: {
+            ...bundle.en,
+            seoTitulo: bundle.es.seoTitulo,
+            titulo: bundle.es.titulo,
+          },
+          slug: 'automatizacion-segura',
+        },
+        imageSource: png,
+        manifest,
+        publicationDate: '2026-08-18',
+      }),
+    ).rejects.toThrow(/idiomatic adaptation/u);
+  });
 });
 
 describe('complete fake-provider workflow', () => {
@@ -175,6 +199,15 @@ describe('complete fake-provider workflow', () => {
       async generateImage() {
         return png;
       },
+      async interpretRevision() {
+        throw new Error('interpretRevision not used in this test');
+      },
+      async applyRevisionPatch() {
+        throw new Error('applyRevisionPatch not used in this test');
+      },
+      async proposeTopic({ context }) {
+        return context.trim().slice(0, 500);
+      },
     };
     const repository: RepositoryPublicationPort = {
       async createDraft(input) {
@@ -192,6 +225,9 @@ describe('complete fake-provider workflow', () => {
       },
       async revalidate(input) {
         expect(input.expectedHeadSha).toBe('preview-sha');
+      },
+      async readFileAtRef() {
+        return null;
       },
     };
     const deployments: DeploymentPort = {
@@ -220,6 +256,12 @@ describe('complete fake-provider workflow', () => {
           ),
         };
       },
+      async verifyAbsence() {
+        throw new Error('unused');
+      },
+      async verifyDeletionRedirects() {
+        throw new Error('unused');
+      },
     };
     const executor = new BlogExecutor(
       catalog,
@@ -239,6 +281,7 @@ describe('complete fake-provider workflow', () => {
       requestVersionId: 'version',
     });
     expect(result.deployment.sha).toBe(result.publication.headCommitSha);
+    expect(result.intent).toBe('Automatización segura para pequeñas empresas');
     const published = await executor.publish({
       deploymentId: result.deployment.deploymentId,
       expectedFiles: result.publication.files,
@@ -248,5 +291,128 @@ describe('complete fake-provider workflow', () => {
       routes: Object.keys(result.deployment.urls),
     });
     expect(published).toMatchObject({ mergeCommitSha: 'merge-sha' });
+  });
+
+  it('refines topic from context before similarity', async () => {
+    const png = await sharp({
+      create: { background: '#182030', channels: 3, height: 768, width: 1024 },
+    })
+      .png()
+      .toBuffer();
+    const stages: string[] = [];
+    let refined: string | undefined;
+    const catalog: ContentCatalogPort = {
+      async sync() {
+        return { items: catalogItems, revision: 'catalog-sha' };
+      },
+    };
+    const generation: BlogGenerationPort = {
+      async embed() {
+        return [
+          [1, 0],
+          [0.6, 0.8],
+        ];
+      },
+      async generate() {
+        return bundle;
+      },
+      async generateImage() {
+        return png;
+      },
+      async interpretRevision() {
+        throw new Error('interpretRevision not used in this test');
+      },
+      async applyRevisionPatch() {
+        throw new Error('applyRevisionPatch not used in this test');
+      },
+      async proposeTopic({ context }) {
+        expect(context).toContain('detalle largo');
+        return 'Automatización de blogs con agents';
+      },
+    };
+    const repository: RepositoryPublicationPort = {
+      async createDraft(input) {
+        return {
+          baseCommitSha: 'base-sha',
+          branch: input.branch,
+          files: input.files.map((file) => file.path),
+          headCommitSha: 'preview-sha',
+          pullRequestId: '42',
+          pullRequestUrl: 'https://github.test/pull/42',
+        };
+      },
+      async merge() {
+        return { mergeCommitSha: 'merge-sha' };
+      },
+      async revalidate() {},
+      async readFileAtRef() {
+        return null;
+      },
+    };
+    const deployments: DeploymentPort = {
+      async waitForPreview(input) {
+        return {
+          deploymentId: 'preview-1',
+          environment: 'preview',
+          readyAt: new Date().toISOString(),
+          sha: input.headCommitSha,
+          urls: Object.fromEntries(
+            input.routes.map((route) => [
+              route,
+              `https://preview.test${route}`,
+            ]),
+          ),
+        };
+      },
+      async waitForProduction(input) {
+        return {
+          deploymentId: 'production-1',
+          environment: 'production',
+          readyAt: new Date().toISOString(),
+          sha: input.mergeCommitSha,
+          urls: Object.fromEntries(
+            input.routes.map((route) => [route, `https://webbin.test${route}`]),
+          ),
+        };
+      },
+      async verifyAbsence() {
+        throw new Error('unused');
+      },
+      async verifyDeletionRedirects() {
+        throw new Error('unused');
+      },
+    };
+    const executor = new BlogExecutor(
+      catalog,
+      generation,
+      repository,
+      deployments,
+    );
+    const longContext = `Quiero un blog sobre agents. ${'detalle largo '.repeat(40)}`;
+    const result = await executor.execute({
+      input: {
+        context: longContext,
+        mode: 'brief',
+        projectId: 'project',
+        topic: 'Tema por definir desde tu mensaje',
+      },
+      manifest,
+      onStage: async (node) => {
+        stages.push(node);
+      },
+      onTopicRefined: async (topic) => {
+        refined = topic;
+      },
+      requestId: 'request',
+      requestVersionId: 'version',
+    });
+    expect(stages.indexOf('interpret_brief')).toBeGreaterThan(
+      stages.indexOf('catalog_sync'),
+    );
+    expect(stages.indexOf('interpret_brief')).toBeLessThan(
+      stages.indexOf('similarity'),
+    );
+    expect(refined).toBe('Automatización de blogs con agents');
+    expect(result.intent).toBe('Automatización de blogs con agents');
   });
 });

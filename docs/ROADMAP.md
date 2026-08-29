@@ -38,7 +38,7 @@ Deliverables:
 
 - Admin and client bots, local polling and production webhook mode.
 - Identity resolution, menu, commands, natural-language routing and attachments.
-- LangGraph coordinator, request state machine, checkpoints, versions and approvals.
+- TypeScript coordinator, request state machine, checkpoints, versions and approvals.
 - Progress/admin notifications, cancellation and status lookup.
 
 Exit: a paired client can create, confirm, resume and cancel a typed plan; cross-tenant and replay attempts fail.

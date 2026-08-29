@@ -1,0 +1,7 @@
+kind: effect
+label: Open deletion pull request
+nodeKind: project.open_deletion_pr@1
+acceptsClientCustomization: false
+permissions:
+  - github:contents:write
+  - github:pull_requests:write

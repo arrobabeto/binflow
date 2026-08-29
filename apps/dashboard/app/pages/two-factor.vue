@@ -1,5 +1,8 @@
 <script setup lang="ts">
 import { authClient } from '../lib/auth-client';
+import { revalidateAndReplaceAuthenticatedDocument } from '../lib/session-navigation';
+
+const route = useRoute();
 
 const method = ref<'totp' | 'backup'>('totp');
 const code = ref('');
@@ -19,12 +22,21 @@ const verify = async () => {
           code: code.value,
           trustDevice: false,
         });
-  pending.value = false;
   if (result.error) {
+    pending.value = false;
     message.value = 'The verification code is invalid, used or expired.';
     return;
   }
-  await navigateTo('/');
+  try {
+    await revalidateAndReplaceAuthenticatedDocument(
+      authClient,
+      route.query.redirect,
+    );
+  } catch {
+    pending.value = false;
+    message.value =
+      'Your code was accepted, but the session could not be refreshed. Please try signing in again.';
+  }
 };
 </script>
 

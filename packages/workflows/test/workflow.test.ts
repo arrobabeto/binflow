@@ -1,6 +1,6 @@
 import { createHash } from 'node:crypto';
 
-import { eq, sql } from 'drizzle-orm';
+import { asc, eq, sql } from 'drizzle-orm';
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 
 import {
@@ -11,8 +11,14 @@ import {
 } from '@binflow/db';
 import { MemoryArtifactStore } from '@binflow/artifacts';
 import type { BlogExecutor } from '@binflow/blog';
+import { DomainError } from '@binflow/domain';
 
-import { BlogWorkflowRuntime, WorkflowService } from '../src/index.js';
+import {
+  BlogWorkflowRuntime,
+  mapBlogBriefInput,
+  matchesNaturalProject,
+  WorkflowService,
+} from '../src/index.js';
 
 const databaseUrl = process.env.BINFLOW_TEST_DATABASE_URL;
 if (
@@ -26,6 +32,51 @@ if (
 const describeDatabase = databaseUrl === undefined ? describe.skip : describe;
 const tokenHash = (value: string) =>
   createHash('sha256').update(value).digest('hex');
+
+describe('mapBlogBriefInput', () => {
+  it('keeps short text as topic only', () => {
+    expect(mapBlogBriefInput('Automatización con IA', 'es')).toEqual({
+      kind: 'ok',
+      topic: 'Automatización con IA',
+    });
+  });
+
+  it('stores the full long message in context with a provisional topic', () => {
+    const raw = `${'palabra '.repeat(80)}contexto extra para el artículo`.trim();
+    expect(raw.length).toBeGreaterThan(500);
+    const result = mapBlogBriefInput(raw, 'es');
+    expect(result).toEqual({
+      kind: 'ok',
+      topic: 'Tema por definir desde tu mensaje',
+      context: raw,
+    });
+  });
+
+  it('rejects only when the message exceeds the context limit', () => {
+    const raw = `tema ${'x'.repeat(10_600)}`;
+    expect(mapBlogBriefInput(raw, 'en')).toEqual({ kind: 'too_long' });
+  });
+});
+
+describe('matchesNaturalProject', () => {
+  it('matches portfolio keywords', () => {
+    expect(
+      matchesNaturalProject('Quiero agregar un proyecto de portafolio nuevo'),
+    ).toBe(true);
+  });
+
+  it('matches brief-style cues without slash command', () => {
+    expect(
+      matchesNaturalProject(
+        'Plataforma de reservas para escuela de idiomas online. Stack: Astro, Stripe. Rol: diseño + frontend. Estado: Publicado. Cliente confidencial.',
+      ),
+    ).toBe(true);
+  });
+
+  it('ignores generic text without project signals', () => {
+    expect(matchesNaturalProject('Hola, ¿cómo estás?')).toBe(false);
+  });
+});
 
 describeDatabase('Telegram request workflow kernel', () => {
   const database = createDatabase(databaseUrl!);
@@ -92,6 +143,7 @@ describeDatabase('Telegram request workflow kernel', () => {
             translationPolicy: 'always_translate',
           },
           id: 'enrollment-webbin',
+          lastValidatedAt: new Date('2026-08-18T11:59:00.000Z'),
           projectId: 'project-webbin',
           state: 'pairing_pending',
           tenantId: 'tenant-webbin',
@@ -217,7 +269,7 @@ describeDatabase('Telegram request workflow kernel', () => {
             ],
             fingerprint: 'f'.repeat(64),
             globalProfileVersion: '1',
-            graphVersion: 'create_blog@1',
+            graphVersion: 'stacks/astro-repo/create-blog@1',
             id: 'manifest-webbin',
             profile: 'astro_repo',
             projectId: 'project-webbin',
@@ -256,6 +308,29 @@ describeDatabase('Telegram request workflow kernel', () => {
           projectId: 'project-webbin',
           tenantId: 'tenant-webbin',
         });
+        await scoped.insert(schema.enrollmentValidationAttempts).values(
+          [
+            'configuration',
+            'openai_credential',
+            'telegram_admin_credential',
+            'telegram_client_credential',
+            'github_app_binding',
+            'vercel_binding',
+            'project_manifest',
+            'capability_catalog',
+          ].map((checkName, index) => ({
+            checkName,
+            checkVersion: 1,
+            checkedAt: new Date('2026-08-18T12:00:00.000Z'),
+            dependencyFingerprint: 'a'.repeat(64),
+            enrollmentId: 'enrollment-webbin',
+            evidence: { ready: true },
+            id: `validation-${String(index)}`,
+            projectId: 'project-webbin',
+            result: 'success' as const,
+            tenantId: 'tenant-webbin',
+          })),
+        );
       },
     );
   });
@@ -278,11 +353,49 @@ describeDatabase('Telegram request workflow kernel', () => {
     const replay = await service.handleTelegramUpdate(
       update('1', '/start pairing-token-abcdefghijklmnopqrstuvwxyz'),
     );
-    expect(replay.text).toContain('not paired');
+    expect(replay.text).toContain('Vinculación completada');
     const wrongBot = await service.handleTelegramUpdate(
       update('2', '/tools', '1000000002'),
     );
     expect(wrongBot.text).toContain('not paired');
+  });
+
+  it('activates the enrollment only after the pairing reply is delivered', async () => {
+    const pairingUpdate = update(
+      '1',
+      '/start pairing-token-abcdefghijklmnopqrstuvwxyz',
+    );
+    await service.handleTelegramUpdate(pairingUpdate);
+    expect(
+      (await database.db.select().from(schema.clientEnrollments))[0],
+    ).toMatchObject({ state: 'pairing_pending', version: 1 });
+
+    await service.confirmTelegramReplyDelivered(pairingUpdate);
+    expect(
+      (await database.db.select().from(schema.clientEnrollments))[0],
+    ).toMatchObject({ state: 'active', version: 2 });
+    expect(
+      await database.db
+        .select()
+        .from(schema.enrollmentValidationAttempts)
+        .where(
+          eq(
+            schema.enrollmentValidationAttempts.checkName,
+            'telegram_test_send',
+          ),
+        ),
+    ).toHaveLength(1);
+    expect(
+      await database.db
+        .select()
+        .from(schema.auditEvents)
+        .where(eq(schema.auditEvents.action, 'enrollment.activated')),
+    ).toHaveLength(1);
+
+    await service.confirmTelegramReplyDelivered(pairingUpdate);
+    expect(
+      (await database.db.select().from(schema.clientEnrollments))[0],
+    ).toMatchObject({ state: 'active', version: 2 });
   });
 
   it('pairs the global admin target once with a hash-only owner challenge', async () => {
@@ -354,6 +467,76 @@ describeDatabase('Telegram request workflow kernel', () => {
     ).not.toContain(confirmation.token);
   });
 
+  it('queues interpret_revision from free-text feedback after request changes', async () => {
+    await service.handleTelegramUpdate(
+      update('1', '/start pairing-token-abcdefghijklmnopqrstuvwxyz'),
+    );
+    const plan = await service.handleTelegramUpdate(
+      update('2', '/create_blog Título más atractivo'),
+    );
+    const confirmation = plan.actionTokens.find(
+      (action) => action.action === 'confirm_plan',
+    )!;
+    await service.handleTelegramUpdate(
+      update('3', `/action ${confirmation.token}`),
+    );
+    const [request] = await database.db.select().from(schema.requests);
+    expect(request).toBeDefined();
+    await withPlatformOwnerScope(
+      database.db,
+      {
+        actorId: 'test',
+        correlationId: 'revision-feedback',
+        reason: 'Seed revision requested',
+      },
+      async (scoped) => {
+        await scoped
+          .update(schema.requests)
+          .set({ state: 'REVISION_REQUESTED' })
+          .where(eq(schema.requests.id, request!.id));
+      },
+    );
+    const feedback = await service.handleTelegramUpdate(
+      update('4', 'Haz el título más atractivo sin cambiar el cuerpo'),
+    );
+    expect(feedback.text).toContain('plan de cambio');
+    const resumes = await database.db
+      .select()
+      .from(schema.outboxEvents)
+      .where(eq(schema.outboxEvents.eventType, 'workflow.resume_requested'));
+    expect(
+      resumes.some(
+        (event) =>
+          (event.payload as { reason?: string }).reason ===
+          'interpret_revision',
+      ),
+    ).toBe(true);
+    const [updated] = await database.db.select().from(schema.requests);
+    expect(updated?.state).toBe('QUEUED');
+    expect(updated?.currentVersion).toBe(2);
+  });
+
+  it('stores a long client brief intact in context with a provisional topic', async () => {
+    await service.handleTelegramUpdate(
+      update('1', '/start pairing-token-abcdefghijklmnopqrstuvwxyz'),
+    );
+    const brief = `Quiero un artículo sobre automatización de blogs con tools agénticas. ${'detalle '.repeat(80)}Fin del brief.`;
+    expect(brief.length).toBeGreaterThan(500);
+    const plan = await service.handleTelegramUpdate(update('2', brief));
+    expect(plan.requestId).not.toBeNull();
+    const [request] = await database.db.select().from(schema.requests);
+    const [version] = await database.db.select().from(schema.requestVersions);
+    expect(request?.topic).toBe('Tema por definir desde tu mensaje');
+    expect(version?.interpretedInput).toMatchObject({
+      context: brief,
+      mode: 'brief',
+      topic: 'Tema por definir desde tu mensaje',
+    });
+    expect(
+      (version?.interpretedInput as { context?: string }).context,
+    ).toBe(brief);
+  });
+
   it('does not create a request for an empty command and can cancel by opaque action', async () => {
     await service.handleTelegramUpdate(
       update('1', '/start pairing-token-abcdefghijklmnopqrstuvwxyz'),
@@ -374,6 +557,104 @@ describeDatabase('Telegram request workflow kernel', () => {
     );
     const [request] = await database.db.select().from(schema.requests);
     expect(request?.state).toBe('CANCELLED');
+    expect(
+      await database.db
+        .select()
+        .from(schema.outboxEvents)
+        .where(
+          eq(schema.outboxEvents.eventType, 'client.notification_requested'),
+        ),
+    ).toHaveLength(0);
+  });
+
+  it('notifies the client once in its locale when the owner cancels', async () => {
+    await service.handleTelegramUpdate(
+      update('1', '/start pairing-token-abcdefghijklmnopqrstuvwxyz'),
+    );
+    const plan = await service.handleTelegramUpdate(
+      update('2', '/create_blog Automatización segura con IA'),
+    );
+    const [created] = await database.db.select().from(schema.requests);
+    const cancelled = await service.cancelAsAdmin(
+      plan.requestId!,
+      created!.version,
+      'admin:owner',
+      'correlation-cancel',
+      'idempotency-cancel',
+    );
+    expect(cancelled.state).toBe('CANCELLED');
+    const notices = await database.db
+      .select()
+      .from(schema.outboxEvents)
+      .where(
+        eq(schema.outboxEvents.eventType, 'client.notification_requested'),
+      );
+    expect(notices).toHaveLength(1);
+    expect(notices[0]).toMatchObject({
+      aggregateId: plan.requestId,
+      aggregateType: 'request',
+      payload: {
+        message: 'La solicitud fue cancelada.',
+        notificationType: 'request.cancelled',
+        requestId: plan.requestId,
+      },
+      projectId: 'project-webbin',
+      status: 'pending',
+      tenantId: 'tenant-webbin',
+    });
+    const adminNotices = await database.db
+      .select()
+      .from(schema.outboxEvents)
+      .where(eq(schema.outboxEvents.eventType, 'admin.notification_requested'));
+    expect(
+      adminNotices.filter(
+        (event) =>
+          (event.payload as { notificationType?: string }).notificationType ===
+          'request.cancelled',
+      ),
+    ).toHaveLength(0);
+    await service.cancelAsAdmin(
+      plan.requestId!,
+      created!.version,
+      'admin:owner',
+      'correlation-cancel',
+      'idempotency-cancel',
+    );
+    expect(
+      await database.db
+        .select()
+        .from(schema.outboxEvents)
+        .where(
+          eq(schema.outboxEvents.eventType, 'client.notification_requested'),
+        ),
+    ).toHaveLength(1);
+  });
+
+  it('cancels without a notice when the conversation locale is unsupported', async () => {
+    await service.handleTelegramUpdate(
+      update('1', '/start pairing-token-abcdefghijklmnopqrstuvwxyz'),
+    );
+    const plan = await service.handleTelegramUpdate(
+      update('2', '/create_blog Automatización segura con IA'),
+    );
+    const [created] = await database.db.select().from(schema.requests);
+    await database.db.execute(sql`update conversations set locale = 'fr'`);
+    const cancelled = await service.cancelAsAdmin(
+      plan.requestId!,
+      created!.version,
+      'admin:owner',
+      'correlation-cancel',
+      'idempotency-cancel',
+    );
+    expect(cancelled.state).toBe('CANCELLED');
+    expect(
+      await database.db
+        .select()
+        .from(schema.outboxEvents)
+        .where(
+          eq(schema.outboxEvents.eventType, 'client.notification_requested'),
+        ),
+    ).toHaveLength(0);
   });
 
   it('binds preview approval to evidence and completes an idempotent fake publication', async () => {
@@ -440,6 +721,7 @@ describeDatabase('Telegram request workflow kernel', () => {
             sha256: 'c'.repeat(64),
           },
         ],
+        intent: 'Seguridad operativa con IA',
         publication: {
           baseCommitSha: 'base1234567',
           branch: `binflow/create-blog/${request!.id}`,
@@ -462,9 +744,25 @@ describeDatabase('Telegram request workflow kernel', () => {
           sha: 'merge1234567',
           urls: {
             '/articulos/seguridad-operativa-con-ia':
-              'https://webbin.dev/articulos/seguridad-operativa-con-ia',
+              'https://webbin.com.mx/articulos/seguridad-operativa-con-ia',
             '/es/articulos/seguridad-operativa-con-ia':
-              'https://webbin.dev/es/articulos/seguridad-operativa-con-ia',
+              'https://webbin.com.mx/es/articulos/seguridad-operativa-con-ia',
+          },
+        },
+        mergeCommitSha: 'merge1234567',
+      }),
+      mergeApprovedPreview: async () => ({ mergeCommitSha: 'merge1234567' }),
+      verifyProduction: async () => ({
+        deployment: {
+          deploymentId: 'production-1',
+          environment: 'production' as const,
+          readyAt: clock.now().toISOString(),
+          sha: 'merge1234567',
+          urls: {
+            '/articulos/seguridad-operativa-con-ia':
+              'https://webbin.com.mx/articulos/seguridad-operativa-con-ia',
+            '/es/articulos/seguridad-operativa-con-ia':
+              'https://webbin.com.mx/es/articulos/seguridad-operativa-con-ia',
           },
         },
         mergeCommitSha: 'merge1234567',
@@ -506,5 +804,314 @@ describeDatabase('Telegram request workflow kernel', () => {
     expect(
       await database.db.select().from(schema.similarityChecks),
     ).toHaveLength(1);
+  });
+
+  it('records stage checkpoints, failure detail and admin notification on execute failure', async () => {
+    await service.handleTelegramUpdate(
+      update('1', '/start pairing-token-abcdefghijklmnopqrstuvwxyz'),
+    );
+    const plan = await service.handleTelegramUpdate(
+      update('2', '/create_blog Fallo de validación EN'),
+    );
+    const confirmation = plan.actionTokens.find(
+      (action) => action.action === 'confirm_plan',
+    )!;
+    await service.handleTelegramUpdate(
+      update('3', `/action ${confirmation.token}`),
+    );
+    const [request] = await database.db.select().from(schema.requests);
+    const [version] = await database.db.select().from(schema.requestVersions);
+    expect(request).toBeDefined();
+    expect(version).toBeDefined();
+    const failingExecutor = {
+      execute: async (input: { onStage?: (node: string) => Promise<void> }) => {
+        await input.onStage?.('catalog_sync');
+        await input.onStage?.('generate');
+        throw new DomainError(
+          'policy_denied',
+          'English article copied Spanish title.',
+        );
+      },
+      publish: async () => {
+        throw new DomainError('internal_error', 'Unexpected publish.');
+      },
+      mergeApprovedPreview: async () => ({ mergeCommitSha: 'merge1234567' }),
+      verifyProduction: async () => ({
+        deployment: {
+          deploymentId: 'production-1',
+          environment: 'production' as const,
+          readyAt: clock.now().toISOString(),
+          sha: 'merge1234567',
+          urls: {},
+        },
+        mergeCommitSha: 'merge1234567',
+      }),
+    } as unknown as BlogExecutor;
+    const runtime = new BlogWorkflowRuntime(
+      database.db,
+      new MemoryArtifactStore(),
+      failingExecutor,
+      clock,
+    );
+    await expect(
+      runtime.execute({
+        reason: 'execute',
+        requestId: request!.id,
+        requestVersionId: version!.id,
+        tenantId: request!.tenantId,
+      }),
+    ).rejects.toThrow('English article copied Spanish title.');
+    const [failed] = await database.db
+      .select()
+      .from(schema.requests)
+      .where(eq(schema.requests.id, request!.id));
+    expect(failed?.state).toBe('FAILED_FINAL');
+    expect(failed?.terminalResult).toMatchObject({
+      errorCategory: 'policy_denied',
+      errorMessage: 'English article copied Spanish title.',
+      failedNode: 'generate',
+    });
+    const checkpoints = await database.db
+      .select()
+      .from(schema.workflowCheckpoints)
+      .orderBy(asc(schema.workflowCheckpoints.sequence));
+    expect(checkpoints.map((checkpoint) => checkpoint.node)).toEqual([
+      'plan_confirmed',
+      'catalog_sync',
+      'generate',
+      'failed',
+    ]);
+    const notifications = await database.db
+      .select()
+      .from(schema.outboxEvents)
+      .where(eq(schema.outboxEvents.eventType, 'admin.notification_requested'));
+    const failedNotification = notifications.find(
+      (event) =>
+        (event.payload as { notificationType?: string }).notificationType ===
+        'request.failed_final',
+    );
+    expect(failedNotification?.payload).toMatchObject({
+      notificationType: 'request.failed_final',
+      requestId: request!.id,
+    });
+    expect(JSON.stringify(failedNotification?.payload)).toContain('generate');
+    expect(JSON.stringify(failedNotification?.payload)).toContain(
+      'English article copied Spanish title.',
+    );
+    const detail = await service.get(request!.id, 'owner-1', 'request-detail');
+    expect(detail.failure).toMatchObject({
+      category: 'policy_denied',
+      message: 'English article copied Spanish title.',
+      node: 'generate',
+    });
+    expect(detail.stages.length).toBeGreaterThanOrEqual(3);
+    expect(JSON.stringify(detail.stages)).not.toContain('apiKey');
+    expect(JSON.stringify(detail.stages)).not.toContain('chainOfThought');
+    const [graphRun] = await database.db.select().from(schema.graphRuns);
+    await database.db.insert(schema.workflowCheckpoints).values({
+      graphRunId: graphRun!.id,
+      id: 'checkpoint-secret',
+      node: 'generate',
+      projectId: request!.projectId,
+      sequence: checkpoints.at(-1)!.sequence + 1,
+      state: {
+        apiKey: 'secret-value',
+        chainOfThought: 'hidden reasoning',
+        requestState: 'GENERATING',
+      },
+      tenantId: request!.tenantId,
+    });
+    const redacted = await service.get(
+      request!.id,
+      'owner-1',
+      'request-detail-redacted',
+    );
+    expect(JSON.stringify(redacted.stages)).not.toContain('secret-value');
+    expect(JSON.stringify(redacted.stages)).not.toContain('hidden reasoning');
+    expect(redacted.stages.at(-1)?.summary).toBe('GENERATING');
+  });
+
+  it('appends checkpoint sequences on retryable execute without unique collisions', async () => {
+    await service.handleTelegramUpdate(
+      update('1', '/start pairing-token-abcdefghijklmnopqrstuvwxyz'),
+    );
+    const plan = await service.handleTelegramUpdate(
+      update('2', '/create_blog Reintento de proveedor'),
+    );
+    const confirmation = plan.actionTokens.find(
+      (action) => action.action === 'confirm_plan',
+    )!;
+    await service.handleTelegramUpdate(
+      update('3', `/action ${confirmation.token}`),
+    );
+    const [request] = await database.db.select().from(schema.requests);
+    const [version] = await database.db.select().from(schema.requestVersions);
+    let attempts = 0;
+    const retryingExecutor = {
+      execute: async (input: { onStage?: (node: string) => Promise<void> }) => {
+        attempts += 1;
+        await input.onStage?.('catalog_sync');
+        if (attempts === 1)
+          throw new DomainError(
+            'provider_retryable',
+            'Catalog sync timed out.',
+          );
+        await input.onStage?.('generate');
+        throw new DomainError(
+          'policy_denied',
+          'A published article already has high topic overlap.',
+        );
+      },
+      publish: async () => {
+        throw new DomainError('internal_error', 'Unexpected publish.');
+      },
+      mergeApprovedPreview: async () => ({ mergeCommitSha: 'merge1234567' }),
+      verifyProduction: async () => ({
+        deployment: {
+          deploymentId: 'production-1',
+          environment: 'production' as const,
+          readyAt: clock.now().toISOString(),
+          sha: 'merge1234567',
+          urls: {},
+        },
+        mergeCommitSha: 'merge1234567',
+      }),
+    } as unknown as BlogExecutor;
+    const runtime = new BlogWorkflowRuntime(
+      database.db,
+      new MemoryArtifactStore(),
+      retryingExecutor,
+      clock,
+    );
+    await expect(
+      runtime.execute({
+        reason: 'execute',
+        requestId: request!.id,
+        requestVersionId: version!.id,
+        tenantId: request!.tenantId,
+      }),
+    ).rejects.toThrow('Catalog sync timed out.');
+    await expect(
+      runtime.execute({
+        reason: 'execute',
+        requestId: request!.id,
+        requestVersionId: version!.id,
+        tenantId: request!.tenantId,
+      }),
+    ).rejects.toThrow('A published article already has high topic overlap.');
+    const checkpoints = await database.db
+      .select()
+      .from(schema.workflowCheckpoints)
+      .orderBy(asc(schema.workflowCheckpoints.sequence));
+    expect(checkpoints.map((checkpoint) => checkpoint.sequence)).toEqual([
+      1, 2, 3, 4, 5, 6,
+    ]);
+    expect(checkpoints.map((checkpoint) => checkpoint.node)).toEqual([
+      'plan_confirmed',
+      'catalog_sync',
+      'failed',
+      'catalog_sync',
+      'generate',
+      'failed',
+    ]);
+    const failedFinal = (
+      await database.db
+        .select()
+        .from(schema.outboxEvents)
+        .where(
+          eq(schema.outboxEvents.eventType, 'admin.notification_requested'),
+        )
+    ).filter(
+      (event) =>
+        (event.payload as { notificationType?: string }).notificationType ===
+        'request.failed_final',
+    );
+    expect(failedFinal).toHaveLength(1);
+  });
+
+  it('lists requests by approval need, project, client name and cursor', async () => {
+    await service.handleTelegramUpdate(
+      update('1', '/start pairing-token-abcdefghijklmnopqrstuvwxyz'),
+    );
+    const plan = await service.handleTelegramUpdate(
+      update('2', '/create_blog Listado de inbox'),
+    );
+    const confirmation = plan.actionTokens.find(
+      (action) => action.action === 'confirm_plan',
+    )!;
+    await service.handleTelegramUpdate(
+      update('3', `/action ${confirmation.token}`),
+    );
+    const [seed] = await database.db.select().from(schema.requests);
+    expect(seed).toBeDefined();
+    await withPlatformOwnerScope(
+      database.db,
+      {
+        actorId: 'fixture',
+        correlationId: 'request-list-seed',
+        reason: 'Seed request inbox rows',
+      },
+      async (scoped) => {
+        for (const index of Array.from({ length: 11 }, (_, value) => value)) {
+          await scoped.insert(schema.requests).values({
+            capabilityId: 'create_blog_draft',
+            conversationId: seed!.conversationId,
+            currentVersion: 1,
+            id: `request-inbox-${String(index)}`,
+            projectId: seed!.projectId,
+            state: index === 0 ? 'AWAITING_ADMIN_APPROVAL' : 'QUEUED',
+            tenantId: seed!.tenantId,
+            topic: `Inbox topic ${String(index)}`,
+            updatedAt: new Date(
+              `2026-08-18T12:${String(index).padStart(2, '0')}:00.000Z`,
+            ),
+            userId: seed!.userId,
+            version: 1,
+          });
+        }
+      },
+    );
+    const approval = await service.list('owner-1', 'list-approval', {
+      limit: 10,
+      needsAdminApproval: true,
+    });
+    expect(approval.items).toHaveLength(1);
+    expect(approval.items[0]).toMatchObject({
+      clientKey: 'webbin',
+      clientName: 'Webbin',
+      state: 'AWAITING_ADMIN_APPROVAL',
+    });
+    expect(JSON.stringify(approval)).not.toContain('secret-value');
+    const firstOther = await service.list('owner-1', 'list-other-1', {
+      limit: 10,
+      needsAdminApproval: false,
+      projectId: seed!.projectId,
+    });
+    expect(firstOther.items).toHaveLength(10);
+    expect(firstOther.nextCursor).not.toBeNull();
+    expect(
+      firstOther.items.every(
+        (item) => item.state !== 'AWAITING_ADMIN_APPROVAL',
+      ),
+    ).toBe(true);
+    const secondOther = await service.list('owner-1', 'list-other-2', {
+      cursor: firstOther.nextCursor!,
+      limit: 10,
+      needsAdminApproval: false,
+      projectId: seed!.projectId,
+    });
+    const firstIds = new Set(firstOther.items.map((item) => item.id));
+    expect(secondOther.items.every((item) => !firstIds.has(item.id))).toBe(
+      true,
+    );
+    expect(secondOther.items.length).toBeGreaterThan(0);
+    const missingProject = await service.list('owner-1', 'list-missing', {
+      limit: 10,
+      projectId: 'project-missing',
+    });
+    expect(missingProject.items).toHaveLength(0);
+    const detail = await service.get(seed!.id, 'owner-1', 'list-detail');
+    expect(detail.clientName).toBe('Webbin');
+    expect(detail.clientKey).toBe('webbin');
   });
 });

@@ -1,0 +1,6 @@
+kind: effect
+nodeKind: publication.verify_production@1
+label: Verify production
+acceptsClientCustomization: false
+permissions:
+  - vercel:deployments:read
