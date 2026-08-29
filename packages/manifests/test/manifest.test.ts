@@ -50,12 +50,40 @@ describe('project manifest', () => {
       'src/content/articulos/*.md',
       'src/content/articulos-es/*.md',
       'public/images/articles/*.avif',
+      'public/_redirects',
+      'src/content/proyectos/*.md',
+      'src/content/proyectos-es/*.md',
+      'public/images/projects/*.jpg',
+      'public/images/projects/*.avif',
     ]);
+    expect(manifest.content.portfolio?.editablePaths).toEqual([
+      'src/content/proyectos/*.md',
+      'src/content/proyectos-es/*.md',
+      'public/images/projects/*.jpg',
+      'public/images/projects/*.avif',
+    ]);
+    expect(manifest.content.portfolio?.collections.es?.directory).toBe(
+      'src/content/proyectos-es',
+    );
+    expect(manifest.content.portfolio?.sectionHeadings.en?.challenge).toBe(
+      'Challenge',
+    );
+    expect(manifest.content.portfolio?.enumFields?.tipo).toContain('Sitio web');
     expect(manifest.enabledCapabilities).toEqual([
       {
         access: 'client_publish',
         capabilityId: 'create_blog_draft',
         capabilityVersion: 1,
+      },
+      {
+        access: 'client_publish',
+        capabilityId: 'create_project_astro',
+        capabilityVersion: 1,
+      },
+      {
+        access: 'client_publish',
+        capabilityId: 'delete_blog_draft',
+        capabilityVersion: 2,
       },
     ]);
   });

@@ -1,8 +1,12 @@
 import { readFile } from 'node:fs/promises';
 
-import { createBinflowAuthRuntime } from '@binflow/auth';
+import {
+  createBinflowAuthRuntime,
+  defaultAuthSecretPath,
+  type BinflowAuthRuntime,
+} from '@binflow/auth';
 
-let runtime: ReturnType<typeof createBinflowAuthRuntime> | undefined;
+let runtime: Promise<BinflowAuthRuntime> | undefined;
 
 const readDatabaseUrl = async (): Promise<string> => {
   if (process.env.DATABASE_URL !== undefined) return process.env.DATABASE_URL;
@@ -12,21 +16,36 @@ const readDatabaseUrl = async (): Promise<string> => {
   return 'postgresql://binflow_app:binflow_local_app@localhost:5432/binflow';
 };
 
-export const getAuthRuntime = () => {
+const authSecretSources = (): Readonly<{
+  secret?: string;
+  secretFile?: string;
+}> => {
+  if (process.env.BINFLOW_AUTH_SECRET !== undefined) {
+    return process.env.BINFLOW_AUTH_SECRET_FILE === undefined
+      ? { secret: process.env.BINFLOW_AUTH_SECRET }
+      : {
+          secret: process.env.BINFLOW_AUTH_SECRET,
+          secretFile: process.env.BINFLOW_AUTH_SECRET_FILE,
+        };
+  }
+  return {
+    secretFile: process.env.BINFLOW_AUTH_SECRET_FILE ?? defaultAuthSecretPath(),
+  };
+};
+
+export const getAuthRuntime = (): Promise<BinflowAuthRuntime> => {
   runtime ??= (async () =>
     createBinflowAuthRuntime({
       baseURL: process.env.BINFLOW_PUBLIC_URL ?? 'http://localhost:3000',
       databaseUrl: await readDatabaseUrl(),
       production: process.env.BINFLOW_SECURE_COOKIES === 'true',
-      ...(process.env.BINFLOW_AUTH_SECRET === undefined
-        ? {}
-        : { secret: process.env.BINFLOW_AUTH_SECRET }),
-      ...(process.env.BINFLOW_AUTH_SECRET_FILE === undefined
-        ? {}
-        : { secretFile: process.env.BINFLOW_AUTH_SECRET_FILE }),
+      ...authSecretSources(),
       trustedOrigins: [
         process.env.BINFLOW_PUBLIC_URL ?? 'http://localhost:3000',
       ],
-    }))();
+    }))().catch((error: unknown) => {
+    runtime = undefined;
+    throw error;
+  });
   return runtime;
 };

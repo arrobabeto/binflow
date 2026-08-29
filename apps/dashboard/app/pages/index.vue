@@ -27,6 +27,10 @@ const signOut = async () => {
           <UButton to="/clients" color="neutral" variant="soft"
             >Clients</UButton
           >
+          <UButton to="/tools" color="neutral" variant="soft">Tools</UButton>
+          <UButton to="/customizations" color="neutral" variant="soft"
+            >Customizations</UButton
+          >
           <UButton to="/requests" color="neutral" variant="soft"
             >Requests</UButton
           >

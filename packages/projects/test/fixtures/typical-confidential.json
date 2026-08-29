@@ -1,0 +1,45 @@
+{
+  "slug": "headless-language-class-booking-site",
+  "confidencial": true,
+  "destacada": false,
+  "fecha": "2026-06-01",
+  "url": "https://www.example.com/",
+  "imagePrompt": "Abstract education technology scene with soft daylight, no logos.",
+  "rationale": {
+    "summary": "Anonymized education booking platform case study.",
+    "evidenceRefs": [],
+    "limitations": ["No verified booking metrics supplied."]
+  },
+  "es": {
+    "descriptor": "Sitio headless para reserva de clases de idiomas",
+    "clienteTipo": "Academia de idiomas",
+    "industria": "Educación",
+    "rol": "Desarrollo frontend headless e integración de reservas",
+    "tipo": "Sitio web",
+    "estado": "Publicado",
+    "resumen": "Reconstrucción completa de un sitio de formación en idiomas con recorrido de reserva y pago integrado.",
+    "impacto": "Permitió contratar clases y paquetes sin coordinación manual por cada solicitud.",
+    "stack": ["Nuxt 3", "Vue", "Orbitype", "Calendly"],
+    "sections": {
+      "challenge": "Una academia de idiomas necesitaba reconstruir su sitio y simplificar la contratación de clases con múltiples idiomas, niveles y formatos. El recorrido no podía resolverse con un formulario genérico ni un único enlace de calendario. Cada opción debía llevar al calendario correcto para evitar reservas incompatibles. También debía incluir pago y paquetes recurrentes. El contenido debía editarse sin reconstruir la aplicación en cada cambio.",
+      "solution": "Se desarrolló el frontend con Nuxt 3, Vue y Tailwind, integrando Orbitype como CMS headless. Se implementó la lógica de selección de curso y enrutamiento a eventos de Calendly según idioma, nivel y formato. El sistema mantiene separado el contenido editorial de la lógica de reserva y pago, con componentes reutilizables y soporte bilingüe.",
+      "outcome": "El sitio publicado permite revisar idiomas, niveles y formatos antes de reservar. Cada selección puede conectar con el calendario adecuado y continuar hacia pago o paquetes sin depender solo de coordinación manual. No hay cifras verificadas de reservas o ingresos; el caso describe capacidades operativas entregadas."
+    }
+  },
+  "en": {
+    "descriptor": "Headless language-course booking website",
+    "clienteTipo": "Language training business",
+    "industria": "Education",
+    "rol": "Headless frontend development and booking integration",
+    "tipo": "Sitio web",
+    "estado": "Publicado",
+    "resumen": "A full rebuild of a language-training website with an integrated booking and payment journey.",
+    "impacto": "Enabled students to contract lessons and packages without manually coordinating every request.",
+    "stack": ["Nuxt 3", "Vue", "Orbitype", "Calendly"],
+    "sections": {
+      "challenge": "A language-training business needed to rebuild its website and clarify how students contract lessons across languages, levels and formats. A generic contact form or single calendar link could not support the journey. Each option had to route to the correct availability. Payment and recurring packages were required. Editorial content also had to remain editable without rebuilding the app for every update.",
+      "solution": "The frontend was rebuilt with Nuxt 3, Vue and Tailwind, with Orbitype as a headless CMS. Custom selection logic routes each course choice to the matching Calendly event. Editorial content stays separate from booking and payment logic, with reusable components and bilingual support.",
+      "outcome": "The published site lets students review languages, levels and formats before booking. Each option can connect to the appropriate calendar and continue to payment or packages without relying solely on manual coordination. No verified booking or revenue figures are available."
+    }
+  }
+}

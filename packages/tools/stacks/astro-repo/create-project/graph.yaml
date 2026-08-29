@@ -1,0 +1,70 @@
+version: stacks/astro-repo/create-project@4
+nodes:
+  - id: catalog_sync
+  - id: similarity
+  - id: read_project_url
+  - id: generate
+  - id: normalize_project_bundle
+  - id: validate_project_bundle
+  - id: validate_privacy_and_evidence
+  - id: repo_contract_checks
+  - id: render_artifacts
+  - id: create_draft
+  - id: wait_preview
+  - id: awaiting_client_approval
+  - id: interpret_revision
+  - id: awaiting_revision_plan_confirmation
+  - id: apply_revision
+  - id: merge_or_publish
+  - id: verify_production
+  - id: completed
+edges:
+  - from: catalog_sync
+    to: similarity
+  - from: similarity
+    to: read_project_url
+    when: similarity.is_not_high_overlap
+  - from: read_project_url
+    to: generate
+  - from: generate
+    to: normalize_project_bundle
+  - from: normalize_project_bundle
+    to: validate_project_bundle
+  - from: validate_project_bundle
+    to: validate_privacy_and_evidence
+  - from: validate_privacy_and_evidence
+    to: repo_contract_checks
+  - from: repo_contract_checks
+    to: render_artifacts
+  - from: render_artifacts
+    to: create_draft
+  - from: create_draft
+    to: wait_preview
+  - from: wait_preview
+    to: awaiting_client_approval
+  - from: awaiting_client_approval
+    to: interpret_revision
+    when: review.is_revision
+  - from: interpret_revision
+    to: awaiting_revision_plan_confirmation
+  - from: awaiting_revision_plan_confirmation
+    to: apply_revision
+    when: revision_plan.is_confirmed_surgical
+  - from: awaiting_revision_plan_confirmation
+    to: generate
+    when: revision_plan.is_confirmed_full
+  - from: awaiting_revision_plan_confirmation
+    to: interpret_revision
+    when: revision_plan.is_adjusted
+  - from: awaiting_revision_plan_confirmation
+    to: awaiting_client_approval
+    when: revision_plan.is_cancelled
+  - from: apply_revision
+    to: normalize_project_bundle
+  - from: awaiting_client_approval
+    to: merge_or_publish
+    when: approval.client_publish
+  - from: merge_or_publish
+    to: verify_production
+  - from: verify_production
+    to: completed

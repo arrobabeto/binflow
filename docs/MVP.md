@@ -11,7 +11,10 @@ Deliver a locally operable Binflow control plane that enrolls Webbin, serves one
 3. The dashboard produces a one-time client pairing link.
 4. The client opens the bot, sees available tools and invokes `/create_blog` or describes the desired blog naturally.
 5. If the command is empty, the bot explains required inputs, process order, current categories and examples.
-6. A topic is enough to start. The system proposes missing context, objective, audience and category.
+6. A short topic is enough to start. A longer client message is kept intact as
+   brief `context` with a provisional topic; after plan confirmation,
+   `interpret_brief` proposes the durable topic. The system may also propose
+   missing objective, audience and category.
 7. The client confirms the interpreted category and plan before generation.
 8. Binflow synchronizes the content catalog and rejects high overlap.
 9. Binflow researches when needed, creates the Spanish source, adapts English, and prepares an AVIF cover.

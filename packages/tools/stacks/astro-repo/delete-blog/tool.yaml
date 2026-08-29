@@ -1,0 +1,12 @@
+command: /delete_blog
+description: Removes an existing blog article via deletion PR and admin-only
+  publication. Target identified by title or URL. Deletion scope is
+  manifest-driven.
+displayName: Delete blog post
+executorId: workflow.delete_blog@1
+graphVersion: stacks/astro-repo/delete-blog@1
+id: delete_blog_draft
+profile: astro_repo
+requiresPreview: false
+riskClass: high
+version: 2

@@ -1,0 +1,12 @@
+command: /delete_project
+description: Removes an existing portfolio case study via deletion PR and
+  admin-only publication. Target identified by title or URL. Deletion scope is
+  manifest-driven.
+displayName: Delete portfolio project
+executorId: workflow.delete_project@1
+graphVersion: stacks/astro_repo/delete-project@1
+id: delete_project_astro
+profile: astro_repo
+requiresPreview: false
+riskClass: high
+version: 2

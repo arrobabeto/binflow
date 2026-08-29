@@ -1,0 +1,6 @@
+kind: interrupt
+nodeKind: await.admin_approval@1
+label: Admin approval for new category
+acceptsClientCustomization: false
+actor: admin
+ttlHours: 24

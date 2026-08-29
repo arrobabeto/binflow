@@ -3,7 +3,7 @@
 - Status: Accepted
 - Date: 2026-08-18
 - Supersedes: None
-- Superseded by: None
+- Superseded by: ADR-0025 for activation-check placement and pairing completion
 
 ## Context
 

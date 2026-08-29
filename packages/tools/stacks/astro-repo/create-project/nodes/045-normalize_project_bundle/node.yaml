@@ -1,0 +1,4 @@
+kind: compute
+nodeKind: project.normalize_bundle@1
+label: Normalize project bundle
+acceptsClientCustomization: false

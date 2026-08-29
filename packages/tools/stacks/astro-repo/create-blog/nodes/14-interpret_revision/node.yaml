@@ -1,0 +1,8 @@
+kind: agent
+nodeKind: content.interpret_revision@1
+label: Interpret revision feedback
+workload: text
+model: gpt-5.6-luna
+effort: medium
+maxOutputTokens: 4000
+acceptsClientCustomization: false

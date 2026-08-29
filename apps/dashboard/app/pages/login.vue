@@ -1,5 +1,8 @@
 <script setup lang="ts">
 import { authClient } from '../lib/auth-client';
+import { authenticatedDestination } from '../lib/session-navigation';
+
+const route = useRoute();
 
 const email = ref('');
 const password = ref('');
@@ -19,7 +22,12 @@ const submit = async () => {
     return;
   }
   if ('twoFactorRedirect' in result.data && result.data.twoFactorRedirect) {
-    await navigateTo('/two-factor');
+    await navigateTo({
+      path: '/two-factor',
+      query: {
+        redirect: authenticatedDestination(route.query.redirect),
+      },
+    });
     return;
   }
   await navigateTo('/security');

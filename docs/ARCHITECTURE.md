@@ -33,7 +33,7 @@ flowchart TD
 ```text
 apps/
   api/          HTTP ingress, webhooks and administrative API
-  worker/       LangGraph execution and external side effects
+  worker/       Workflow execution and external side effects
   dashboard/    Nuxt administrative interface and auth endpoints
   cli/          interactive local bootstrap and encrypted integration management
   maintenance/  retention, reconciliation and scheduled health jobs
@@ -44,6 +44,7 @@ packages/
   integrations/ credential lifecycle and provider-verification orchestration
   auth/         Better Auth configuration and authorization helpers
   policies/     deterministic capability and approval decisions
+  tools/        declarative tool catalog, node kinds and rule composition
   workflows/    coordinator graph and capability subgraphs
   manifests/    global profile manifests and validation
   ai/           provider-neutral model interfaces and OpenAI adapter
@@ -53,6 +54,9 @@ packages/
   artifacts/    S3-compatible artifact abstraction
   observability/ tracing, audit, usage and structured logging
   secrets/       provider-neutral envelope encryption and secret resolution
+  onboarding/   enrollment, manifest materialization and capability catalog
+  blog/         create_blog_draft deterministic executor
+  integration-admin/ dashboard credential enrollment services
 infra/
   compose/      local and production service definitions
   docker/       versioned container definitions
@@ -97,7 +101,7 @@ Provider payloads must not cross into domain interfaces. Adapters normalize them
 
 ### Worker
 
-- Owns LangGraph coordinator and capability subgraphs.
+- Owns the TypeScript workflow coordinator and capability executors.
 - Loads frozen request configuration and secrets only when required.
 - Executes deterministic adapters and records each node run.
 - Pauses for input, preview or approval through graph interrupts.

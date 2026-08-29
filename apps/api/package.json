@@ -19,6 +19,7 @@
     "@binflow/integration-admin": "workspace:*",
     "@binflow/onboarding": "workspace:*",
     "@binflow/secrets": "workspace:*",
+    "@binflow/tools": "workspace:*",
     "@binflow/workflows": "workspace:*",
     "fastify": "5.11.3",
     "drizzle-orm": "0.45.2",

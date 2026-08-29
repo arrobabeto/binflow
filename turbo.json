@@ -11,6 +11,8 @@
     },
     "dev": {
       "cache": false,
+      "dependsOn": ["^build"],
+      "passThroughEnv": ["BINFLOW_LIVE_EXECUTION_ENABLED"],
       "persistent": true
     },
     "lint": {

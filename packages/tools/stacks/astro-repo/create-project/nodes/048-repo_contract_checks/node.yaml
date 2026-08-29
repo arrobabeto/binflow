@@ -1,0 +1,4 @@
+kind: compute
+nodeKind: project.repo_contract_checks@1
+label: Repository contract checks
+acceptsClientCustomization: false

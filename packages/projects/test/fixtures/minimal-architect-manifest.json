@@ -1,0 +1,68 @@
+{
+  "content": {
+    "editablePaths": [
+      "src/content/projects/*.md",
+      "src/content/casos/*.md",
+      "public/images/cases/*.jpg",
+      "public/images/cases/*.avif"
+    ],
+    "portfolio": {
+      "collections": {
+        "en": {
+          "directory": "src/content/projects",
+          "routePrefix": "/projects"
+        },
+        "es": {
+          "directory": "src/content/casos",
+          "routePrefix": "/es/casos"
+        }
+      },
+      "editablePaths": [
+        "src/content/projects/*.md",
+        "src/content/casos/*.md",
+        "public/images/cases/*.jpg",
+        "public/images/cases/*.avif"
+      ],
+      "enumFields": {
+        "estado": [
+          "Completed",
+          "In progress",
+          "Concept"
+        ],
+        "tipo": [
+          "Residential",
+          "Commercial",
+          "Mixed use"
+        ]
+      },
+      "frontmatterFields": [
+        "descriptor",
+        "tipo",
+        "estado"
+      ],
+      "imageDirectory": "public/images/cases",
+      "requiredFrontmatter": [
+        "descriptor",
+        "tipo",
+        "estado",
+        "confidencial",
+        "destacada"
+      ],
+      "sectionHeadings": {
+        "en": {
+          "challenge": "Brief",
+          "outcome": "Delivery",
+          "solution": "Design"
+        },
+        "es": {
+          "challenge": "Encargo",
+          "outcome": "Entrega",
+          "solution": "Dise\u00f1o"
+        }
+      }
+    }
+  },
+  "repository": {
+    "branchPattern": "bot/{capability}/{request-id}-{slug}"
+  }
+}

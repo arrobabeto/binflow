@@ -10,6 +10,8 @@ import {
   enrollmentSchema,
   projectManifestResponseSchema,
   projectManifestSchema,
+  updateProjectCapabilitiesInputSchema,
+  type CapabilityBinding,
   type CreateEnrollmentInput,
   type CapabilityCatalogResponse,
   type Enrollment,
@@ -18,6 +20,7 @@ import {
   type ProjectManifest,
   type ProjectManifestResponse,
   type UpdateEnrollmentInput,
+  type UpdateProjectCapabilitiesInput,
 } from '@binflow/contracts';
 import {
   completeIdempotencyRecord,
@@ -36,8 +39,8 @@ import {
   type VerifiedManifestBindings,
 } from '@binflow/manifests';
 import {
+  assertKnownBinding,
   projectCapabilityCatalog,
-  webbinCapabilityBinding,
 } from '@binflow/policies';
 
 const CONFIGURATION_CHECK = 'configuration';
@@ -48,13 +51,12 @@ const CREDENTIAL_CHECKS = [
   'github_app_binding',
   'vercel_binding',
 ] as const;
-const ACTIVATION_ONLY_CHECKS = [
+const ACTIVATION_CHECKS = [
+  CONFIGURATION_CHECK,
+  ...CREDENTIAL_CHECKS,
   'project_manifest',
   'capability_catalog',
-  'content_catalog',
   'telegram_test_send',
-  'github_reversible_probe',
-  'vercel_preview_correlation',
   'client_pairing',
 ] as const;
 
@@ -67,6 +69,63 @@ type ActorContext = Readonly<{
 const asJson = (value: unknown): JsonValue => value as JsonValue;
 const fingerprint = (value: unknown): string =>
   createHash('sha256').update(JSON.stringify(value)).digest('hex');
+
+const assertBindingsRegisteredInDatabase = async (
+  database: ScopedDatabase,
+  bindings: readonly CapabilityBinding[],
+): Promise<void> => {
+  for (const binding of bindings) {
+    const [row] = await database
+      .select({ id: schema.capabilityDefinitions.id })
+      .from(schema.capabilityDefinitions)
+      .where(
+        and(
+          eq(schema.capabilityDefinitions.id, binding.capabilityId),
+          eq(schema.capabilityDefinitions.version, binding.capabilityVersion),
+        ),
+      )
+      .limit(1);
+    if (row === undefined)
+      throw new DomainError(
+        'validation_error',
+        `Tool ${binding.capabilityId}@${String(binding.capabilityVersion)} is not registered in the database. Run pnpm db:migrate, then retry.`,
+        { code: 'capability_definition_missing' },
+      );
+  }
+};
+
+const assertBindingsCompatibleWithProjectProfile = async (
+  database: ScopedDatabase,
+  projectProfile: string,
+  bindings: readonly CapabilityBinding[],
+): Promise<void> => {
+  for (const binding of bindings) {
+    const [row] = await database
+      .select({
+        allowedProfiles: schema.capabilityDefinitions.allowedProfiles,
+      })
+      .from(schema.capabilityDefinitions)
+      .where(
+        and(
+          eq(schema.capabilityDefinitions.id, binding.capabilityId),
+          eq(schema.capabilityDefinitions.version, binding.capabilityVersion),
+        ),
+      )
+      .limit(1);
+    if (row === undefined)
+      throw new DomainError(
+        'validation_error',
+        `Tool ${binding.capabilityId}@${String(binding.capabilityVersion)} is not registered in the database. Run pnpm db:migrate, then retry.`,
+        { code: 'capability_definition_missing' },
+      );
+    if (!row.allowedProfiles.includes(projectProfile))
+      throw new DomainError(
+        'validation_error',
+        `Tool ${binding.capabilityId}@${String(binding.capabilityVersion)} is not compatible with project profile "${projectProfile}" (allowed: ${row.allowedProfiles.join(', ')}).`,
+        { code: 'capability_profile_incompatible' },
+      );
+  }
+};
 
 const ensureConfigurationComplete = (
   configuration: EnrollmentConfiguration,
@@ -124,6 +183,7 @@ const toProjectManifest = (
 const toEnrollment = (row: {
   enrollment: typeof schema.clientEnrollments.$inferSelect;
   projectKey: string;
+  projectProfile: string;
   tenantKey: string;
 }): Enrollment =>
   enrollmentSchema.parse({
@@ -131,6 +191,7 @@ const toEnrollment = (row: {
     createdAt: row.enrollment.createdAt.toISOString(),
     lastValidatedAt: row.enrollment.lastValidatedAt?.toISOString() ?? null,
     projectKey: row.projectKey,
+    projectProfile: row.projectProfile,
     tenantKey: row.tenantKey,
     updatedAt: row.enrollment.updatedAt.toISOString(),
   });
@@ -143,6 +204,7 @@ const selectEnrollment = async (
     .select({
       enrollment: schema.clientEnrollments,
       projectKey: schema.projects.key,
+      projectProfile: schema.projects.profile,
       tenantKey: schema.tenants.key,
     })
     .from(schema.clientEnrollments)
@@ -261,6 +323,7 @@ export class EnrollmentService {
           .select({
             enrollment: schema.clientEnrollments,
             projectKey: schema.projects.key,
+            projectProfile: schema.projects.profile,
             tenantKey: schema.tenants.key,
           })
           .from(schema.clientEnrollments)
@@ -330,27 +393,149 @@ export class EnrollmentService {
     return withPlatformOwnerScope(
       this.database,
       { actorId, correlationId, reason: 'Read project capability catalog' },
-      async (database) => {
-        const [row] = await database
-          .select()
-          .from(schema.projectManifestVersions)
-          .where(eq(schema.projectManifestVersions.projectId, projectId))
-          .orderBy(desc(schema.projectManifestVersions.version))
-          .limit(1);
-        if (row === undefined)
-          return capabilityCatalogResponseSchema.parse({
-            items: [],
-            manifestVersion: null,
-            projectId,
-          });
-        const manifest = toProjectManifest(row);
-        return capabilityCatalogResponseSchema.parse({
-          items: projectCapabilityCatalog(manifest.enabledCapabilities),
-          manifestVersion: manifest.version,
-          projectId,
-        });
-      },
+      async (database) => this.readCapabilities(database, projectId),
     );
+  }
+
+  public async updateCapabilities(
+    projectId: string,
+    rawInput: UpdateProjectCapabilitiesInput,
+    context: ActorContext,
+  ): Promise<CapabilityCatalogResponse> {
+    const input = updateProjectCapabilitiesInputSchema.parse(rawInput);
+    for (const binding of input.bindings) assertKnownBinding(binding);
+    const enabledBindings = input.bindings.filter(
+      (binding) => binding.access !== 'disabled',
+    );
+    if (enabledBindings.length === 0)
+      throw new DomainError(
+        'policy_denied',
+        'At least one tool must remain enabled.',
+        { code: 'capability_catalog_empty' },
+      );
+
+    return withPlatformOwnerScope(
+      this.database,
+      {
+        actorId: context.actorId,
+        correlationId: context.correlationId,
+        reason: 'Update project capability bindings',
+      },
+      async (database) =>
+        withIdempotency(
+          database,
+          {
+            ...context,
+            method: 'PUT',
+            request: asJson(input),
+            route: `/api/v1/projects/${projectId}/capabilities`,
+          },
+          async () => {
+            const [enrollment] = await database
+              .select()
+              .from(schema.clientEnrollments)
+              .where(eq(schema.clientEnrollments.projectId, projectId))
+              .limit(1);
+            if (enrollment === undefined)
+              throw new DomainError(
+                'validation_error',
+                'Project enrollment was not found.',
+                { code: 'project_not_found' },
+              );
+            const [project] = await database
+              .select({ profile: schema.projects.profile })
+              .from(schema.projects)
+              .where(eq(schema.projects.id, projectId))
+              .limit(1);
+            if (project === undefined)
+              throw new DomainError(
+                'validation_error',
+                'Project enrollment was not found.',
+                { code: 'project_not_found' },
+              );
+            await assertBindingsCompatibleWithProjectProfile(
+              database,
+              project.profile,
+              enabledBindings,
+            );
+            const [latestManifest] = await database
+              .select()
+              .from(schema.projectManifestVersions)
+              .where(eq(schema.projectManifestVersions.projectId, projectId))
+              .orderBy(desc(schema.projectManifestVersions.version))
+              .limit(1);
+            if (
+              latestManifest === undefined ||
+              !['validated', 'active'].includes(latestManifest.status)
+            )
+              throw new DomainError(
+                'validation_error',
+                'Validate the enrollment before assigning tools.',
+                { code: 'manifest_not_ready' },
+              );
+
+            const nextConfiguration = enrollmentConfigurationSchema.parse({
+              ...enrollment.configuration,
+              enabledCapabilities: enabledBindings,
+            });
+            const now = this.clock.now();
+            await database
+              .update(schema.clientEnrollments)
+              .set({
+                configuration: nextConfiguration,
+                updatedAt: now,
+              })
+              .where(eq(schema.clientEnrollments.id, enrollment.id));
+
+            const refreshed = await selectEnrollment(database, enrollment.id);
+            await this.materializeManifest(database, refreshed, context);
+
+            await database.insert(schema.auditEvents).values({
+              action: 'project_capabilities.updated',
+              actorId: context.actorId,
+              actorType: 'platform_owner',
+              correlationId: context.correlationId,
+              id: uuidv7(),
+              metadata: {
+                capabilityIds: enabledBindings.map(
+                  (binding) =>
+                    `${binding.capabilityId}@${String(binding.capabilityVersion)}`,
+                ),
+              },
+              objectId: projectId,
+              objectType: 'project',
+              projectId,
+              tenantId: enrollment.tenantId,
+            });
+
+            return asJson(await this.readCapabilities(database, projectId));
+          },
+        ),
+    ).then((value) => value as unknown as CapabilityCatalogResponse);
+  }
+
+  private async readCapabilities(
+    database: ScopedDatabase,
+    projectId: string,
+  ): Promise<CapabilityCatalogResponse> {
+    const [row] = await database
+      .select()
+      .from(schema.projectManifestVersions)
+      .where(eq(schema.projectManifestVersions.projectId, projectId))
+      .orderBy(desc(schema.projectManifestVersions.version))
+      .limit(1);
+    if (row === undefined)
+      return capabilityCatalogResponseSchema.parse({
+        items: [],
+        manifestVersion: null,
+        projectId,
+      });
+    const manifest = toProjectManifest(row);
+    return capabilityCatalogResponseSchema.parse({
+      items: projectCapabilityCatalog(manifest.enabledCapabilities),
+      manifestVersion: manifest.version,
+      projectId,
+    });
   }
 
   public async create(
@@ -658,10 +843,10 @@ export class EnrollmentService {
                     manifestVersion: manifest.version,
                   },
                   result:
-                    catalog.length === 1 && catalog[0]?.enabled === true
+                    catalog.some((capability) => capability.enabled)
                       ? 'success'
                       : 'failed',
-                  ...(catalog.length === 1 && catalog[0]?.enabled === true
+                  ...(catalog.some((capability) => capability.enabled)
                     ? {}
                     : {
                         errorCategory: 'policy_denied',
@@ -1011,7 +1196,7 @@ export class EnrollmentService {
                 ),
               )
               .orderBy(desc(schema.enrollmentValidationAttempts.checkedAt));
-            const blockers: string[] = ACTIVATION_ONLY_CHECKS.filter(
+            const blockers: string[] = ACTIVATION_CHECKS.filter(
               (name) =>
                 attempts.find(
                   (attempt) =>
@@ -1021,7 +1206,10 @@ export class EnrollmentService {
                       new Date(enrollment.lastValidatedAt).getTime(),
                 )?.result !== 'success',
             );
-            if (enrollment.state !== 'pairing_pending') {
+            if (
+              enrollment.state !== 'pairing_pending' &&
+              enrollment.state !== 'active'
+            ) {
               blockers.unshift('enrollment_state');
             }
             return asJson({ blockers, ready: blockers.length === 0 });
@@ -1071,14 +1259,23 @@ export class EnrollmentService {
     )
       return toProjectManifest(latest);
 
+    await assertBindingsRegisteredInDatabase(
+      database,
+      candidate.enabledCapabilities,
+    );
+
     if (
       latest !== undefined &&
-      (latest.status === 'draft' || latest.status === 'validated')
+      (latest.status === 'draft' ||
+        latest.status === 'validated' ||
+        latest.status === 'active')
     )
       await database
         .update(schema.projectManifestVersions)
         .set({ status: 'superseded', supersededAt: now })
         .where(eq(schema.projectManifestVersions.id, latest.id));
+
+    const nextStatus = latest?.status === 'active' ? 'active' : 'validated';
 
     await database.insert(schema.projectManifestVersions).values({
       createdBy: context.actorId,
@@ -1088,7 +1285,7 @@ export class EnrollmentService {
       id: candidate.id,
       profile: candidate.profile,
       projectId: enrollment.projectId,
-      status: 'validated',
+      status: nextStatus,
       tenantId: enrollment.tenantId,
       validatedAt: now,
       version: candidate.version,
@@ -1118,16 +1315,18 @@ export class EnrollmentService {
       projectId: enrollment.projectId,
       tenantId: enrollment.tenantId,
     });
-    await database.insert(schema.projectCapabilityBindings).values({
-      access: webbinCapabilityBinding.access,
-      capabilityId: webbinCapabilityBinding.capabilityId,
-      capabilityVersion: webbinCapabilityBinding.capabilityVersion,
-      createdBy: context.actorId,
-      id: uuidv7(),
-      manifestVersionId: candidate.id,
-      projectId: enrollment.projectId,
-      tenantId: enrollment.tenantId,
-    });
+    for (const binding of candidate.enabledCapabilities) {
+      await database.insert(schema.projectCapabilityBindings).values({
+        access: binding.access,
+        capabilityId: binding.capabilityId,
+        capabilityVersion: binding.capabilityVersion,
+        createdBy: context.actorId,
+        id: uuidv7(),
+        manifestVersionId: candidate.id,
+        projectId: enrollment.projectId,
+        tenantId: enrollment.tenantId,
+      });
+    }
     await database.insert(schema.auditEvents).values({
       action: 'project_manifest.validated',
       actorId: context.actorId,

@@ -21,7 +21,9 @@
     "@binflow/contracts": "workspace:*",
     "@binflow/db": "workspace:*",
     "@binflow/domain": "workspace:*",
+    "@binflow/projects": "workspace:*",
     "@binflow/policies": "workspace:*",
+    "@binflow/tools": "workspace:*",
     "drizzle-orm": "0.45.2",
     "uuid": "13.0.0"
   },

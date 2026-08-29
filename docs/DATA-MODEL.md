@@ -80,6 +80,13 @@ stable job key, publish attempts, availability time, published timestamp and
 last stable error category. The row is created in the same transaction as the
 business mutation and audit event.
 
+Notification delivery uses two event types with separate destinations:
+`admin.notification_requested` for the paired platform-owner chat and
+`client.notification_requested` for the requesting client's conversation
+(ADR-0027). Payloads carry the rendered message, notification type and request
+ID only. A payload never carries a destination chat ID; the worker resolves the
+destination from the paired channel identity at delivery time.
+
 ### `processed_events`
 
 Consumer plus event/idempotency key, first/last observation and result. Its
@@ -128,9 +135,12 @@ MVP permits only `create_blog_draft@1` with `client_publish` for Webbin. A
 composite scope foreign key prevents a binding from crossing tenant, project or
 manifest boundaries. Binding rows cannot be updated or deleted.
 
-### `rule_set_versions`, `node_config_versions`, `workflow_definitions`
+### `project_tool_customizations`
 
-Immutable editorial rules, provider/model/prompt configs and graph versions.
+Append-only tenant/project/capability customization versions. Each row references
+an artifact-store body (markdown), digest, version number and supersession. Runs
+freeze the customization version used for generation. Customization is outside
+the enrollment manifest state machine.
 
 ### `project_locales`
 
@@ -206,15 +216,11 @@ Question/answer and structured plan history with confirmation timestamps.
 Request version, graph version, thread/checkpoint identifiers, status, start/end and current node.
 
 `workflow_checkpoints` is the append-only first-MVP checkpointer with a
-monotonic sequence and structured state.
+monotonic sequence and structured state. Mid-stage resume is not implemented;
+retryable failures re-enter the current resume command.
 
-### `node_runs`
-
-Node version, input/output artifact references, attempt, timings, model/tool association and result/error.
-
-### LangGraph checkpoint tables
-
-Owned by the supported checkpointer implementation. Business tables reference but do not duplicate checkpoint content.
+Node attempt detail lives in checkpoint summaries and `model_calls`, not a
+separate `node_runs` table in the first MVP.
 
 ### `outbox_events` and `processed_events`
 

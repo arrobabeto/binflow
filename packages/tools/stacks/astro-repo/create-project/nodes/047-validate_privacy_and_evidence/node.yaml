@@ -1,0 +1,4 @@
+kind: compute
+nodeKind: project.validate_privacy@1
+label: Validate privacy and evidence
+acceptsClientCustomization: false

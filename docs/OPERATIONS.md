@@ -27,7 +27,53 @@
   and PostgreSQL-backed session runtime can initialize; Caddy waits for this
   health check in production.
 
-Start durable dependencies with `docker compose -f infra/compose/local.yml up -d postgres redis minio clamav`, then apply migrations with `pnpm db:migrate`. The same Compose file can build the current API, dashboard, worker and maintenance images; the CLI intentionally runs in the trusted host terminal so interactive secret input never traverses Compose configuration.
+Start durable dependencies with `docker compose -f infra/compose/local.yml up -d postgres redis minio clamav`, then apply migrations with `pnpm db:migrate`. Host `pnpm dev` needs those ports on localhost; it does not start PostgreSQL or Redis by itself. The same Compose file can build the current API, dashboard, worker and maintenance images; the CLI intentionally runs in the trusted host terminal so interactive secret input never traverses Compose configuration.
+
+After portfolio cover encoding changes (JPEG → AVIF), force-bump the active
+Webbin manifest path allowlist so `render_artifacts` accepts
+`public/images/projects/*.avif`:
+
+`pnpm --filter @binflow/tools exec tsx scripts/refresh-webbin-manifest-avif-paths.ts`
+
+### New tool scaffolding (ADR-0039)
+
+Author a validated brief under `packages/tools/briefs/<id>.brief.yaml`, then:
+
+```bash
+pnpm --filter @binflow/tools exec tsx scripts/scaffold-tool.ts briefs/<id>.brief.yaml --dry-run
+pnpm --filter @binflow/tools exec tsx scripts/scaffold-tool.ts briefs/<id>.brief.yaml
+```
+
+Paste stdout snippets into contracts, policies, and `capability-runtimes.ts`. Implement
+executor/runtime before enabling bindings. Destructive tools remain design-only until
+ADR-0040 platform gaps close.
+
+Example dry-run (no catalog registration):
+
+`pnpm --filter @binflow/tools exec tsx scripts/scaffold-tool.ts briefs/delete_project_astro.brief.yaml --dry-run`
+
+Enable `delete_project_astro@2` on an existing Webbin enrollment after migration
+`0023`:
+
+`pnpm --filter @binflow/tools exec tsx scripts/add-webbin-delete-project-binding.ts`
+
+### Delete blog stuck requests
+
+If a client re-requests delete for an already-removed article and a request
+lands in `REVALIDATING` or another non-terminal state, cancel or mark failed in
+the dashboard. There is no automatic heal job in MVP.
+
+If delete-blog **merged** but `verify_production` failed while the article files
+are already gone, confirm production routes return 404 for the deleted slug. When
+they do, reset the request to `APPROVED_FOR_PUBLISH` and re-enqueue
+`workflow.resume` with `reason: publish`, or mark `COMPLETED` manually if
+tombstone and client notification already ran.
+
+Post-deletion HTTP redirects are not managed by Binflow until the client repo
+supports Vercel-native redirects (ADR-0041). Search Console cleanup for removed
+URLs is handled in the client repository.
+
+Do not re-run full delete execute for slugs already removed from the repository.
 
 `DATABASE_URL` is the runtime application connection. `BINFLOW_MIGRATION_DATABASE_URL`
 or its `_FILE` variant is the schema-owner connection used only by migration and
@@ -69,6 +115,10 @@ First production target should provide at least 2–4 vCPU, 8 GiB RAM and 100 Gi
 - Database/Redis/object-store endpoints without credentials.
 - Log level, retention, rate and worker concurrency defaults.
 - Allowed callback domains and provider feature flags.
+
+Dashboard sessions use a rolling 30-minute inactivity limit. Changing this
+policy requires an ADR and coordinated dashboard/API restart; sessions whose
+persisted last activity already exceeds the new limit are rejected immediately.
 
 ### Secret
 
@@ -144,9 +194,12 @@ Production supplies the KEK as a Docker secret. Database records contain one ran
 ### Platform-owner authentication bootstrap
 
 Generate a separate Better Auth secret outside the repository before starting
-the dashboard or API. Local development uses a regular `0600` file and exports
-only its path through `BINFLOW_AUTH_SECRET_FILE`; production mounts the same
-secret class as `/run/secrets/auth_secret`. Do not reuse the SecretsProvider KEK.
+the dashboard or API. Local development uses a regular `0600` file. Compose
+services receive that path through `BINFLOW_AUTH_SECRET_FILE`; host `pnpm dev`
+loads the same default file (`$XDG_CONFIG_HOME/binflow/auth-secret-v1.key`, or
+`~/.config/binflow/auth-secret-v1.key`) when neither `BINFLOW_AUTH_SECRET` nor
+`BINFLOW_AUTH_SECRET_FILE` is set. Production mounts the secret as
+`/run/secrets/auth_secret`. Do not reuse the SecretsProvider KEK.
 
 ```text
 pnpm binflow auth-secret init
@@ -227,12 +280,77 @@ and database backup rather than deleting similarity history manually.
 Keep `BINFLOW_LIVE_EXECUTION_ENABLED=false` while testing enrollment and the
 fake-provider E2E suite. Set it to `true` only after provider verification,
 artifact storage health and an operator review of the active Webbin manifest.
+On the host, `pnpm run dev` leaves the switch off (confirmed plans stay
+`QUEUED` with a pending `workflow.resume_requested` outbox row). Use
+`pnpm run dev:live` when you intentionally want OpenAI/GitHub/Vercel mutation
+after plan confirmation.
 Turning it back to `false` immediately prevents new OpenAI/GitHub/Vercel
 mutations. Pending workflow outbox records remain durable and undispatched
 until the switch is enabled again; existing branches and PRs remain recorded
 for reconciliation. Dispatched jobs retry retryable provider/internal failures
 up to four attempts with exponential backoff, while deterministic policy,
-authorization, validation and budget failures stop immediately.
+authorization, validation and budget failures stop immediately. A `FAILED_FINAL`
+publication that still lacks a production deployment is re-queued after the
+worker starts so an already-merged GitHub PR can finish production verification.
+Host `pnpm dev` and the Compose worker must not poll the same Telegram
+bot at the same time. The worker now enforces this with a Redis polling lock
+per bot: the holder long-polls ingress; any other instance starts in
+**send-only** mode and can still deliver outbound notices without calling
+`getUpdates`. Keep Docker dependencies (`postgres`, `redis`,
+`minio`, `clamav`) running under Compose, but run **one** polling worker only:
+either the Compose `worker` service **or** the host `@binflow/worker`
+started by `pnpm dev`, never both. With `pnpm run dev` already polling,
+stop the Compose poller with
+`docker compose -f infra/compose/local.yml stop worker`. A second
+`getUpdates` client produces Telegram
+`Conflict: terminated by other getUpdates request` and drops ingress
+until only one poller remains.
+
+### Notification dispatch
+
+The worker drains two notification event types on the same schedule:
+`admin.notification_requested` to the paired platform-owner chat and
+`client.notification_requested` to the requesting client's conversation. Both
+use bounded exponential backoff and mark an event `failed` after ten attempts.
+Before Telegram delivery, the worker atomically leases each pending outbox row
+(`available_at` lease) so concurrent workers (host + Compose, or send-only
+replicas) cannot deliver the same notice more than once. Delivery is independent
+of workflow state, so a stopped worker delays notices without losing or
+reverting the transitions that produced them.
+
+A client notice needs the client bot runtime, not the admin runtime. When the
+client bot is unpaired or its runtime is missing, the event stays `pending` and
+retries; it is never delivered to the admin chat as a fallback. Cancellations
+performed from the dashboard while the worker is stopped are therefore announced
+to the client once the worker returns.
+
+### Webbin preview Deployment Protection
+
+Telegram preview buttons open the unique Vercel deployment hostname. If the
+Webbin Vercel project has Standard Protection / Vercel Authentication enabled
+for Preview, those URLs prompt for a Vercel login and the client cannot review
+the article.
+
+Binflow does not mint shareable preview secrets. To let the client open the
+preview without a Vercel account:
+
+1. Open [Vercel](https://vercel.com/) as the team that owns Webbin
+   (`arrobabetos-projects` in the current pilot).
+2. Select the **webbin** project (not the Binflow dashboard).
+3. Go to **Settings → Deployment Protection**.
+4. Disable **Standard Protection** / **Vercel Authentication** for **Preview**
+   deployments. Leave Production protected unless you intentionally want the
+   live site public without Vercel auth (the custom production domain is
+   already the public site).
+5. Save, then open a current `*.vercel.app` preview URL in a private/incognito
+   window with no Vercel session. The article should load.
+
+Publication-complete Telegram messages use `https://webbin.com.mx`, not the unique
+production deployment hostname.
+
+Re-enable Preview protection after the review if you do not want later preview
+URLs to stay world-readable. Changing this setting does not alter Git, the
+Binflow manifest `protectionMode`, or production evidence URLs.
 
 Endpoints:
 
@@ -242,6 +360,14 @@ Endpoints:
 
 The Operations dashboard surfaces PostgreSQL, Redis, worker heartbeat, object
 storage and required integration readiness.
+
+For local admin-bot pairing, create the one-time link from a non-idle,
+TOTP-verified session, open the current link and send the generated `/start
+<token>` command. A successful bot reply is the completion signal; a typing
+indicator alone is not. Refresh the target projection afterward. If the link is
+denied, create a new link only after confirming the worker is healthy and the
+admin polling runtime is active; older unconsumed links are revoked when a new
+one is issued.
 
 ## Backups
 

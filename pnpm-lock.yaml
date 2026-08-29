@@ -65,6 +65,9 @@ importers:
       '@binflow/secrets':
         specifier: workspace:*
         version: link:../../packages/secrets
+      '@binflow/tools':
+        specifier: workspace:*
+        version: link:../../packages/tools
       '@binflow/workflows':
         specifier: workspace:*
         version: link:../../packages/workflows
@@ -198,6 +201,9 @@ importers:
       '@binflow/messaging':
         specifier: workspace:*
         version: link:../../packages/messaging
+      '@binflow/projects':
+        specifier: workspace:*
+        version: link:../../packages/projects
       '@binflow/secrets':
         specifier: workspace:*
         version: link:../../packages/secrets
@@ -241,9 +247,15 @@ importers:
       '@binflow/integrations':
         specifier: workspace:*
         version: link:../integrations
+      '@binflow/projects':
+        specifier: workspace:*
+        version: link:../projects
       '@binflow/secrets':
         specifier: workspace:*
         version: link:../secrets
+      '@binflow/tools':
+        specifier: workspace:*
+        version: link:../tools
       ai:
         specifier: 7.0.59
         version: 7.0.59(zod@4.4.3)
@@ -544,7 +556,51 @@ importers:
         specifier: 24.13.3
         version: 24.13.3
 
+  packages/projects:
+    dependencies:
+      '@binflow/contracts':
+        specifier: workspace:*
+        version: link:../contracts
+      '@binflow/domain':
+        specifier: workspace:*
+        version: link:../domain
+      sharp:
+        specifier: 0.35.3
+        version: 0.35.3(@types/node@24.13.3)
+    devDependencies:
+      '@types/node':
+        specifier: 24.13.3
+        version: 24.13.3
+
   packages/secrets:
+    devDependencies:
+      '@types/node':
+        specifier: 24.13.3
+        version: 24.13.3
+
+  packages/tools:
+    dependencies:
+      '@binflow/contracts':
+        specifier: workspace:*
+        version: link:../contracts
+      '@binflow/db':
+        specifier: workspace:*
+        version: link:../db
+      '@binflow/domain':
+        specifier: workspace:*
+        version: link:../domain
+      drizzle-orm:
+        specifier: 0.45.2
+        version: 0.45.2(@types/pg@8.20.0)(kysely@0.29.5)(pg@8.23.0)
+      uuid:
+        specifier: 13.0.0
+        version: 13.0.0
+      yaml:
+        specifier: 2.8.2
+        version: 2.8.2
+      zod:
+        specifier: 4.4.3
+        version: 4.4.3
     devDependencies:
       '@types/node':
         specifier: 24.13.3
@@ -595,6 +651,12 @@ importers:
       '@binflow/policies':
         specifier: workspace:*
         version: link:../policies
+      '@binflow/projects':
+        specifier: workspace:*
+        version: link:../projects
+      '@binflow/tools':
+        specifier: workspace:*
+        version: link:../tools
       drizzle-orm:
         specifier: 0.45.2
         version: 0.45.2(@types/pg@8.20.0)(kysely@0.29.5)(pg@8.23.0)
@@ -6927,6 +6989,11 @@ packages:
   yallist@5.0.0:
     resolution: {integrity: sha512-YgvUTfwqyc7UXVMrB+SImsVYSmTS8X/tSrtdNZMImM+n7+QTriRXyXim0mBrTXNeqzVF0KWGgHPeiyViFFrNDw==}
     engines: {node: '>=18'}
+
+  yaml@2.8.2:
+    resolution: {integrity: sha512-mplynKqc1C2hTVYxd0PU2xQAc22TI1vShAYGksCCfxbn/dFwnHTNi1bvYsBTkhdUNtGIf5xNOg938rrSSYvS9A==}
+    engines: {node: '>= 14.6'}
+    hasBin: true
 
   yaml@2.9.0:
     resolution: {integrity: sha512-2AvhNX3mb8zd6Zy7INTtSpl1F15HW6Wnqj0srWlkKLcpYl/gMIMJiyuGq2KeI2YFxUPjdlB+3Lc10seMLtL4cA==}
@@ -13798,6 +13865,8 @@ snapshots:
   yallist@3.1.1: {}
 
   yallist@5.0.0: {}
+
+  yaml@2.8.2: {}
 
   yaml@2.9.0: {}
 

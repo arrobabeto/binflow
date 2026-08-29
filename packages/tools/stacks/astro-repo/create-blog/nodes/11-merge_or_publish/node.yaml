@@ -1,0 +1,7 @@
+kind: effect
+nodeKind: publication.merge@1
+label: Merge and publish
+acceptsClientCustomization: false
+permissions:
+  - github:pull_requests:write
+  - github:contents:write

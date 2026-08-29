@@ -9,7 +9,7 @@ ADRs preserve why durable decisions exist. Accepted ADRs are binding until a lat
 | [0001](0001-documentation-first.md)                                  | Documentation-first delivery                                   | Accepted |
 | [0002](0002-typescript-monorepo.md)                                  | TypeScript/pnpm monorepo                                       | Accepted |
 | [0003](0003-postgresql-and-redis.md)                                 | PostgreSQL durable state and Redis coordination                | Accepted |
-| [0004](0004-langgraph-and-bullmq.md)                                 | LangGraph workflows and BullMQ transport                       | Accepted |
+| [0004](0004-langgraph-and-bullmq.md)                                 | TypeScript workflow runtime and BullMQ transport               | Accepted |
 | [0005](0005-capabilities-and-manifests.md)                           | Typed capabilities and manifests                               | Accepted |
 | [0006](0006-preview-and-approval.md)                                 | Exact preview and version-bound approval                       | Accepted |
 | [0007](0007-telegram-topology.md)                                    | Admin bot plus dedicated client bots                           | Accepted |
@@ -29,5 +29,23 @@ ADRs preserve why durable decisions exist. Accepted ADRs are binding until a lat
 | [0021](0021-telegram-ingress-and-durable-request-kernel.md)          | Telegram ingress and durable request kernel                    | Accepted |
 | [0022](0022-complete-blog-execution-and-publication.md)              | Complete blog execution and publication                        | Accepted |
 | [0023](0023-admin-notifications-and-production-readiness.md)         | Admin notifications and production readiness                   | Accepted |
+| [0024](0024-rolling-idle-dashboard-session.md)                       | Rolling 30-minute idle dashboard session                       | Accepted |
+| [0025](0025-delivered-client-pairing-activation.md)                  | Delivered client pairing activates enrollment                  | Accepted |
+| [0026](0026-telegram-inline-action-buttons.md)                       | Telegram inline buttons for client actions                     | Accepted |
+| [0027](0027-client-notification-outbox.md)                           | Client-notification outbox for admin cancellation              | Accepted |
+| [0028](0028-idempotent-publication-after-merge.md)                   | Idempotent publication after GitHub merge                      | Accepted |
+| [0029](0029-client-visible-production-origin.md)                     | Client-visible production URLs use webbin.com.mx               | Accepted |
+| [0030](0030-declarative-tools-and-client-customization.md)           | Declarative tools, node kinds and client customization         | Accepted |
+| [0031](0031-context-first-blog-brief.md)                             | Context-first blog brief with provisional topic                | Accepted |
+| [0032](0032-surgical-blog-revision.md)                               | Surgical blog revision with confirmed revision plan            | Accepted |
+| [0033](0033-create-project-draft-portfolio-tool.md)                  | Create project draft portfolio capability                      | Superseded by ADR-0034 |
+| [0034](0034-create-project-astro-reusable-tool.md)                   | Reusable create_project_astro tool, manifest structure, upload | Accepted |
+| [0035](0035-project-content-schema-dsl-and-collection-loop.md)       | Project content-schema DSL and conversational collection loop  | Accepted |
+| [0036](0036-portfolio-hero-screenshot-cover.md)                      | Portfolio cover from hero screenshot; required Webbin URL      | Accepted |
+| [0037](0037-project-year-month-url-evidence-avif-cover.md)           | Year-month fecha, URL evidence, AVIF covers, fact merge        | Accepted |
+| [0038](0038-capability-runtime-registry.md)                          | Capability runtime registry and catalog-backed graph versions  | Accepted |
+| [0039](0039-tool-authoring-pipeline.md)                              | Tool authoring pipeline (brief, scaffolder, conformance)       | Accepted |
+| [0040](0040-destructive-content-capabilities.md)                     | Destructive content capabilities (delete project)              | Proposed |
+| [0041](0041-defer-delete-blog-redirects.md)                          | Defer delete-blog post-deletion redirects                      | Accepted |
 
 Use [0000-template.md](0000-template.md) for new decisions.

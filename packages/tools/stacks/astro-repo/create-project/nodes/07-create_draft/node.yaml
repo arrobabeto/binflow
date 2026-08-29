@@ -1,0 +1,7 @@
+kind: effect
+nodeKind: publication.create_draft@1
+label: Create branch commit and PR
+acceptsClientCustomization: false
+permissions:
+  - github:contents:write
+  - github:pull_requests:write

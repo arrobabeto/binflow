@@ -1,0 +1,172 @@
+identity:
+  id: delete_project_astro
+  version: 2
+  stack: astro_repo
+  toolDir: delete-project
+  graphVersionSuffix: '@1'
+  displayName: Delete portfolio project
+  command: /delete_project
+  description: >
+    Removes an existing portfolio case study via deletion PR and admin-only
+    publication. Target identified by title or URL. Deletion scope is manifest-driven.
+  profile: astro_repo
+  executorId: workflow.delete_project@1
+  riskClass: high
+  requiresPreview: false
+  mutationClass: destructive
+  approvalPolicyId: webbin-project-deletion@1
+
+specTitle: Delete portfolio project — capability specification
+
+migration:
+  inputSchemaId: delete_project_astro.input@1
+  outputSchemaId: delete_project_astro.output@1
+  allowedProfiles:
+    - astro_repo
+  requiredPermissions:
+    - github:metadata:read
+    - github:contents:write
+    - github:pull_requests:write
+    - github:checks:read
+    - github:statuses:read
+    - vercel:deployments:read
+  timeoutSeconds: 1800
+  retryPolicy:
+    maxAttempts: 3
+    retryableErrors:
+      - provider_retryable
+      - deployment_pending
+  budget:
+    maxEstimatedCostCents: 200
+    maxModelCalls: 1
+    maxTokens: 1000
+
+nodes:
+  - sortPrefix: '01'
+    id: catalog_sync
+    kind: effect
+    nodeKind: content.catalog_sync@1
+    label: Sync content catalog
+    acceptsClientCustomization: false
+    permissions:
+      - github:metadata:read
+      - github:contents:read
+  - sortPrefix: '02'
+    id: resolve_target
+    kind: compute
+    nodeKind: project.resolve_delete_target@1
+    label: Resolve delete target by title or URL
+    acceptsClientCustomization: false
+  - sortPrefix: '03'
+    id: validate_deletion
+    kind: compute
+    nodeKind: project.validate_deletion@1
+    label: Validate deletion scope
+    acceptsClientCustomization: false
+  - sortPrefix: '04'
+    id: render_deletion_artifacts
+    kind: compute
+    nodeKind: project.render_deletion@1
+    label: Build manifest-driven deletion file set
+    acceptsClientCustomization: false
+  - sortPrefix: '05'
+    id: open_deletion_pr
+    kind: effect
+    nodeKind: project.open_deletion_pr@1
+    label: Open deletion pull request
+    acceptsClientCustomization: false
+    permissions:
+      - github:contents:write
+      - github:pull_requests:write
+  - sortPrefix: '06'
+    id: awaiting_admin_approval
+    kind: interrupt
+    nodeKind: await.admin_approval@1
+    label: Admin deletion approval
+    acceptsClientCustomization: false
+    actor: admin
+    ttlHours: 48
+  - sortPrefix: '07'
+    id: merge_or_publish
+    kind: effect
+    nodeKind: publication.merge@1
+    label: Merge deletion PR
+    acceptsClientCustomization: false
+    permissions:
+      - github:contents:write
+      - github:pull_requests:write
+  - sortPrefix: '08'
+    id: verify_production
+    kind: effect
+    nodeKind: deployment.verify_absence@1
+    label: Verify production routes return 404
+    acceptsClientCustomization: false
+    permissions:
+      - vercel:deployments:read
+  - sortPrefix: '09'
+    id: completed
+    kind: compute
+    nodeKind: workflow.completed@1
+    label: Completed
+    acceptsClientCustomization: false
+
+edges:
+  - from: catalog_sync
+    to: resolve_target
+  - from: resolve_target
+    to: validate_deletion
+  - from: validate_deletion
+    to: render_deletion_artifacts
+  - from: render_deletion_artifacts
+    to: open_deletion_pr
+  - from: open_deletion_pr
+    to: awaiting_admin_approval
+  - from: awaiting_admin_approval
+    to: merge_or_publish
+    when: approval.client_publish
+  - from: merge_or_publish
+    to: verify_production
+  - from: verify_production
+    to: completed
+
+contentSchemaFields:
+  - id: targetTitle
+    type: string
+    min: 2
+    max: 500
+    required: false
+    ask: '¿Qué proyecto quieres borrar? Indica el título o la URL pública.'
+  - id: targetUrl
+    type: url
+    required: false
+    ask: '¿Cuál es la URL pública del proyecto que quieres borrar?'
+
+customizableNodeIds: []
+
+layerAssignments:
+  - layer: code
+    behavior: Title/URL resolution, manifest path expansion, GitHub DELETE, catalog tombstone, production 404 verification.
+  - layer: manifest
+    behavior: Portfolio collection directories and editablePaths determine files removed per locale.
+  - layer: customization
+    behavior: Optional ask wording for title/URL collection; cannot widen deletion scope.
+
+typedErrors:
+  - code: project_not_found
+    when: Title or URL does not resolve to a catalog item.
+  - code: ambiguous_title
+    when: Multiple catalog matches for the same normalized title.
+  - code: route_still_live
+    when: Production verification finds a live project route after merge.
+
+verification:
+  scenarios:
+    - Collect title or URL; resolve to slug via catalog.
+    - Title-only input triggers URL confirmation before plan confirm.
+    - Deletion PR removes manifest-declared portfolio paths only.
+    - Admin-only approval required against PR head.
+    - Catalog item status becomes deleted after successful merge.
+    - Old project URLs return 404 in production.
+  fixtures:
+    - typical-confidential.json
+    - webbin-manifest.json portfolio paths

@@ -1,0 +1,9 @@
+kind: agent
+nodeKind: content.apply_revision@1
+label: Apply confirmed revision plan
+workload: text
+model: gpt-5.6-terra
+effort: medium
+maxOutputTokens: 12000
+acceptsClientCustomization: true
+rulesRef: shared/rules/portfolio-content@1

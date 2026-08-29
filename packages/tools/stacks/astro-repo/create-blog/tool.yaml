@@ -1,0 +1,11 @@
+id: create_blog_draft
+version: 1
+displayName: Create blog
+command: /create_blog
+profile: astro_repo
+graphVersion: stacks/astro-repo/create-blog@1
+executorId: workflow.create_blog@1
+riskClass: medium
+requiresPreview: true
+description: >
+  Creates a bilingual Astro blog article with preview PR and gated publication.

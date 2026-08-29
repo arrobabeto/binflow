@@ -1,0 +1,7 @@
+kind: effect
+label: Merge deletion PR
+nodeKind: publication.merge@1
+acceptsClientCustomization: false
+permissions:
+  - github:contents:write
+  - github:pull_requests:write

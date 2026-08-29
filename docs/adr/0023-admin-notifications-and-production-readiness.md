@@ -17,9 +17,12 @@ and a fail-closed contract for the later VPS webhook cutover.
 2. The active admin target is identified by exact verified bot ID, Telegram user
    ID and chat ID. Re-pairing revokes the old target and every transition is
    audited.
-3. A client blog request and every transition that requires platform-owner
-   approval produce a durable admin-notification outbox event. Delivery is
-   retryable and does not advance workflow state.
+3. A client blog request, every transition that requires platform-owner
+   approval, and every terminal `FAILED_FINAL` workflow stop produce a durable
+   admin-notification outbox event. Required notification types include
+   `request.created`, `admin_approval_required`, `request.failed_final`, and
+   `request.published` when production is verified. Delivery is retryable and
+   does not advance workflow state.
 4. Local mode keeps separate admin/client polling namespaces. The production
    profile remains disabled until the VPS cutover implements separate webhook
    paths and secrets, validates the Telegram secret header and deduplicates

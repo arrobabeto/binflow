@@ -1,0 +1,4 @@
+kind: compute
+nodeKind: project.validate_bundle@1
+label: Validate project bundle
+acceptsClientCustomization: false

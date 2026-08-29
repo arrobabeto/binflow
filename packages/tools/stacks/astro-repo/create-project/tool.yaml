@@ -1,0 +1,12 @@
+id: create_project_astro
+version: 1
+displayName: Create portfolio project
+command: /create_project
+profile: astro_repo
+graphVersion: stacks/astro-repo/create-project@4
+executorId: workflow.create_project@1
+riskClass: medium
+requiresPreview: true
+description: >
+  Creates a bilingual Astro portfolio case study with preview PR and gated publication.
+  Structure is manifest-driven; editorial style comes from uploaded client customization.

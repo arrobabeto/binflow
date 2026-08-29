@@ -116,15 +116,16 @@ new regular `0600` file outside the repository. It prints only the path and
 refuses to overwrite an existing file.
 
 Fastify resolves the Better Auth cookie server-side for `/api/v1/**` and derives
-an actor with `role: platform_owner`. A missing/expired session is
+an actor with `role: platform_owner`. A missing/expired/idle session is
 `401 authentication_error`; a valid account without enabled TOTP is
-`403 authorization_error` outside the security-enrollment surface; a sensitive
-mutation whose session is older than five minutes is
-`403 authorization_error` with code `fresh_session_required`.
+`403 authorization_error` outside the security-enrollment surface. Protected
+operations do not have a separate five-minute freshness failure.
 
-Session policy is database-backed, 12-hour expiry, one-hour refresh and
-five-minute freshness. Cookie session caching is disabled so revocation is
-immediate. Cookies are HTTP-only, same-site lax and secure in production.
+Session policy is database-backed, rolling 30-minute inactivity expiry and
+at-most-once-per-minute refresh. Cookie session caching is disabled so
+revocation is immediate. Cookies are HTTP-only, same-site lax and secure in
+production. The browser signs out at the same idle boundary and revalidates
+restored/foreground navigation against the server.
 
 ## Core enums
 
@@ -212,6 +213,11 @@ Validation rules:
 - Webbin accepts exactly `es` and `en`, with `es` as default/slug locale and
   `always_translate`; `de` and `ask_each_action` are rejected by the pilot
   overlay rather than silently ignored.
+- The generated English article must adapt `titulo`, `seoTitulo`, `descripcion`,
+  `imagenAlt`, keywords, FAQ questions and Markdown headings. Identical Spanish
+  strings in the English locale are invalid.
+- The Webbin pilot production origin is `https://webbin.com.mx`. Client-visible
+  production URLs use that origin.
 
 ## Capability definition
 
@@ -247,6 +253,19 @@ new category. Project configuration cannot override its schemas, executor,
 permissions, timeout, retries or budget. It can only bind the exact definition
 through a validated manifest.
 
+`PUT /api/v1/projects/:projectId/capabilities` accepts
+`{ bindings: CapabilityBinding[] }` and:
+
+1. Rejects unknown registry bindings (`capability_binding_not_allowed`).
+2. Rejects bindings whose `capability_definitions` row is missing
+   (`capability_definition_missing` — apply migrations first).
+3. Rejects bindings when `projects.profile` is not in the definition’s
+   `allowedProfiles` (`capability_profile_incompatible`).
+4. Requires at least one non-disabled binding and a validated/active manifest.
+
+Enrollment list/detail responses include `projectProfile` (from `projects.profile`)
+so the Tools assignment UI can filter compatible clients by stack.
+
 ```ts
 type CapabilityCatalogItem = {
   id: 'create_blog_draft';
@@ -259,6 +278,114 @@ type CapabilityCatalogItem = {
   riskClass: 'medium';
 };
 ```
+
+The immutable registry includes **`create_project_astro@1`** with executor
+`workflow.create_project@1`, profile `astro_repo`, medium risk, preview
+required, and client-only publication approval (ADR-0034). Legacy
+`create_project_draft@1` remains in the database append-only history.
+
+Graph versions for queued runs resolve from the declarative tool catalog
+(`tool.yaml` → `graphVersion`) via ADR-0038; worker dispatch resolves
+`executorId` through `packages/workflows/src/capability-runtimes.ts` (fail-closed).
+
+## `create_project_astro`
+
+Telegram command: `/create_project`.
+
+See `docs/specs/create-project-astro.md`, ADR-0034, ADR-0035, ADR-0036 and
+ADR-0037. Structure (paths, headings, enums) is manifest-driven. Customization
+supplies editorial style and optional allowlisted `content_schema` fields
+collected in `NEEDS_INPUT` before plan confirmation. Base facts: `name`,
+`fecha` (`YYYY-MM`), `projectDescription`. Graph `@4` runs `read_project_url`
+before generate. Covers render as AVIF. Closed-fact metadata merges
+deterministically onto `project_bundle.v1` after generate.
+
+Intermediate artifact: validated `project_bundle.v1` JSON rendered to manifest
+collection paths with optional cover under `content.portfolio.imageDirectory`.
+
+## `delete_project_astro`
+
+Telegram command: `/delete_project`.
+
+See `docs/specs/delete-project.md` and ADR-0040. Destructive portfolio deletion
+by title or URL; admin-only publication; no preview deploy. Input schema:
+`deleteProjectAstroInputSchema` (`collect` | `execute` modes). Policy:
+`webbin-project-deletion@1`.
+
+## `delete_blog_draft`
+
+Telegram command: `/delete_blog`.
+
+See `docs/specs/delete-blog-draft.md` and ADR-0040 / ADR-0041. Input schema:
+`deleteBlogDraftInputSchema` (`collect` | `execute` modes). Policy:
+`webbin-blog-deletion@1`.
+
+```ts
+type CreateProjectAstroInput =
+  | {
+      mode: 'collect';
+      projectId: string;
+      closedFacts: Record<string, unknown>;
+      messages: string[];
+      collectionComplete?: boolean;
+      publicationIntent?: 'draft' | 'publish';
+    }
+  | {
+      mode: 'brief';
+      projectId: string;
+      brief: string;
+      closedFacts?: Record<string, unknown>;
+      publicationIntent?: 'draft' | 'publish';
+      image?: { mode: 'omit' | 'generate' | 'provided'; sourcePath?: string };
+      url?: string;
+      tipo?: string;
+      estado?: string;
+      fecha?: string;
+      destacada?: boolean;
+      confidencial?: boolean;
+      stack?: string[];
+      sourceLocale?: SupportedLocale;
+      clientProfile?: string;
+      notes?: string;
+    }
+  | {
+      mode: 'structured';
+      projectId: string;
+      bundle: GeneratedProjectBundle;
+      publicationIntent?: 'draft' | 'publish';
+      url?: string;
+      fecha?: string;
+      destacada?: boolean;
+      confidencial?: boolean;
+      notes?: string;
+    }
+  | {
+      mode: 'revision';
+      projectId: string;
+      feedback: string;
+    };
+```
+
+Manifest portfolio extension:
+
+```ts
+type ManifestPortfolio = {
+  collections: Partial<Record<SupportedLocale, { directory: string; routePrefix: string }>>;
+  editablePaths: string[];
+  frontmatterFields: string[];
+  requiredFrontmatter: string[];
+  imageDirectory: string;
+  sectionHeadings: Partial<
+    Record<
+      SupportedLocale,
+      { challenge: string; solution: string; outcome: string }
+    >
+  >;
+  enumFields?: Record<string, readonly string[]>;
+};
+```
+
+Publication with `publicationIntent: 'publish'` requires `url` on the bundle.
 
 ## `create_blog_draft`
 
@@ -301,7 +428,13 @@ type CreateBlogDraftInput =
     };
 ```
 
-`topic` is the only client-supplied field required to begin brief mode. The planner may propose optional values, but the client must confirm them before generation.
+`topic` is required on the brief-mode schema (≤500 characters). For Telegram
+ingress (ADR-0031), a short message becomes `topic` only; a longer message
+(≤10 000) is stored entirely in `context` with a provisional localized `topic`.
+The executor’s `interpret_brief` stage proposes the durable topic from
+`context` before similarity. The planner may still propose optional fields
+(`objective`, `audience`, …); the client must confirm the plan before
+generation.
 
 ```ts
 type CategoryDecision =
@@ -349,6 +482,9 @@ type CreateBlogDraftOutput = {
 };
 ```
 
+Preview URLs use the unique Vercel deployment origin. Production publication
+URLs use the verified public project domain, not a `*.vercel.app` hostname.
+
 ## Policy decision
 
 ```ts
@@ -392,10 +528,17 @@ type ApprovalBinding = {
 
 Any artifact identifier change invalidates the approval. Duplicate approval actions return the current decision without repeating effects.
 
-Client action tokens support `approve_preview`, `request_revision`, `reject`
-and `cancel` after preview. Admin action tokens support `approve_publish` and
+Client action tokens support `approve_preview`, `request_revision`,
+`confirm_revision_plan`, `adjust_revision_plan`, `cancel_revision`, `reject`
+and `cancel` after preview or revision-plan gates. Admin action tokens support `approve_publish` and
 `reject` only for a new-category request. Tokens are opaque, hashed, expire in
 24 hours and bind to one request version, PR head SHA and preview deployment.
+The Telegram client surface presents those tokens as inline buttons on every
+decision step, including worker-originated preview notices and revision-plan
+notices; the
+ingress contract is still `text: "/action <token>"` whether the client tapped
+a button or typed the fallback command. Visible Telegram copy never includes
+the `/action` form.
 
 Publication resume signals use the same stable request/request-version
 identity as generation and add a code-owned reason: `execute`, `publish` or
@@ -425,7 +568,9 @@ GET    /api/v1/session
 GET    /api/v1/projects
 GET    /api/v1/projects/:projectId
 GET    /api/v1/projects/:projectId/capabilities
-GET    /api/v1/requests
+PUT    /api/v1/projects/:projectId/capabilities
+GET    /api/v1/tools/:toolId/assignments
+GET    /api/v1/requests?projectId&needsAdminApproval&limit&cursor
 GET    /api/v1/requests/:requestId
 POST   /api/v1/requests/:requestId/approve
 POST   /api/v1/requests/:requestId/reject
@@ -456,8 +601,23 @@ GET    /api/v1/admin/telegram/target
 ```
 
 Module 7 implements a redacted request projection with request ID,
-tenant/project, `create_blog_draft` capability, state, current version, topic
-and timestamps plus the optimistic concurrency revision. The implemented kernel states are `RECEIVED`, `NEEDS_INPUT`,
+tenant/project, `clientName`, `clientKey`, `create_blog_draft` capability, state,
+current version, topic and timestamps plus the optimistic concurrency revision.
+`GET /api/v1/requests` is a cursor page. Query: optional `projectId`, optional
+`needsAdminApproval` (`true` = `AWAITING_ADMIN_APPROVAL` only, `false` =
+every other state), `limit` in `{10,30,50}` (default 10), optional opaque
+`cursor` of `{ updatedAt, id }` ordered `updatedAt DESC, id DESC`. `nextCursor`
+is null when no further batch exists. Detail also includes:
+
+- `stages`: append-only workflow checkpoints for the current request version.
+  Each entry has `sequence`, `node`, `createdAt` and a redacted `summary`
+  derived only from allowlisted checkpoint state (`requestState`,
+  `errorCategory`). No credentials, chain-of-thought or raw JSON dumps.
+- `failure`: when the request stops with an error, `{ category, message, node }`
+  from `terminalResult` (`errorCategory`, `errorMessage`, `failedNode`) or
+  `null` when no failure is recorded.
+
+The implemented kernel states are `RECEIVED`, `NEEDS_INPUT`,
 `AWAITING_PLAN_CONFIRMATION`, `QUEUED`, `CANCELLED` and `FAILED_FINAL`;
 Module 8 adds execution/publication states.
 
@@ -465,14 +625,29 @@ Module 8 adds execution/publication states.
 idempotency key. Telegram actions call the same application service with a
 resolved channel actor and an opaque, single-use action token.
 
+A successful dashboard cancellation also enqueues one durable
+`client.notification_requested` outbox event in the same transaction, so the
+client's Telegram conversation learns the request is terminal (ADR-0027). The
+event is keyed by request and event version, so an idempotent replay of the
+cancel call returns the stored response without enqueuing a second notice. A
+request whose conversation locale cannot be resolved commits the cancellation
+without an event. Client-initiated `/cancel` enqueues nothing because it already
+answers in-thread.
+
 The transport-neutral Telegram ingress input is `{ botId, updateId,
 externalUserId, chatId, text, receivedAt }`. It accepts direct messages only,
 deduplicates by bot/update and returns localized reply intents. It never accepts
 tenant/project IDs supplied by an update.
 
+Telegram transport dispatch preserves the complete command text. Chat SDK
+slash events are reconstructed as `/<command> [arguments]` and sent through the
+same ingress service as ordinary direct messages; registering only a direct
+message handler is not conformant because Telegram classifies `/start` and the
+tool commands separately.
+
 Mutation endpoints require an idempotency key and optimistic concurrency version. Transport-specific schemas will be generated from shared Zod definitions.
 
-The admin Telegram pairing-link endpoint requires a fresh two-factor owner
+The admin Telegram pairing-link endpoint requires a non-idle, TOTP-verified owner
 session and an idempotency key. It returns plaintext only once as
 `{ pairingUrl, expiresAt }`; persistence stores only the token hash. The target
 projection returns only bot username, paired Telegram user/chat IDs, status and
@@ -487,9 +662,12 @@ no `If-Match`. Missing inputs are validation errors and a stale version is a
 conflict.
 
 `POST .../validate` synchronously records immutable current named validation
-attempts; later external scans/probes use durable operations. `POST .../activate`
-fails with `policy_denied` until every activation check defined by ADR-0017 is
-current and successful. A pairing-link response contains plaintext only on its
+attempts; later request-bound external scans/probes use durable operations.
+Successful delivery of the client bot's pairing response records
+`telegram_test_send` and transitions the aggregate to `active` when the
+ADR-0025 activation checks remain current. `POST .../activate` remains an
+idempotent readiness/reconciliation surface and fails with `policy_denied`
+while those checks are missing. A pairing-link response contains plaintext only on its
 first successful delivery. Its idempotency record stores a redacted delivery
 receipt; replay returns `409 pairing_link_already_delivered`, and persistence or
 later reads never expose the token.
@@ -504,7 +682,7 @@ evidence. The enrollment draft accepts `defaultContentLocale` and a strict
 
 `GET /api/v1/session` is the minimal authenticated bridge between Better Auth
 and business APIs. It returns only actor ID, email, `role: platform_owner`,
-`twoFactor: true` and current freshness; it never returns a cookie, session
+`twoFactor: true` and current non-idle status; it never returns a cookie, session
 token, IP address or user agent.
 
 Integration creation accepts one strict discriminated provider payload. OpenAI

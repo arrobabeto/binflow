@@ -1,0 +1,4 @@
+kind: compute
+label: Resolve delete target by title or URL
+nodeKind: blog.resolve_delete_target@1
+acceptsClientCustomization: false

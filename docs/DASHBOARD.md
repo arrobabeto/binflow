@@ -11,6 +11,8 @@ The first-MVP dashboard UI is English.
 ```text
 Overview
 Clients
+Tools
+Customizations
 Projects
 Requests
 Approvals
@@ -21,6 +23,43 @@ System
 Settings
 ```
 
+## Tools
+
+The Tools section lists code-owned capabilities grouped by stack (`astro_repo`
+today). Each tool detail shows a read-only **flowchart** of nodes (solid arrows
+for unconditional edges, dashed arrows labeled with `when` predicates), kind
+badges, effective model/effort for agent nodes, and rendered rules. The
+flowchart fills the panel width (no horizontal overflow; shrink-to-fit on
+narrow viewports) and grows vertically with the graph. Branching nodes place
+successors on distinct horizontal columns so edges stay readable. Base
+configuration is
+edited through repository skills and PRs, not through freeform dashboard
+mutation of topology.
+
+Client assignment on the tool detail page lists only enrollments whose
+`projectProfile` matches the tool’s `profile` / stack. Assignment calls
+`PUT /api/v1/projects/:projectId/capabilities`, which rejects bindings when the
+project profile is absent from the capability’s `allowedProfiles`
+(`capability_profile_incompatible`) or when the capability row is missing from
+`capability_definitions` (`capability_definition_missing` — run `pnpm db:migrate`).
+API error messages are surfaced in the assignment panel.
+
+## Customizations
+
+Select a client, list assigned tools, download the native customization
+template, download the current version, or upload a new markdown document.
+Uploads are validated against the template sections (including optional
+`## content_schema` YAML), size-capped, scanned, and stored as append-only
+versions. Customization is untrusted: it may declare allowlisted content fields
+(ADR-0035) and style guidance, but cannot change models, paths, approvals or
+bypass code-owned schema compilation.
+
+Webbin portfolio voice and rich fields for `create_project_astro` ship as
+`docs/customizations/webbin-create-project-astro.md` — upload from this page (or
+run `pnpm --filter @binflow/tools exec tsx scripts/upload-webbin-project-customization.ts` locally).
+Until uploaded, generation uses neutral template defaults and base fact
+collection only.
+
 ## Authentication
 
 - `/login`: email and password.
@@ -28,13 +67,24 @@ Settings
 - `/security`: enable TOTP, regenerate backup codes and revoke sessions.
 - No public signup or password reset email in the first MVP; recovery follows the documented bootstrap/break-glass process.
 - Routes containing credentials, enrollment mutation or approvals require a verified two-factor session.
+- A successful TOTP or backup-code challenge revalidates the browser session and
+  replaces the current document with the intended authenticated route. The
+  dashboard must not render `/login` again or require a manual refresh before
+  showing the authenticated surface.
 - Password-only sessions may access only `/security`, sign-out and the auth
   calls needed to finish TOTP enrollment.
 - Every login after enrollment requires TOTP or one unused backup code. Trusted
   device bypass is not offered.
-- Sensitive security, secret, integration and approval mutations require a
-  session created within the previous five minutes; the UI sends the owner back
-  through login when freshness expires.
+- Every protected route and mutation requires a TOTP-verified session with less
+  than 30 minutes of inactivity. Deliberate browser activity extends the
+  rolling session; inactivity signs out and replaces the document with
+  `/login`. Restored or foregrounded pages revalidate server state before they
+  remain usable.
+- SSR authentication reads the session cookie through the in-process Better Auth
+  runtime. Document rendering must not nested-fetch `/api/auth` on the same
+  Nuxt server; an unavailable or incomplete session payload is unauthenticated
+  and renders `/login` instead of a 500 error. The idle timer must invoke
+  browser timer functions as methods; extracting `window.setTimeout` throws.
 - Backup codes are rendered once after enrollment or regeneration and the UI
   requires the owner to acknowledge that they were stored before leaving.
 - TOTP replacement is not a browser self-service action because disabling the
@@ -69,6 +119,9 @@ Client list supports create, resume configuration, validate, activate, suspend a
 - Content catalog/category state.
 - Validation history.
 - Usage and requests scoped to the client.
+- While client pairing is pending, the detail refreshes on foreground return
+  and at a bounded interval. Successful bot-response delivery changes the badge
+  to `active` without requiring manual browser refresh.
 
 Only `astro_repo` is selectable in the first MVP. Future profile names must not be shown as operational choices until their acceptance criteria pass.
 
@@ -77,9 +130,15 @@ reuses the project manifest and shows its redacted effective contract. Webbin
 offers English and Spanish content only, requires both, uses Spanish as source
 and slug locale, and fixes translation to `always_translate`; globally
 supported German and `ask_each_action` remain unavailable for this pilot.
-The same view shows the effective code-owned capability catalog. In the first
-MVP `Create blog` is enabled as `create_blog_draft@1`; executor, schemas,
-permissions and approval behavior are read-only and cannot be edited in the UI.
+The same view shows the effective code-owned capability catalog. Operators
+toggle which registry tools are bound to the client after validation; each save
+creates a new immutable manifest revision (`PUT
+/api/v1/projects/:projectId/capabilities`). Executor schemas, permissions and
+approval behavior remain read-only in the UI.
+
+The Tools detail page can assign a tool to validated clients with the same API,
+filtering the list to enrollments whose `projectProfile` matches the tool
+profile.
 
 ## Requests
 
@@ -87,21 +146,44 @@ Module 7 lists request ID, client/project, capability, topic, current version,
 state and timestamps. Detail shows redacted structured input, confirmed plan and
 checkpoint state, never raw Telegram updates, credentials or hidden reasoning.
 
-List filters:
+The requests inbox is two columns. The left column is requests in
+`AWAITING_ADMIN_APPROVAL`. The right column is every other state (in progress,
+completed, failed, cancelled, superseded). A client tag (`clientName`) sits
+above each request title on the list and on the detail page. **Open request**
+loads `/requests/:id` as a full document so the detail page renders only that
+request; it never renders the inbox list alongside the detail.
 
-- Tenant/project.
-- Capability.
-- State and risk.
-- Requester.
-- Date range.
-- Approval requirement.
-- Failure class.
+Shared list controls:
+
+- Client filter defaults to **All**, whose option value is the `all-clients`
+  sentinel and maps to an absent `projectId` query parameter. Select items must
+  never bind the empty string, which the component reserves for clearing a
+  selection. Other options come from operational enrollments (`active`,
+  `revalidation_required`) and from clients visible in the loaded request
+  batches (label is tenant display name from requests, or a title-cased tenant
+  key from enrollments). Changing the client filters both columns.
+- Page size 10, 30 or 50 (default 10). Changing size resets both columns to the
+  newest batch.
+- Each column has **Next batch** when `nextCursor` is present. Next replaces
+  the current batch; it does not append.
+
+Later list filters remain specified for capability, requester, date range, risk
+and failure class; they are not in this inbox slice.
 
 Detail view:
 
 - Original user message and attachments metadata.
-- Structured input and confirmed plan.
+- Structured input and confirmed plan as labeled fields, not a raw JSON dump.
 - Frozen graph/node/model/prompt/manifest/rule/policy versions.
+- **Stage log**: append-only workflow checkpoints for the current request
+  version — node id, timestamp and a redacted summary (`requestState`,
+  `errorCategory` only). Never chain-of-thought, credentials or raw provider
+  payloads. While the request is non-terminal, the detail view polls on a
+  bounded interval and refreshes when the tab becomes visible (same pattern as
+  pending client pairing). Pages must pass timer callbacks bound to the global
+  object; handing `setInterval`/`clearInterval` to the refresh helper as
+  detached references throws `Illegal invocation` in the browser and aborts the
+  view.
 - State timeline and node attempts.
 - Category and similarity decisions.
 - Research evidence references.
@@ -114,13 +196,23 @@ Detail view:
 The dashboard never displays private chain-of-thought. It displays generated rationale, evidence and objective tool results.
 
 Module 8 returns preview URLs, exact file paths, PR/head/deployment identifiers,
-approval requirements and provider-safe failure details in request detail.
+approval requirements, provider-safe failure details (`failure`: category,
+message, failed node) and the stage log in request detail. The preview-evidence
+card renders only when head commit or preview URLs exist.
 Approve, reject, revise and cancel use the same idempotent application service
 as Telegram; the UI never calculates approval policy.
 
+Cancelling from the detail page also queues a neutral, localized notice to the
+client's Telegram conversation (ADR-0027). The dashboard does not confirm
+delivery: the response reports the committed transition, and the notice is
+delivered asynchronously by the worker. Approve, reject and revise do not notify
+the client yet.
+
 The Operations settings screen creates the one-time admin Telegram pairing
-link and projects the redacted active target. Pairing requires a fresh
-two-factor session; a generated link is shown once and cannot be recovered.
+link and projects the redacted active target. Pairing requires a non-idle,
+TOTP-verified session; a generated link is shown once and cannot be recovered.
+Refreshing the target projection never signs the owner out; an expired idle
+session returns the owner to login before another link can be created.
 
 ## Approval behavior
 

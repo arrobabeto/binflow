@@ -1,6 +1,9 @@
 import {
   capabilityCatalogItemSchema,
   createBlogDraftInputSchema,
+  createProjectAstroInputSchema,
+  deleteBlogDraftInputSchema,
+  deleteProjectAstroInputSchema,
   type CapabilityBinding,
   type CapabilityCatalogItem,
 } from '@binflow/contracts';
@@ -13,20 +16,24 @@ export type CapabilityDefinition = Readonly<{
     maxModelCalls: number;
     maxTokens: number;
   }>;
-  command: '/create_blog';
-  displayName: 'Create blog';
-  executorId: 'workflow.create_blog@1';
-  id: 'create_blog_draft';
-  inputSchema: typeof createBlogDraftInputSchema;
+  command: string;
+  displayName: string;
+  executorId: string;
+  id: string;
+  inputSchema:
+    | typeof createBlogDraftInputSchema
+    | typeof createProjectAstroInputSchema
+    | typeof deleteBlogDraftInputSchema
+    | typeof deleteProjectAstroInputSchema;
   requiredPermissions: readonly string[];
-  requiresPreview: true;
+  requiresPreview: boolean;
   retryPolicy: Readonly<{
     maxAttempts: number;
     retryableErrors: readonly string[];
   }>;
-  riskClass: 'medium';
+  riskClass: 'low' | 'medium' | 'high';
   timeoutSeconds: number;
-  version: 1;
+  version: number;
 }>;
 
 export const createBlogDraftDefinition: CapabilityDefinition = Object.freeze({
@@ -62,8 +69,113 @@ export const createBlogDraftDefinition: CapabilityDefinition = Object.freeze({
   version: 1,
 });
 
+export const createProjectAstroDefinition: CapabilityDefinition = Object.freeze({
+  approvalPolicyId: 'webbin-project-publication@1',
+  budget: Object.freeze({
+    maxEstimatedCostCents: 500,
+    maxModelCalls: 12,
+    maxTokens: 120_000,
+  }),
+  command: '/create_project',
+  displayName: 'Create portfolio project',
+  executorId: 'workflow.create_project@1',
+  id: 'create_project_astro',
+  inputSchema: createProjectAstroInputSchema,
+  requiredPermissions: Object.freeze([
+    'github:metadata:read',
+    'github:contents:write',
+    'github:pull_requests:write',
+    'github:checks:read',
+    'github:statuses:read',
+    'vercel:deployments:read',
+  ]),
+  requiresPreview: true,
+  retryPolicy: Object.freeze({
+    maxAttempts: 3,
+    retryableErrors: Object.freeze([
+      'provider_retryable',
+      'deployment_pending',
+    ]),
+  }),
+  riskClass: 'medium',
+  timeoutSeconds: 1_800,
+  version: 1,
+});
+
+export const deleteProjectAstroDefinition: CapabilityDefinition = Object.freeze({
+  approvalPolicyId: 'webbin-project-deletion@1',
+  budget: Object.freeze({
+    maxEstimatedCostCents: 200,
+    maxModelCalls: 1,
+    maxTokens: 1_000,
+  }),
+  command: '/delete_project',
+  displayName: 'Delete portfolio project',
+  executorId: 'workflow.delete_project@1',
+  id: 'delete_project_astro',
+  inputSchema: deleteProjectAstroInputSchema,
+  requiredPermissions: Object.freeze([
+    'github:metadata:read',
+    'github:contents:write',
+    'github:pull_requests:write',
+    'github:checks:read',
+    'github:statuses:read',
+    'vercel:deployments:read',
+  ]),
+  requiresPreview: false,
+  retryPolicy: Object.freeze({
+    maxAttempts: 3,
+    retryableErrors: Object.freeze([
+      'provider_retryable',
+      'deployment_pending',
+    ]),
+  }),
+  riskClass: 'high',
+  timeoutSeconds: 1_800,
+  version: 2,
+});
+
+export const deleteBlogDraftDefinition: CapabilityDefinition = Object.freeze({
+  approvalPolicyId: 'webbin-blog-deletion@1',
+  budget: Object.freeze({
+    maxEstimatedCostCents: 200,
+    maxModelCalls: 1,
+    maxTokens: 1_000,
+  }),
+  command: '/delete_blog',
+  displayName: 'Delete blog post',
+  executorId: 'workflow.delete_blog@1',
+  id: 'delete_blog_draft',
+  inputSchema: deleteBlogDraftInputSchema,
+  requiredPermissions: Object.freeze([
+    'github:metadata:read',
+    'github:contents:write',
+    'github:pull_requests:write',
+    'github:checks:read',
+    'github:statuses:read',
+    'vercel:deployments:read',
+  ]),
+  requiresPreview: false,
+  retryPolicy: Object.freeze({
+    maxAttempts: 3,
+    retryableErrors: Object.freeze([
+      'provider_retryable',
+      'deployment_pending',
+    ]),
+  }),
+  riskClass: 'high',
+  timeoutSeconds: 1_800,
+  version: 2,
+});
+
+/** @deprecated Use createProjectAstroDefinition */
+export const createProjectDraftDefinition = createProjectAstroDefinition;
+
 export const capabilityRegistry = Object.freeze([
   createBlogDraftDefinition,
+  createProjectAstroDefinition,
+  deleteBlogDraftDefinition,
+  deleteProjectAstroDefinition,
 ] as const);
 
 export const webbinCapabilityBinding: CapabilityBinding = Object.freeze({
@@ -72,15 +184,76 @@ export const webbinCapabilityBinding: CapabilityBinding = Object.freeze({
   capabilityVersion: 1,
 });
 
+export const webbinProjectCapabilityBinding: CapabilityBinding = Object.freeze({
+  access: 'client_publish',
+  capabilityId: 'create_project_astro',
+  capabilityVersion: 1,
+});
+
+export const webbinDeleteBlogCapabilityBinding: CapabilityBinding = Object.freeze({
+  access: 'client_publish',
+  capabilityId: 'delete_blog_draft',
+  capabilityVersion: 2,
+});
+
+export const webbinDeleteProjectCapabilityBinding: CapabilityBinding =
+  Object.freeze({
+    access: 'client_publish',
+    capabilityId: 'delete_project_astro',
+    capabilityVersion: 2,
+  });
+
+export const astroRepoDefaultCapabilityBindings: readonly CapabilityBinding[] =
+  Object.freeze([
+    webbinCapabilityBinding,
+    webbinProjectCapabilityBinding,
+    webbinDeleteBlogCapabilityBinding,
+    webbinDeleteProjectCapabilityBinding,
+  ]);
+
+export const resolveProjectCapabilityBindings = (
+  configuration: Readonly<{
+    enabledCapabilities?: readonly CapabilityBinding[] | undefined;
+  }>,
+): readonly CapabilityBinding[] => {
+  if (configuration.enabledCapabilities !== undefined) {
+    if (configuration.enabledCapabilities.length === 0)
+      throw new DomainError(
+        'policy_denied',
+        'At least one capability must remain enabled.',
+        { code: 'capability_catalog_empty' },
+      );
+    for (const binding of configuration.enabledCapabilities) {
+      assertKnownBinding(binding);
+      if (binding.access === 'disabled')
+        throw new DomainError(
+          'validation_error',
+          'Use the assignment API to disable a tool; do not send access disabled.',
+          { code: 'capability_binding_disabled' },
+        );
+    }
+    return configuration.enabledCapabilities;
+  }
+  return astroRepoDefaultCapabilityBindings;
+};
+
+const accessValues = new Set([
+  'disabled',
+  'client_publish',
+  'admin_required',
+  'admin_only',
+]);
+
 export const assertKnownBinding = (binding: CapabilityBinding): void => {
-  if (
-    binding.capabilityId !== createBlogDraftDefinition.id ||
-    binding.capabilityVersion !== createBlogDraftDefinition.version ||
-    binding.access !== 'client_publish'
-  )
+  const definition = capabilityRegistry.find(
+    (candidate) =>
+      candidate.id === binding.capabilityId &&
+      candidate.version === binding.capabilityVersion,
+  );
+  if (definition === undefined || !accessValues.has(binding.access))
     throw new DomainError(
       'policy_denied',
-      'Capability binding is not allowed by the Webbin pilot policy.',
+      'Capability binding is not allowed by the code-owned registry.',
       { code: 'capability_binding_not_allowed' },
     );
 };
@@ -88,25 +261,29 @@ export const assertKnownBinding = (binding: CapabilityBinding): void => {
 export const projectCapabilityCatalog = (
   bindings: readonly CapabilityBinding[],
 ): CapabilityCatalogItem[] => {
-  const binding = bindings.find(
-    (candidate) =>
-      candidate.capabilityId === createBlogDraftDefinition.id &&
-      candidate.capabilityVersion === createBlogDraftDefinition.version,
-  );
-  if (binding === undefined) return [];
-  assertKnownBinding(binding);
-  return [
-    capabilityCatalogItemSchema.parse({
-      access: binding.access,
-      command: createBlogDraftDefinition.command,
-      displayName: createBlogDraftDefinition.displayName,
-      enabled: binding.access !== 'disabled',
-      id: createBlogDraftDefinition.id,
-      requiresPreview: true,
-      riskClass: createBlogDraftDefinition.riskClass,
-      version: createBlogDraftDefinition.version,
-    }),
-  ];
+  const items: CapabilityCatalogItem[] = [];
+  for (const binding of bindings) {
+    assertKnownBinding(binding);
+    const definition = capabilityRegistry.find(
+      (candidate) =>
+        candidate.id === binding.capabilityId &&
+        candidate.version === binding.capabilityVersion,
+    );
+    if (definition === undefined) continue;
+    items.push(
+      capabilityCatalogItemSchema.parse({
+        access: binding.access,
+        command: definition.command,
+        displayName: definition.displayName,
+        enabled: binding.access !== 'disabled',
+        id: definition.id,
+        requiresPreview: definition.requiresPreview,
+        riskClass: definition.riskClass,
+        version: definition.version,
+      }),
+    );
+  }
+  return items;
 };
 
 export type PublicationPolicyDecision = Readonly<{
@@ -115,7 +292,7 @@ export type PublicationPolicyDecision = Readonly<{
   effectiveRisk: 'medium';
   reasons: readonly string[];
   requiredApprovals: readonly ('client' | 'admin')[];
-  requiresPreview: true;
+  requiresPreview: boolean;
 }>;
 
 export const decideBlogPublicationPolicy = (
@@ -133,5 +310,44 @@ export const decideBlogPublicationPolicy = (
       : ['Existing or normalized category requires client approval.'],
   requiredApprovals:
     input.categoryKind === 'new' ? ['client', 'admin'] : ['client'],
+  requiresPreview: true,
+});
+
+export const decideBlogDeletionPolicy = (
+  input: Readonly<{
+    editablePaths: readonly string[];
+  }>,
+): PublicationPolicyDecision => ({
+  allowed: true,
+  allowedPaths: [...input.editablePaths],
+  effectiveRisk: 'medium',
+  reasons: ['Blog deletion requires admin-only approval.'],
+  requiredApprovals: ['admin'],
+  requiresPreview: false,
+});
+
+export const decideProjectDeletionPolicy = (
+  input: Readonly<{
+    editablePaths: readonly string[];
+  }>,
+): PublicationPolicyDecision => ({
+  allowed: true,
+  allowedPaths: [...input.editablePaths],
+  effectiveRisk: 'medium',
+  reasons: ['Portfolio project deletion requires admin-only approval.'],
+  requiredApprovals: ['admin'],
+  requiresPreview: false,
+});
+
+export const decideProjectPublicationPolicy = (
+  input: Readonly<{
+    editablePaths: readonly string[];
+  }>,
+): PublicationPolicyDecision => ({
+  allowed: true,
+  allowedPaths: [...input.editablePaths],
+  effectiveRisk: 'medium',
+  reasons: ['Portfolio publication requires client approval.'],
+  requiredApprovals: ['client'],
   requiresPreview: true,
 });

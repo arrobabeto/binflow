@@ -1,0 +1,6 @@
+kind: interrupt
+label: Admin deletion approval
+nodeKind: await.admin_approval@1
+acceptsClientCustomization: false
+actor: admin
+ttlHours: 48
