@@ -2,6 +2,8 @@
 import { authClient } from '../lib/auth-client';
 import { authenticatedDestination } from '../lib/session-navigation';
 
+definePageMeta({ layout: 'auth' });
+
 const route = useRoute();
 
 const email = ref('');

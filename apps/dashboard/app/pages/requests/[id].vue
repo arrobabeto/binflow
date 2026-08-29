@@ -95,42 +95,31 @@ const mutate = async (action: 'approve' | 'reject' | 'cancel') => {
 </script>
 
 <template>
-  <div class="min-h-dvh">
-    <header class="border-b border-default bg-white">
-      <div
-        class="mx-auto flex max-w-5xl items-center justify-between px-6 py-4"
+  <main class="mx-auto max-w-5xl px-6 py-10">
+    <div class="mb-6">
+      <UButton to="/requests" color="neutral" variant="ghost"
+        >Back to requests</UButton
       >
-        <div>
-          <p class="eyebrow">Binflow</p>
-          <p class="font-semibold">Request detail</p>
-        </div>
-        <a
-          class="inline-flex items-center rounded-md px-2.5 py-1.5 text-sm font-medium text-muted hover:bg-elevated"
-          href="/requests"
-          >Back to requests</a
+    </div>
+    <div class="flex flex-wrap items-start justify-between gap-4">
+      <div>
+        <p
+          v-if="detail?.clientName"
+          class="text-xs font-medium tracking-wide text-muted uppercase"
         >
+          {{ detail.clientName }}
+        </p>
+        <h1 class="mt-1 text-3xl font-semibold tracking-tight">
+          {{ detail?.topic ?? (loading ? 'Loading request…' : 'Request') }}
+        </h1>
+        <p class="mt-2 font-mono text-sm text-muted">
+          {{ detail?.id ?? requestId }}
+        </p>
       </div>
-    </header>
-    <main class="mx-auto max-w-5xl px-6 py-10">
-      <div class="flex flex-wrap items-start justify-between gap-4">
-        <div>
-          <p
-            v-if="detail?.clientName"
-            class="text-xs font-medium tracking-wide text-muted uppercase"
-          >
-            {{ detail.clientName }}
-          </p>
-          <h1 class="mt-1 text-3xl font-semibold tracking-tight">
-            {{ detail?.topic ?? (loading ? 'Loading request…' : 'Request') }}
-          </h1>
-          <p class="mt-2 font-mono text-sm text-muted">
-            {{ detail?.id ?? requestId }}
-          </p>
-        </div>
-        <UBadge v-if="detail" color="neutral" variant="soft">{{
-          detail.state
-        }}</UBadge>
-      </div>
+      <UBadge v-if="detail" color="neutral" variant="soft">{{
+        detail.state
+      }}</UBadge>
+    </div>
 
       <UAlert
         v-if="loadError"
@@ -289,6 +278,5 @@ const mutate = async (action: 'approve' | 'reject' | 'cancel') => {
         @click="mutate('cancel')"
         >Cancel request</UButton
       >
-    </main>
-  </div>
+  </main>
 </template>
