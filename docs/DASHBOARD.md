@@ -9,24 +9,37 @@ The first-MVP dashboard UI is English.
 ## Navigation
 
 ```text
-Overview
+Home
 Clients
-Tools
-Customizations
-Projects
 Requests
-Approvals
-Content catalog
-Usage
-Audit
-System
-Settings
+Tools ▸ Catalog · Customizations
+System ▸ Integrations · Operations
 ```
+
+Primary navigation is a persistent shell (`AppShell`) on every authenticated
+operational page. Zones:
+
+- **Primary:** Home, Clients, Requests — daily operations.
+- **Tools menu:** Catalog (`/tools`) and Customizations — capability and voice
+  configuration.
+- **System menu:** Integrations and Operations — platform readiness. Login,
+  two-factor, and Security use the auth layout without the shell. Security is
+  not listed in the System menu; it remains reachable for mandatory TOTP
+  enrollment and session management when the auth flow requires it.
+
+Approvals are not a separate top-level page; pending admin approvals surface on
+Home and in the left column of Requests.
+
+Documented but not yet built as pages: Projects, Content catalog, Usage, Audit,
+and a dedicated Settings hub (Integrations / Operations cover the MVP platform
+settings surfaces).
 
 ## Tools
 
-The Tools section lists code-owned capabilities grouped by stack (`astro_repo`
-today). Each tool detail shows a read-only **flowchart** of nodes (solid arrows
+The Tools catalog lists code-owned capabilities grouped by stack (`astro_repo`
+today). Operators can **search** by display name, id, command, or stack; **filter**
+to one available stack (or all stacks); and **sort** by name or stack. Each tool
+detail shows a read-only **flowchart** of nodes (solid arrows
 for unconditional edges, dashed arrows labeled with `when` predicates), kind
 badges, effective model/effort for agent nodes, and rendered rules. The
 flowchart fills the panel width (no horizontal overflow; shrink-to-fit on
@@ -91,17 +104,33 @@ collection only.
   only active factor before replacement could strand the sole owner. It uses
   the audited host-level recovery procedure.
 
-## Overview
+## Overview (Home)
 
-Displays:
+Home is the operations cockpit (`/`). It displays:
 
-- Active/suspended/failed enrollments.
-- Requests by current state.
-- Pending admin approvals.
-- Recent client activity and publications.
-- Queue/worker/integration health.
-- Current-day and current-month AI cost.
-- Actionable alerts only; raw log streams remain outside the primary dashboard.
+- **Status strip**
+  - System health from `GET /api/v1/health` plus `GET /api/v1/readiness`
+    (Healthy when API is `ok` and readiness is `ready`).
+  - Requests created today (UTC), counted from recent request list batches
+    (`limit=50` for approval and other columns). When a batch has
+    `nextCursor`, the count may show a `+` suffix (approximate).
+  - Pending admin approvals from `GET /api/v1/requests?needsAdminApproval=true`
+    (same approximate rule).
+  - Client mix: active (including `revalidation_required`) over total
+    enrollments, with an attention hint when enrollments need action.
+- **Client cards** for every enrollment: display label (from tenant key),
+  lifecycle state, project key, requests today and pending approvals for that
+  project (from the same recent batches), enrollment step when not operational,
+  a settings (cog) control in the card corner that opens the enrollment detail,
+  and a Requests link filtered to that project (`/requests?projectId=…`).
+- **Needs attention** actionable links only: pending approvals, unverified or
+  invalid credentials, readiness not ready, and enrollments in
+  `validation_failed`, `pairing_pending`, `revalidation_required`, or
+  `suspended`.
+
+Full day/month AI cost and exhaustive request totals remain specified for a
+future Usage surface (`GET /api/v1/usage`); Home does not invent those totals
+until that API is wired into the UI.
 
 ## Clients and projects
 
@@ -156,12 +185,14 @@ request; it never renders the inbox list alongside the detail.
 Shared list controls:
 
 - Client filter defaults to **All**, whose option value is the `all-clients`
-  sentinel and maps to an absent `projectId` query parameter. Select items must
-  never bind the empty string, which the component reserves for clearing a
-  selection. Other options come from operational enrollments (`active`,
-  `revalidation_required`) and from clients visible in the loaded request
-  batches (label is tenant display name from requests, or a title-cased tenant
-  key from enrollments). Changing the client filters both columns.
+  sentinel and maps to an absent `projectId` query parameter. Opening
+  `/requests?projectId=<id>` (for example from a Home client card) selects that
+  client. Select items must never bind the empty string, which the component
+  reserves for clearing a selection. Other options come from operational
+  enrollments (`active`, `revalidation_required`) and from clients visible in
+  the loaded request batches (label is tenant display name from requests, or a
+  title-cased tenant key from enrollments). Changing the client filters both
+  columns.
 - Page size 10, 30 or 50 (default 10). Changing size resets both columns to the
   newest batch.
 - Each column has **Next batch** when `nextCursor` is present. Next replaces
@@ -224,6 +255,9 @@ session returns the owner to login before another link can be created.
 
 ## Credentials
 
+- The Integrations list supports **search** (alias, kind, client, status),
+  **client filter** (tenant binding key, or Platform for unbound rows), and
+  **sort** (alias, client, or status).
 - Forms accept a secret once over TLS.
 - After saving, display provider, alias, health, masked suffix, last tested/used and status.
 - Test, rotate and revoke are separate audited actions.
@@ -233,6 +267,10 @@ session returns the owner to login before another link can be created.
   PEM file once and transmits its bounded contents, never a local filesystem path.
 - Verification displays only stable outcome/error and refreshed health metadata;
   provider evidence remains server-side.
+- Lifecycle: `unverified` → `active` on successful verify; a newer verified
+  candidate for the same owner scope/kind marks the prior row `superseded`.
+  `revoked` is explicit and permanent for that version. Runtime resolution uses
+  only the current `active` credential per scope/kind.
 
 ## Content catalog
 

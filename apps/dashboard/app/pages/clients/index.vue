@@ -8,34 +8,17 @@ const { data, refresh, status } = await useFetch<{
 </script>
 
 <template>
-  <div class="min-h-dvh">
-    <header class="border-b border-default bg-white">
-      <div
-        class="mx-auto flex max-w-6xl items-center justify-between px-6 py-4"
-      >
-        <div>
-          <p class="eyebrow">Binflow</p>
-          <p class="font-semibold">Clients</p>
-        </div>
-        <div class="flex gap-2">
-          <UButton color="neutral" variant="ghost" to="/">Overview</UButton>
-          <UButton color="neutral" variant="ghost" to="/integrations"
-            >Integrations</UButton
-          >
-          <UButton to="/clients/new">Add client</UButton>
-        </div>
+  <main class="mx-auto max-w-6xl px-6 py-10">
+    <div class="flex flex-wrap items-end justify-between gap-4">
+      <div>
+        <h1 class="text-3xl font-semibold tracking-tight">
+          Client enrollments
+        </h1>
+        <p class="mt-2 text-muted">
+          Resume configuration and see activation readiness.
+        </p>
       </div>
-    </header>
-    <main class="mx-auto max-w-6xl px-6 py-10">
-      <div class="flex items-end justify-between">
-        <div>
-          <h1 class="text-3xl font-semibold tracking-tight">
-            Client enrollments
-          </h1>
-          <p class="mt-2 text-muted">
-            Resume configuration and see activation readiness.
-          </p>
-        </div>
+      <div class="flex gap-2">
         <UButton
           color="neutral"
           variant="soft"
@@ -43,7 +26,9 @@ const { data, refresh, status } = await useFetch<{
           @click="refresh"
           >Refresh</UButton
         >
+        <UButton to="/clients/new">Add client</UButton>
       </div>
+    </div>
       <div class="mt-8 grid gap-4">
         <UCard v-if="data?.items.length === 0">
           <p class="font-medium">No clients yet</p>
@@ -71,7 +56,6 @@ const { data, refresh, status } = await useFetch<{
             >
           </div>
         </UCard>
-      </div>
-    </main>
-  </div>
+    </div>
+  </main>
 </template>

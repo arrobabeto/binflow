@@ -4,6 +4,29 @@ All notable changes to product behavior, architecture, contracts, security, oper
 
 ## Unreleased
 
+### Dashboard navigation and tools catalog UX
+
+- Home client cards open enrollment via a top-right settings (cog) control
+  instead of an “Open enrollment” button.
+- Tools catalog supports search, stack filter (available stacks), and sort.
+- Integrations list supports search, client filter (tenant binding or
+  Platform), and sort.
+- AppShell: Customizations lives under the Tools dropdown (Catalog ·
+  Customizations). System menu is Integrations · Operations only (Security
+  remains auth-gated, not listed in the shell).
+
+### Dashboard home and persistent navigation
+
+- Authenticated pages share `AppShell`: primary (Home, Clients, Requests),
+  Tools menu (Catalog, Customizations), and a System menu (Integrations,
+  Operations). Login, two-factor, and Security keep the auth layout.
+- Home (`/`) is an operations cockpit: system health/readiness, requests today
+  and pending approvals (from recent request batches), client mix, client
+  summary cards, and a needs-attention list. Client cards deep-link to
+  `/requests?projectId=…`.
+- Per-page duplicate headers removed; page bodies keep local actions (Refresh,
+  Add client, back links).
+
 ### Tool isolation and shared catalog ports (ADR-0042)
 
 - `createGitHubContentCatalogPort` requires explicit non-empty `contentKinds`

@@ -37,24 +37,12 @@ const createPairingLink = async () => {
 </script>
 
 <template>
-  <div class="min-h-dvh">
-    <header class="border-b border-default bg-white">
-      <div
-        class="mx-auto flex max-w-5xl items-center justify-between px-6 py-4"
-      >
-        <div>
-          <p class="eyebrow">Binflow</p>
-          <p class="font-semibold">Operations</p>
-        </div>
-        <UButton color="neutral" variant="ghost" to="/">Dashboard</UButton>
-      </div>
-    </header>
-    <main class="mx-auto max-w-5xl px-6 py-10">
-      <h1 class="text-3xl font-semibold tracking-tight">Admin notifications</h1>
-      <p class="mt-2 text-muted">
-        Pair the verified global admin bot to receive client activity and
-        approval alerts.
-      </p>
+  <main class="mx-auto max-w-5xl px-6 py-10">
+    <h1 class="text-3xl font-semibold tracking-tight">Admin notifications</h1>
+    <p class="mt-2 text-muted">
+      Pair the verified global admin bot to receive client activity and
+      approval alerts.
+    </p>
       <p v-if="errorMessage" class="mt-4 text-sm text-error">
         {{ errorMessage }}
       </p>
@@ -122,6 +110,5 @@ const createPairingLink = async () => {
           >Pair in Telegram</UButton
         >
       </UCard>
-    </main>
-  </div>
+  </main>
 </template>

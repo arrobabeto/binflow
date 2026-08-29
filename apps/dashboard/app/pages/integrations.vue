@@ -4,6 +4,15 @@ import type {
   IntegrationCandidateInput,
 } from '@binflow/contracts';
 
+import {
+  allCredentialClients,
+  availableCredentialClients,
+  credentialCatalogSortOptions,
+  credentialClientLabel,
+  filterCredentialCatalog,
+  type CredentialCatalogSort,
+} from '../lib/credential-catalog-filter';
+
 type Kind = IntegrationCandidateInput['kind'];
 
 const kindOptions: { label: string; value: Kind }[] = [
@@ -17,6 +26,26 @@ const { data, refresh, status } = await useFetch<{
   items: CredentialSummary[];
   nextCursor: string | null;
 }>('/api/v1/admin/integrations');
+
+const query = ref('');
+const clientFilter = ref(allCredentialClients);
+const sort = ref<CredentialCatalogSort>('client-asc');
+
+const clientOptions = computed(() => [
+  { label: 'All clients', value: allCredentialClients },
+  ...availableCredentialClients(data.value?.items ?? []).map((client) => ({
+    label: credentialClientLabel(client),
+    value: client,
+  })),
+]);
+
+const filteredCredentials = computed(() =>
+  filterCredentialCatalog(data.value?.items ?? [], {
+    client: clientFilter.value,
+    query: query.value,
+    sort: sort.value,
+  }),
+);
 
 const form = reactive({
   alias: '',
@@ -204,44 +233,53 @@ const revoke = async (credential: CredentialSummary) => {
 </script>
 
 <template>
-  <div class="min-h-dvh">
-    <header class="border-b border-default bg-white">
-      <div
-        class="mx-auto flex max-w-6xl items-center justify-between px-6 py-4"
-      >
+  <main
+    class="mx-auto grid max-w-6xl gap-8 px-6 py-10 lg:grid-cols-[1fr_22rem]"
+  >
+    <section>
+      <div class="flex items-end justify-between gap-4">
         <div>
-          <p class="eyebrow">Binflow</p>
-          <p class="font-semibold">Integrations</p>
+          <h1 class="text-3xl font-semibold tracking-tight">
+            Provider credentials
+          </h1>
+          <p class="mt-2 text-muted">
+            Safe metadata only. Secret values are never shown again.
+          </p>
         </div>
-        <div class="flex gap-2">
-          <UButton color="neutral" variant="ghost" to="/">Overview</UButton>
-          <UButton color="neutral" variant="ghost" to="/clients"
-            >Clients</UButton
-          >
+        <UButton
+          color="neutral"
+          variant="soft"
+          :loading="status === 'pending'"
+          @click="refresh"
+          >Refresh</UButton
+        >
         </div>
-      </div>
-    </header>
 
-    <main
-      class="mx-auto grid max-w-6xl gap-8 px-6 py-10 lg:grid-cols-[1fr_22rem]"
-    >
-      <section>
-        <div class="flex items-end justify-between gap-4">
-          <div>
-            <h1 class="text-3xl font-semibold tracking-tight">
-              Provider credentials
-            </h1>
-            <p class="mt-2 text-muted">
-              Safe metadata only. Secret values are never shown again.
-            </p>
-          </div>
-          <UButton
-            color="neutral"
-            variant="soft"
-            :loading="status === 'pending'"
-            @click="refresh"
-            >Refresh</UButton
-          >
+        <div class="mt-6 flex flex-wrap items-end gap-3">
+          <UFormField label="Search" class="min-w-48 flex-1">
+            <UInput
+              v-model="query"
+              class="w-full"
+              placeholder="Alias, kind, client, or status"
+              icon="i-lucide-search"
+            />
+          </UFormField>
+          <UFormField label="Client" class="min-w-40">
+            <USelect
+              v-model="clientFilter"
+              value-key="value"
+              :items="clientOptions"
+              class="w-full"
+            />
+          </UFormField>
+          <UFormField label="Sort" class="min-w-40">
+            <USelect
+              v-model="sort"
+              value-key="value"
+              :items="[...credentialCatalogSortOptions]"
+              class="w-full"
+            />
+          </UFormField>
         </div>
 
         <div class="mt-6 space-y-3">
@@ -255,10 +293,19 @@ const revoke = async (credential: CredentialSummary) => {
             color="success"
             :description="successMessage"
           />
-          <UCard v-if="data?.items.length === 0">
+          <UCard v-if="(data?.items.length ?? 0) === 0">
             No credentials have been registered.
           </UCard>
-          <UCard v-for="credential in data?.items ?? []" :key="credential.id">
+          <UCard v-else-if="filteredCredentials.length === 0">
+            <p class="font-medium">No credentials match</p>
+            <p class="mt-1 text-sm text-muted">
+              Try another client filter or search term.
+            </p>
+          </UCard>
+          <UCard
+            v-for="credential in filteredCredentials"
+            :key="credential.id"
+          >
             <div class="flex flex-wrap items-center justify-between gap-4">
               <div>
                 <div class="flex flex-wrap items-center gap-2">
@@ -432,6 +479,5 @@ const revoke = async (credential: CredentialSummary) => {
           </form>
         </UCard>
       </aside>
-    </main>
-  </div>
+  </main>
 </template>

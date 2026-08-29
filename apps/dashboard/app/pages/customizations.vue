@@ -104,31 +104,14 @@ onMounted(() => {
 </script>
 
 <template>
-  <div class="min-h-dvh">
-    <header class="border-b border-default bg-white">
-      <div
-        class="mx-auto flex max-w-6xl items-center justify-between px-6 py-4"
-      >
-        <div>
-          <p class="eyebrow">Binflow</p>
-          <p class="font-semibold">Customizations</p>
-        </div>
-        <div class="flex items-center gap-3">
-          <UButton to="/tools" color="neutral" variant="soft">Tools</UButton>
-          <UButton to="/clients" color="neutral" variant="soft"
-            >Clients</UButton
-          >
-        </div>
-      </div>
-    </header>
-    <main class="mx-auto max-w-6xl px-6 py-10">
-      <h1 class="text-3xl font-semibold tracking-tight">
-        Client tool customizations
-      </h1>
-      <p class="mt-2 text-muted">
-        Download the native template, edit style guidance, and upload a new
-        version. Customization cannot change models, paths or approvals.
-      </p>
+  <main class="mx-auto max-w-6xl px-6 py-10">
+    <h1 class="text-3xl font-semibold tracking-tight">
+      Client tool customizations
+    </h1>
+    <p class="mt-2 text-muted">
+      Download the native template, edit style guidance, and upload a new
+      version. Customization cannot change models, paths or approvals.
+    </p>
       <div class="mt-8 grid gap-4 md:grid-cols-2">
         <UFormField label="Client project">
           <USelect
@@ -177,6 +160,5 @@ onMounted(() => {
         >
         <p v-if="message" class="mt-3 text-sm text-muted">{{ message }}</p>
       </UCard>
-    </main>
-  </div>
+  </main>
 </template>

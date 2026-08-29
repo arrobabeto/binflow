@@ -3,6 +3,8 @@ import QRCode from 'qrcode';
 
 import { authClient } from '../lib/auth-client';
 
+definePageMeta({ layout: 'auth' });
+
 const { data: session } = await authClient.useSession(useFetch);
 const password = ref('');
 const code = ref('');

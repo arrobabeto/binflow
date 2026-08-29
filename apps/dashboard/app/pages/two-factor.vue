@@ -2,6 +2,8 @@
 import { authClient } from '../lib/auth-client';
 import { revalidateAndReplaceAuthenticatedDocument } from '../lib/session-navigation';
 
+definePageMeta({ layout: 'auth' });
+
 const route = useRoute();
 
 const method = ref<'totp' | 'backup'>('totp');

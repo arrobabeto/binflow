@@ -9,10 +9,26 @@ import {
   type RequestInboxPageSize,
 } from '../../lib/request-inbox';
 
-const selectedProjectId = ref<string>(allRequestInboxClients);
+const route = useRoute();
+const queryProjectId = computed(() => {
+  const value = route.query.projectId;
+  return typeof value === 'string' && value.length > 0 ? value : undefined;
+});
+
+const selectedProjectId = ref<string>(
+  queryProjectId.value ?? allRequestInboxClients,
+);
 const pageSize = ref<'10' | '30' | '50'>('10');
 const approvalCursor = ref<string | undefined>();
 const otherCursor = ref<string | undefined>();
+
+watch(
+  queryProjectId,
+  (projectId) => {
+    selectedProjectId.value = projectId ?? allRequestInboxClients;
+  },
+  { immediate: true },
+);
 
 const { data: enrollments } = await useFetch<{
   items: Enrollment[];
@@ -69,50 +85,37 @@ const loadNext = (column: 'approval' | 'other') => {
 </script>
 
 <template>
-  <div class="min-h-dvh">
-    <header class="border-b border-default bg-white">
-      <div
-        class="mx-auto flex max-w-6xl items-center justify-between px-6 py-4"
+  <main class="mx-auto max-w-6xl px-6 py-10">
+    <div class="flex flex-wrap items-end justify-between gap-4">
+      <div>
+        <h1 class="text-3xl font-semibold tracking-tight">Workflow requests</h1>
+        <p class="mt-2 text-muted">
+          Admin-approval queue on the left. Everything else on the right.
+        </p>
+      </div>
+      <UButton
+        color="neutral"
+        variant="soft"
+        :loading="approvalStatus === 'pending' || otherStatus === 'pending'"
+        @click="refreshInbox"
+        >Refresh</UButton
       >
-        <div>
-          <p class="eyebrow">Binflow</p>
-          <p class="font-semibold">Requests</p>
-        </div>
-        <div class="flex gap-2">
-          <UButton color="neutral" variant="ghost" to="/">Overview</UButton>
-          <UButton color="neutral" variant="ghost" to="/clients"
-            >Clients</UButton
-          >
-          <UButton
-            color="neutral"
-            variant="soft"
-            :loading="approvalStatus === 'pending' || otherStatus === 'pending'"
-            @click="refreshInbox"
-            >Refresh</UButton
-          >
-        </div>
-      </div>
-    </header>
-    <main class="mx-auto max-w-6xl px-6 py-10">
-      <h1 class="text-3xl font-semibold tracking-tight">Workflow requests</h1>
-      <p class="mt-2 text-muted">
-        Admin-approval queue on the left. Everything else on the right.
-      </p>
-      <div class="mt-6 flex flex-wrap items-end gap-4">
-        <UFormField label="Client" class="min-w-56">
-          <USelect
-            v-model="selectedProjectId"
-            value-key="value"
-            :items="[
-              { label: 'All', value: allRequestInboxClients },
-              ...clientOptions.map((client) => ({
-                label: client.label,
-                value: client.projectId,
-              })),
-            ]"
-          />
-        </UFormField>
-      </div>
+    </div>
+    <div class="mt-6 flex flex-wrap items-end gap-4">
+      <UFormField label="Client" class="min-w-56">
+        <USelect
+          v-model="selectedProjectId"
+          value-key="value"
+          :items="[
+            { label: 'All', value: allRequestInboxClients },
+            ...clientOptions.map((client) => ({
+              label: client.label,
+              value: client.projectId,
+            })),
+          ]"
+        />
+      </UFormField>
+    </div>
       <div
         class="mt-8 grid gap-6 lg:grid-cols-[minmax(0,1fr)_1px_minmax(0,1fr)] lg:gap-8"
       >
@@ -222,6 +225,5 @@ const loadNext = (column: 'approval' | 'other') => {
           >
         </div>
       </div>
-    </main>
-  </div>
+  </main>
 </template>

@@ -196,26 +196,22 @@ watch(
 </script>
 
 <template>
-  <div class="min-h-dvh">
-    <header class="border-b border-default bg-white">
-      <div
-        class="mx-auto flex max-w-6xl items-center justify-between px-6 py-4"
-      >
-        <div>
-          <p class="eyebrow">Tools</p>
-          <p class="font-semibold">{{ data?.tool.displayName ?? toolId }}</p>
-        </div>
-        <div class="flex items-center gap-3">
-          <UButton to="/tools" color="neutral" variant="soft"
-            >All tools</UButton
-          >
-          <UButton to="/customizations" color="neutral" variant="soft"
-            >Customizations</UButton
-          >
-        </div>
+  <main class="mx-auto max-w-7xl px-6 py-10">
+    <div class="flex flex-wrap items-center justify-between gap-3">
+      <div>
+        <p class="eyebrow">Tools</p>
+        <h1 class="text-2xl font-semibold tracking-tight">
+          {{ data?.tool.displayName ?? toolId }}
+        </h1>
       </div>
-    </header>
-    <main class="mx-auto max-w-7xl px-6 py-10">
+      <div class="flex items-center gap-3">
+        <UButton to="/tools" color="neutral" variant="soft">All tools</UButton>
+        <UButton to="/customizations" color="neutral" variant="soft"
+          >Customizations</UButton
+        >
+      </div>
+    </div>
+    <div class="mt-8">
       <p v-if="pending" class="text-muted">Loading graph…</p>
       <UAlert
         v-else-if="error"
@@ -446,8 +442,8 @@ watch(
           </p>
         </UCard>
       </template>
-    </main>
-  </div>
+    </div>
+  </main>
 </template>
 
 <style scoped>
