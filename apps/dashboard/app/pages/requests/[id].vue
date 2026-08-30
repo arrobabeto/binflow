@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import type { RequestDetail } from '@binflow/contracts';
-import { labeledRecordFields } from '../../lib/request-inbox';
+import { labeledRecordFields, requestStateBadgeColor } from '../../lib/request-inbox';
 import { createPendingPairingRefresh } from '../../lib/pending-pairing-refresh';
 
 const TERMINAL_STATES = [
@@ -111,8 +111,10 @@ const canMessageClient = computed(
         <UButton
           to="/requests"
           color="neutral"
-          variant="ghost"
-          class="mb-2 -ml-2"
+          variant="soft"
+          size="sm"
+          icon="i-lucide-arrow-left"
+          class="mb-3"
           >Back to requests</UButton
         >
         <div class="flex flex-wrap items-start gap-3">
@@ -132,9 +134,12 @@ const canMessageClient = computed(
               {{ detail?.id ?? requestId }}
             </p>
           </div>
-          <UBadge v-if="detail" color="neutral" variant="soft">{{
-            detail.state
-          }}</UBadge>
+          <UBadge
+            v-if="detail"
+            :color="requestStateBadgeColor(detail.state)"
+            variant="soft"
+            >{{ detail.state }}</UBadge
+          >
         </div>
       </template>
     </PageHeader>

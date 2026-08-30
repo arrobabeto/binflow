@@ -1,10 +1,10 @@
 # Delete portfolio project — capability specification
 
 Capability id: `delete_project_astro@2`
-Stack: `astro_repo`
+Stack: `astro-repo` (project profile: `astro_repo`)
 Executor: `workflow.delete_project@1`
 Command: `/delete_project`
-Graph: `stacks/astro_repo/delete-project@1`
+Graph: `stacks/astro-repo/delete-project@1`
 Mutation class: `destructive`
 
 Canonical decision: [ADR-0040](../adr/0040-destructive-content-capabilities.md).

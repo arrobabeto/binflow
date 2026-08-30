@@ -4,12 +4,24 @@ All notable changes to product behavior, architecture, contracts, security, oper
 
 ## Unreleased
 
+### Tool catalog stack path unification
+
+- Moved `delete_project` from mistaken `packages/tools/stacks/astro_repo/` into
+  `packages/tools/stacks/astro-repo/` so the dashboard shows one Astro stack.
+  Project profile remains `astro_repo`. Graph version is now
+  `stacks/astro-repo/delete-project@1`.
+
 ### Dark control-plane design system (ADR-0044)
 
 - Dashboard adopts a dark-only sidebar shell and documented tokens in
   `docs/DESIGN-SYSTEM.md` (Nuxt UI + Binflow CSS variables).
 - Top-bar Tools/System dropdowns become direct sidebar links.
 - Auth pages (login, two-factor, security) share the dark centered card pattern.
+- Requests inbox restores semantic status badges and approval card tints on the
+  dark surface (emerald / rose) without a surface class overriding the tint.
+- Requests inbox cards use Figma state accents (left border + matching badge):
+  completed green, in-progress blue, awaiting/revision amber, cancelled grey,
+  failed rose — instead of full-card approval fills.
 
 ### new-feature agent skill (governance gate)
 

@@ -1,7 +1,7 @@
 identity:
   id: delete_blog_draft
   version: 2
-  stack: astro_repo
+  stack: astro-repo
   toolDir: delete-blog
   graphVersionSuffix: '@1'
   displayName: Delete blog post

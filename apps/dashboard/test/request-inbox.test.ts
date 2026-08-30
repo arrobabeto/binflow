@@ -4,11 +4,14 @@ import {
   allRequestInboxClients,
   formatClientKeyLabel,
   labeledRecordFields,
+  requestCardAccentClass,
   requestCardTone,
   requestCardToneClass,
   requestInboxClientOptions,
   requestInboxProjectFilter,
   requestListSearchParams,
+  requestStateAccent,
+  requestStateBadgeColor,
 } from '../app/lib/request-inbox';
 
 const enrollmentFixture = (
@@ -126,7 +129,22 @@ describe('request inbox helpers', () => {
     expect(labeledRecordFields(null)).toEqual([]);
   });
 
-  it('tones request cards from admin approval status', () => {
+  it('accents request cards from workflow state (Figma)', () => {
+    expect(requestStateAccent('COMPLETED')).toBe('success');
+    expect(requestStateAccent('PREVIEW_DEPLOYING')).toBe('primary');
+    expect(requestStateAccent('REVISION_REQUESTED')).toBe('warning');
+    expect(requestStateAccent('AWAITING_ADMIN_APPROVAL')).toBe('warning');
+    expect(requestStateAccent('CANCELLED')).toBe('neutral');
+    expect(requestStateAccent('FAILED_FINAL')).toBe('error');
+    expect(requestCardAccentClass('success')).toContain('border-l-emerald-500');
+    expect(requestCardAccentClass('primary')).toContain('border-l-blue-500');
+    expect(requestCardAccentClass('warning')).toContain('border-l-amber-500');
+    expect(requestCardAccentClass('neutral')).toContain('binflow-border');
+    expect(requestStateBadgeColor('CANCELLED')).toBe('neutral');
+    expect(requestStateBadgeColor('COMPLETED')).toBe('success');
+  });
+
+  it('keeps legacy approval tone helpers mapped to accents', () => {
     expect(
       requestCardTone({
         approvalStatus: 'approved_for_publish',
@@ -135,23 +153,11 @@ describe('request inbox helpers', () => {
     ).toBe('approved');
     expect(
       requestCardTone({
-        approvalStatus: 'published',
-        state: 'COMPLETED',
-      }),
-    ).toBe('approved');
-    expect(
-      requestCardTone({
         approvalStatus: 'admin_rejected',
         state: 'REVISION_REQUESTED',
       }),
     ).toBe('rejected');
-    expect(
-      requestCardTone({
-        approvalStatus: null,
-        state: 'QUEUED',
-      }),
-    ).toBe('default');
-    expect(requestCardToneClass('approved')).toContain('emerald-500/10');
-    expect(requestCardToneClass('rejected')).toContain('rose-500/10');
+    expect(requestCardToneClass('approved')).toContain('border-l-emerald-500');
+    expect(requestCardToneClass('rejected')).toContain('border-l-amber-500');
   });
 });

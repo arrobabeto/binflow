@@ -3,11 +3,11 @@ import type { Enrollment, RequestSummary } from '@binflow/contracts';
 import { requestListPageSizes } from '@binflow/contracts';
 import {
   allRequestInboxClients,
-  requestCardTone,
-  requestCardToneClass,
+  requestCardAccentClass,
   requestInboxClientOptions,
   requestInboxProjectFilter,
   requestListSearchParams,
+  requestStateAccent,
   type RequestInboxPageSize,
 } from '../../lib/request-inbox';
 
@@ -104,7 +104,7 @@ const loadPreviousRequests = () => {
 };
 
 const cardClass = (item: RequestSummary): string =>
-  requestCardToneClass(requestCardTone(item));
+  requestCardAccentClass(requestStateAccent(item.state));
 
 const inboxLoading = computed(
   () =>
@@ -121,8 +121,9 @@ const inboxLoading = computed(
           Workflow requests
         </h1>
         <p class="mt-2 text-muted">
-          Needs admin approval on top. All other requests below — green after
-          admin approval, red after admin rejection.
+          Needs admin approval on top. Cards use a left accent by workflow
+          state — green completed, blue in progress, amber awaiting/revision,
+          grey cancelled.
         </p>
       </template>
       <template #actions>
@@ -179,30 +180,9 @@ const inboxLoading = computed(
         <UCard
           v-for="item in approvalPage?.items ?? []"
           :key="item.id"
-          class="binflow-surface !ring-0"
+          :class="cardClass(item)"
         >
-          <p class="text-xs font-medium tracking-wide text-muted uppercase">
-            {{ item.clientName }}
-          </p>
-          <div class="mt-1 flex flex-wrap items-center justify-between gap-4">
-            <div>
-              <div class="flex items-center gap-2">
-                <p class="font-semibold text-white">
-                  {{ item.topic ?? 'No topic' }}
-                </p>
-                <UBadge color="warning" variant="soft">{{ item.state }}</UBadge>
-              </div>
-              <p class="mt-1 font-mono text-sm text-[var(--binflow-accent)]">
-                {{ item.capabilityId }} · version {{ item.currentVersion }}
-              </p>
-            </div>
-            <UButton
-              :to="`/requests/${item.id}`"
-              color="neutral"
-              variant="soft"
-              >Open request</UButton
-            >
-          </div>
+          <RequestSummaryCard :item="item" />
         </UCard>
       </div>
     </section>
@@ -225,31 +205,9 @@ const inboxLoading = computed(
         <UCard
           v-for="item in otherPage?.items ?? []"
           :key="item.id"
-          class="binflow-surface !ring-0"
           :class="cardClass(item)"
         >
-          <p class="text-xs font-medium tracking-wide text-muted uppercase">
-            {{ item.clientName }}
-          </p>
-          <div class="mt-1 flex flex-wrap items-center justify-between gap-4">
-            <div>
-              <div class="flex items-center gap-2">
-                <p class="font-semibold text-white">
-                  {{ item.topic ?? 'No topic' }}
-                </p>
-                <UBadge color="neutral" variant="soft">{{ item.state }}</UBadge>
-              </div>
-              <p class="mt-1 font-mono text-sm text-[var(--binflow-accent)]">
-                {{ item.capabilityId }} · version {{ item.currentVersion }}
-              </p>
-            </div>
-            <UButton
-              :to="`/requests/${item.id}`"
-              color="neutral"
-              variant="soft"
-              >Open request</UButton
-            >
-          </div>
+          <RequestSummaryCard :item="item" />
         </UCard>
       </div>
       <div

@@ -4,7 +4,7 @@ description: Removes an existing portfolio case study via deletion PR and
   manifest-driven.
 displayName: Delete portfolio project
 executorId: workflow.delete_project@1
-graphVersion: stacks/astro_repo/delete-project@1
+graphVersion: stacks/astro-repo/delete-project@1
 id: delete_project_astro
 profile: astro_repo
 requiresPreview: false

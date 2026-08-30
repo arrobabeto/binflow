@@ -186,10 +186,12 @@ loads `/requests/:id` as a full document so the detail page renders only that
 request; it never renders the inbox list alongside the detail.
 
 Request summaries include `approvalStatus` from the request’s
-`terminalResult` when present. In the lower **Requests** section, cards use a
-light green surface after admin approval (`approved_for_publish` /
-`published`, or post-approval publish states) and a light red surface after
-admin rejection (`admin_rejected`). Pending approval cards stay neutral.
+`terminalResult` when present (used for messaging and detail actions). Inbox
+cards follow the Figma state accent: dark surface with a colored left border
+and matching status badge / client label —
+`COMPLETED` and publish-path states green, in-progress / preview blue,
+awaiting / revision amber, `CANCELLED` / `SUPERSEDED` neutral grey, failed
+rose.
 
 Shared list controls:
 

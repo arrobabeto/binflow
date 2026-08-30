@@ -79,6 +79,91 @@ export const requestListSearchParams = (
   return params.toString();
 };
 
+export type RequestStateAccent =
+  | 'error'
+  | 'neutral'
+  | 'primary'
+  | 'success'
+  | 'warning';
+
+/**
+ * Figma inbox accent for a workflow state: left border + status color.
+ * CANCELLED/SUPERSEDED stay neutral grey; failures use error.
+ */
+export const requestStateAccent = (
+  state: RequestSummary['state'],
+): RequestStateAccent => {
+  switch (state) {
+    case 'COMPLETED':
+    case 'APPROVED_FOR_PUBLISH':
+    case 'REVALIDATING':
+    case 'MERGING_OR_PUBLISHING':
+    case 'PRODUCTION_DEPLOYING':
+    case 'VERIFYING_PRODUCTION':
+      return 'success';
+    case 'FAILED_FINAL':
+    case 'FAILED_RETRYABLE':
+      return 'error';
+    case 'CANCELLED':
+    case 'SUPERSEDED':
+      return 'neutral';
+    case 'AWAITING_ADMIN_APPROVAL':
+    case 'REVISION_REQUESTED':
+    case 'AWAITING_REVISION_PLAN_CONFIRMATION':
+    case 'NEEDS_INPUT':
+    case 'AWAITING_PLAN_CONFIRMATION':
+    case 'AWAITING_CLIENT_APPROVAL':
+      return 'warning';
+    case 'QUEUED':
+    case 'GENERATING':
+    case 'APPLYING_CHANGE':
+    case 'VALIDATING':
+    case 'PREVIEW_DEPLOYING':
+    case 'PREVIEW_READY':
+    case 'RECEIVED':
+      return 'primary';
+    default:
+      return 'neutral';
+  }
+};
+
+/** Soft badge color mirrors the card accent. */
+export const requestStateBadgeColor = (
+  state: RequestSummary['state'],
+): RequestStateAccent => requestStateAccent(state);
+
+export const requestCardAccentClass = (
+  accent: RequestStateAccent,
+): string => {
+  const accents: Record<RequestStateAccent, string> = {
+    success:
+      'binflow-surface !ring-0 border-l-[3px] !border-l-emerald-500 ring-1 ring-emerald-500/35',
+    primary:
+      'binflow-surface !ring-0 border-l-[3px] !border-l-blue-500 ring-1 ring-blue-500/35',
+    warning:
+      'binflow-surface !ring-0 border-l-[3px] !border-l-amber-500 ring-1 ring-amber-500/35',
+    error:
+      'binflow-surface !ring-0 border-l-[3px] !border-l-rose-500 ring-1 ring-rose-500/35',
+    neutral:
+      'binflow-surface !ring-0 border-l-[3px] !border-l-[var(--binflow-border)]',
+  };
+  return accents[accent];
+};
+
+export const requestStateAccentTextClass = (
+  accent: RequestStateAccent,
+): string => {
+  const text: Record<RequestStateAccent, string> = {
+    success: 'text-emerald-400',
+    primary: 'text-blue-400',
+    warning: 'text-amber-400',
+    error: 'text-rose-400',
+    neutral: 'text-muted',
+  };
+  return text[accent];
+};
+
+/** @deprecated Prefer {@link requestStateAccent} / {@link requestCardAccentClass}. */
 export type RequestCardTone = 'default' | 'approved' | 'rejected';
 
 const postAdminApprovalStates = new Set<RequestSummary['state']>([
@@ -89,7 +174,7 @@ const postAdminApprovalStates = new Set<RequestSummary['state']>([
   'VERIFYING_PRODUCTION',
 ]);
 
-/** Visual tone for inbox cards after an admin decision (or publish progress). */
+/** @deprecated Prefer state accent borders (Figma). */
 export const requestCardTone = (
   request: Readonly<
     Pick<RequestSummary, 'approvalStatus' | 'state'>
@@ -106,11 +191,11 @@ export const requestCardTone = (
   return 'default';
 };
 
+/** @deprecated Prefer {@link requestCardAccentClass}. */
 export const requestCardToneClass = (tone: RequestCardTone): string => {
-  if (tone === 'approved')
-    return 'bg-emerald-500/10 ring-1 ring-emerald-500/35';
-  if (tone === 'rejected') return 'bg-rose-500/10 ring-1 ring-rose-500/35';
-  return '';
+  if (tone === 'approved') return requestCardAccentClass('success');
+  if (tone === 'rejected') return requestCardAccentClass('warning');
+  return requestCardAccentClass('neutral');
 };
 
 /** Request payloads arrive as parsed JSON, so no other value kinds occur. */
