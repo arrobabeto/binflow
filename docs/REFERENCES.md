@@ -2,6 +2,10 @@
 
 References support implementation but do not override Binflow's accepted ADRs and canonical contracts.
 
+## Agent feature governance
+
+- Project skill [new-feature](../.cursor/skills/new-feature/SKILL.md) — intake gate before implementing platform/product features (stacks, integrations, trust boundaries). See also [DEVELOPMENT.md](DEVELOPMENT.md) § Agent skills.
+
 ## Runtime and packaging
 
 - [Node.js releases and LTS status](https://nodejs.org/en/about/previous-releases)

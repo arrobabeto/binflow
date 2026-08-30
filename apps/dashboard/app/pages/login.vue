@@ -41,7 +41,9 @@ const submit = async () => {
     <UCard class="auth-card">
       <template #header>
         <p class="eyebrow">Binflow control plane</p>
-        <h1 class="mt-2 text-3xl font-semibold tracking-tight">Sign in</h1>
+        <h1 class="mt-2 text-3xl font-semibold tracking-tight text-white">
+          Sign in
+        </h1>
         <p class="mt-2 text-sm text-muted">Platform-owner access only.</p>
       </template>
       <UForm class="space-y-5" :state="{ email, password }" @submit="submit">

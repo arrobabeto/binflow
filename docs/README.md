@@ -13,13 +13,14 @@ This directory is the canonical specification for Binflow. Documents describe cu
 7. [Security](SECURITY.md)
 8. [Data model](DATA-MODEL.md)
 9. [Admin dashboard](DASHBOARD.md)
-10. [Client onboarding](ONBOARDING.md)
-11. [Telegram experience](TELEGRAM.md)
-12. [Integrations](INTEGRATIONS.md)
-13. [Testing](TESTING.md)
-14. [Operations](OPERATIONS.md)
-15. [Development standards](DEVELOPMENT.md)
-16. [Roadmap](ROADMAP.md)
+10. [Dashboard design system](DESIGN-SYSTEM.md)
+11. [Client onboarding](ONBOARDING.md)
+12. [Telegram experience](TELEGRAM.md)
+13. [Integrations](INTEGRATIONS.md)
+14. [Testing](TESTING.md)
+15. [Operations](OPERATIONS.md)
+16. [Development standards](DEVELOPMENT.md)
+17. [Roadmap](ROADMAP.md)
 
 ## Governance
 
@@ -43,6 +44,7 @@ This directory is the canonical specification for Binflow. Documents describe cu
 | Threats and controls                            | `SECURITY.md`      |
 | Entities, tenancy and retention                 | `DATA-MODEL.md`    |
 | Dashboard information architecture and behavior | `DASHBOARD.md`     |
+| Dashboard visual tokens and UI patterns         | `DESIGN-SYSTEM.md` |
 | Enrollment and activation                       | `ONBOARDING.md`    |
 | Bot interaction and notifications               | `TELEGRAM.md`      |
 | External provider behavior                      | `INTEGRATIONS.md`  |

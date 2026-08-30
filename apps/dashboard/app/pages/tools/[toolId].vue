@@ -155,14 +155,18 @@ const edgePaths = computed(() => {
   );
 });
 
-const kindBadge = (kind: string) => {
+const kindBadge = (
+  kind: string,
+): 'primary' | 'success' | 'warning' | 'error' | 'neutral' => {
   switch (kind) {
-    case 'agent':
-      return 'primary';
     case 'effect':
+      return 'primary';
+    case 'agent':
+      return 'success';
+    case 'compute':
       return 'warning';
     case 'interrupt':
-      return 'secondary';
+      return 'error';
     default:
       return 'neutral';
   }
@@ -196,22 +200,22 @@ watch(
 </script>
 
 <template>
-  <main class="mx-auto max-w-7xl px-6 py-10">
-    <div class="flex flex-wrap items-center justify-between gap-3">
-      <div>
+  <main class="mx-auto max-w-7xl px-6 py-8 lg:px-8">
+    <PageHeader :crumbs="['Tools', data?.tool.displayName ?? toolId]">
+      <template #title>
         <p class="eyebrow">Tools</p>
-        <h1 class="text-2xl font-semibold tracking-tight">
+        <h1 class="mt-1 text-3xl font-semibold tracking-tight text-white">
           {{ data?.tool.displayName ?? toolId }}
         </h1>
-      </div>
-      <div class="flex items-center gap-3">
+      </template>
+      <template #actions>
         <UButton to="/tools" color="neutral" variant="soft">All tools</UButton>
         <UButton to="/customizations" color="neutral" variant="soft"
           >Customizations</UButton
         >
-      </div>
-    </div>
-    <div class="mt-8">
+      </template>
+    </PageHeader>
+    <div>
       <p v-if="pending" class="text-muted">Loading graph…</p>
       <UAlert
         v-else-if="error"
@@ -220,7 +224,7 @@ watch(
         :description="String(error)"
       />
       <template v-else-if="data">
-        <p class="text-muted">
+        <p class="font-mono text-sm text-[var(--binflow-accent)]">
           {{ data.tool.stack }} · {{ data.graphVersion }} · fingerprint
           {{ data.fingerprint.slice(0, 12) }}…
         </p>
@@ -231,7 +235,7 @@ watch(
         </p>
         <div
           ref="graphViewport"
-          class="tool-graph mt-8 w-full overflow-x-hidden rounded-xl border border-default"
+          class="tool-graph tool-graph-panel mt-8 w-full overflow-x-hidden border border-[var(--binflow-border)] p-4"
         >
           <div
             class="relative origin-top-left"
@@ -355,7 +359,7 @@ watch(
                   <UBadge
                     :color="kindBadge(nodeById.get(nodeId)?.kind ?? 'compute')"
                     variant="subtle"
-                    class="shrink-0"
+                    class="shrink-0 uppercase"
                     >{{ nodeById.get(nodeId)?.kind }}</UBadge
                   >
                 </div>
@@ -448,9 +452,10 @@ watch(
 
 <style scoped>
 .tool-graph {
+  background-color: #e9edf5;
   background-image: radial-gradient(
     circle,
-    color-mix(in oklab, var(--ui-border) 70%, transparent) 1px,
+    rgb(42 49 66 / 16%) 1px,
     transparent 1px
   );
   background-size: 18px 18px;

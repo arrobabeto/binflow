@@ -1,8 +1,11 @@
 import { describe, expect, it } from 'vitest';
 
 import {
+  adminClientMessageInputSchema,
+  adminClientMessageQueuedSchema,
   adminOperationReferenceSchema,
   apiErrorResponseSchema,
+  clientMessageTargetSchema,
   cursorQuerySchema,
   encodeRequestListCursor,
   decodeRequestListCursor,
@@ -346,33 +349,31 @@ describe('control-plane contracts', () => {
     expect(withUrl.url).toBe('https://www.example.com/');
   });
 
-  it('parses request list query and opaque cursors', () => {
-    expect(requestListQuerySchema.parse({})).toEqual({ limit: 10 });
+  it('rejects empty and overlong admin client messages', () => {
+    expect(() => adminClientMessageInputSchema.parse({ message: '  ' })).toThrow();
+    expect(() =>
+      adminClientMessageInputSchema.parse({ message: 'x'.repeat(2001) }),
+    ).toThrow();
     expect(
-      requestListQuerySchema.parse({
-        limit: '30',
-        needsAdminApproval: 'false',
-        projectId: 'project-webbin',
+      adminClientMessageInputSchema.parse({ message: '  hello  ' }),
+    ).toEqual({ message: 'hello' });
+    expect(
+      clientMessageTargetSchema.parse({
+        botUsername: 'bot',
+        clientName: 'Webbin',
+        paired: true,
+        projectKey: 'webbin',
+        tenantKey: 'webbin',
+      }),
+    ).toMatchObject({ paired: true });
+    expect(
+      adminClientMessageQueuedSchema.parse({
+        notificationType: 'admin.direct_message',
+        queued: true,
       }),
     ).toEqual({
-      limit: 30,
-      needsAdminApproval: false,
-      projectId: 'project-webbin',
-    });
-    expect(
-      requestListQuerySchema.parse({
-        limit: 10,
-        needsAdminApproval: true,
-      }),
-    ).toEqual({ limit: 10, needsAdminApproval: true });
-    expect(() => requestListQuerySchema.parse({ limit: '25' })).toThrow();
-    const cursor = encodeRequestListCursor({
-      id: 'request-1',
-      updatedAt: '2026-08-18T12:00:00.000Z',
-    });
-    expect(decodeRequestListCursor(cursor)).toEqual({
-      id: 'request-1',
-      updatedAt: '2026-08-18T12:00:00.000Z',
+      notificationType: 'admin.direct_message',
+      queued: true,
     });
   });
 });

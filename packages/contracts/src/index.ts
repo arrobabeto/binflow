@@ -1716,6 +1716,45 @@ export const adminTelegramTargetSchema = z
   .strict()
   .nullable();
 
+export const ADMIN_CLIENT_MESSAGE_MAX_LENGTH = 2000;
+
+export const adminClientMessageInputSchema = z
+  .object({
+    message: z
+      .string()
+      .transform((value) => value.trim())
+      .pipe(
+        z
+          .string()
+          .min(1, 'Message is required.')
+          .max(
+            ADMIN_CLIENT_MESSAGE_MAX_LENGTH,
+            `Message must be at most ${String(ADMIN_CLIENT_MESSAGE_MAX_LENGTH)} characters.`,
+          ),
+      ),
+  })
+  .strict();
+
+export const clientMessageTargetSchema = z
+  .object({
+    botUsername: z.string().min(1).nullable(),
+    clientName: z.string().min(1),
+    paired: z.boolean(),
+    projectKey: z.string().min(1),
+    tenantKey: z.string().min(1),
+  })
+  .strict();
+
+export const adminClientMessageQueuedSchema = z
+  .object({
+    notificationType: z.enum([
+      'admin.direct_message',
+      'admin.request_message',
+    ]),
+    queued: z.literal(true),
+  })
+  .strict();
+
 export type RequestState = z.infer<typeof requestStateSchema>;
 export type RequestSummary = z.infer<typeof requestSummarySchema>;
 export type RevisionMagnitude = z.infer<typeof revisionMagnitudeSchema>;
@@ -1751,4 +1790,11 @@ export type ToolCustomizationDetail = z.infer<
 >;
 export type UploadToolCustomizationInput = z.infer<
   typeof uploadToolCustomizationInputSchema
+>;
+export type AdminClientMessageInput = z.infer<
+  typeof adminClientMessageInputSchema
+>;
+export type ClientMessageTarget = z.infer<typeof clientMessageTargetSchema>;
+export type AdminClientMessageQueued = z.infer<
+  typeof adminClientMessageQueuedSchema
 >;

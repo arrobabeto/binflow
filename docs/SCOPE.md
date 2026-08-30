@@ -21,6 +21,7 @@
 - Natural-language intent routing and explicit slash commands.
 - Dynamic tool menu, status, revision, approval and cancellation.
 - Admin notifications and approvals shared with the dashboard.
+- Bounded admin→client Telegram direct messages from the dashboard (ADR-0043).
 
 ### First capability
 

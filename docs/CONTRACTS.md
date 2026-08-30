@@ -576,6 +576,8 @@ POST   /api/v1/requests/:requestId/approve
 POST   /api/v1/requests/:requestId/reject
 POST   /api/v1/requests/:requestId/revise
 POST   /api/v1/requests/:requestId/cancel
+POST   /api/v1/requests/:requestId/messages
+GET    /api/v1/requests/:requestId/message-target
 GET    /api/v1/audit
 GET    /api/v1/usage
 GET    /api/v1/operations/:operationId
@@ -584,6 +586,8 @@ GET    /api/v1/readiness
 GET    /api/v1/admin/enrollments
 GET    /api/v1/admin/enrollments/:id
 GET    /api/v1/admin/enrollments/:id/manifest
+GET    /api/v1/admin/enrollments/:id/message-target
+POST   /api/v1/admin/enrollments/:id/messages
 POST   /api/v1/admin/enrollments
 PATCH  /api/v1/admin/enrollments/:id
 POST   /api/v1/admin/enrollments/:id/validate
@@ -599,6 +603,20 @@ POST   /api/v1/admin/enrollments/:id/catalog/sync
 POST   /api/v1/admin/telegram/pairing-link
 GET    /api/v1/admin/telegram/target
 ```
+
+`POST /api/v1/admin/enrollments/:id/messages` and
+`POST /api/v1/requests/:requestId/messages` accept
+`{ "message": "<plain text>" }` (1–2000 characters after trim), require a fresh
+TOTP session and `Idempotency-Key`, and enqueue `client.notification_requested`
+(ADR-0043). Request-scoped send also requires `If-Match` on the request revision
+and is allowed only when `approvalStatus` is `admin_rejected`. Responses are
+`{ "queued": true, "notificationType": "admin.direct_message" | "admin.request_message" }`.
+
+`GET /api/v1/admin/enrollments/:id/message-target` and
+`GET /api/v1/requests/:requestId/message-target` return a redacted channel
+summary:
+`clientName`, `tenantKey`, `projectKey`, `botUsername`, `paired` — never chat
+IDs, tokens or ciphertext.
 
 Module 7 implements a redacted request projection with request ID,
 tenant/project, `clientName`, `clientKey`, `create_blog_draft` capability, state,

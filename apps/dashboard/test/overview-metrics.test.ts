@@ -80,10 +80,15 @@ describe('overview-metrics', () => {
     );
     expect(cards[0]?.label).toBe('Acme');
     expect(cards[1]).toMatchObject({
+      canMessage: true,
       label: 'Webbin',
       pendingApprovals: 1,
       requestsToday: 2,
       showEnrollmentStep: false,
+    });
+    expect(cards[0]).toMatchObject({
+      canMessage: false,
+      showEnrollmentStep: true,
     });
   });
 

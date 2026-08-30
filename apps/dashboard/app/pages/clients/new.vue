@@ -32,15 +32,25 @@ const submit = async () => {
 </script>
 
 <template>
-  <main class="mx-auto max-w-2xl px-6 py-10">
-    <UButton to="/clients" color="neutral" variant="ghost"
-      >Back to clients</UButton
-    >
-    <h1 class="mt-6 text-3xl font-semibold">Add client</h1>
-    <p class="mt-2 text-muted">
-      This adopts a matching Phase 0 draft scope when one already exists.
-    </p>
-    <UCard class="mt-8">
+  <main class="mx-auto max-w-2xl px-6 py-8 lg:px-8">
+    <PageHeader :crumbs="['Clients', 'Add client']">
+      <template #title>
+        <UButton
+          to="/clients"
+          color="neutral"
+          variant="ghost"
+          class="mb-2 -ml-2"
+          >Back to clients</UButton
+        >
+        <h1 class="text-3xl font-semibold tracking-tight text-white">
+          Add client
+        </h1>
+        <p class="mt-2 text-muted">
+          This adopts a matching Phase 0 draft scope when one already exists.
+        </p>
+      </template>
+    </PageHeader>
+    <UCard class="binflow-surface !ring-0">
       <form class="grid gap-5" @submit.prevent="submit">
         <UFormField label="Client display name"
           ><UInput v-model="form.tenantDisplayName" class="w-full" required
@@ -54,7 +64,12 @@ const submit = async () => {
         <UFormField label="Project key"
           ><UInput v-model="form.projectKey" class="w-full" required
         /></UFormField>
-        <UAlert v-if="errorMessage" color="error" :description="errorMessage" />
+        <UAlert
+          v-if="errorMessage"
+          color="error"
+          variant="soft"
+          :description="errorMessage"
+        />
         <UButton type="submit" :loading="saving">Create enrollment</UButton>
       </form>
     </UCard>

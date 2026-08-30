@@ -115,7 +115,7 @@ const signOut = async () => {
     <UCard class="auth-card">
       <template #header>
         <p class="eyebrow">Account security</p>
-        <h1 class="mt-2 text-3xl font-semibold tracking-tight">
+        <h1 class="mt-2 text-3xl font-semibold tracking-tight text-white">
           Secure Binflow
         </h1>
         <p class="mt-2 text-sm text-muted">

@@ -47,7 +47,7 @@ const verify = async () => {
     <UCard class="auth-card">
       <template #header>
         <p class="eyebrow">Second factor</p>
-        <h1 class="mt-2 text-3xl font-semibold tracking-tight">
+        <h1 class="mt-2 text-3xl font-semibold tracking-tight text-white">
           Verify your sign-in
         </h1>
       </template>

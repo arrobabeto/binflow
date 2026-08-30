@@ -20,6 +20,7 @@ export type ClientMix = Readonly<{
 }>;
 
 export type ClientSummaryModel = Readonly<{
+  canMessage: boolean;
   currentStep: number;
   id: string;
   label: string;
@@ -119,6 +120,7 @@ export const buildClientSummaries = (
 ): ClientSummaryModel[] =>
   [...enrollments]
     .map((enrollment) => ({
+      canMessage: operationalStates.has(enrollment.state),
       currentStep: enrollment.currentStep,
       id: enrollment.id,
       label: formatClientKeyLabel(enrollment.tenantKey),
