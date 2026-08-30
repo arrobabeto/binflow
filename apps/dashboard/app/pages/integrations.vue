@@ -234,28 +234,30 @@ const revoke = async (credential: CredentialSummary) => {
 
 <template>
   <main
-    class="mx-auto grid max-w-6xl gap-8 px-6 py-10 lg:grid-cols-[1fr_22rem]"
+    class="mx-auto grid max-w-6xl gap-8 px-6 py-8 lg:grid-cols-[1fr_22rem] lg:px-8"
   >
     <section>
-      <div class="flex items-end justify-between gap-4">
-        <div>
-          <h1 class="text-3xl font-semibold tracking-tight">
+      <PageHeader :crumbs="['System', 'Integrations']">
+        <template #title>
+          <h1 class="mt-1 text-3xl font-semibold tracking-tight text-white">
             Provider credentials
           </h1>
           <p class="mt-2 text-muted">
             Safe metadata only. Secret values are never shown again.
           </p>
-        </div>
-        <UButton
-          color="neutral"
-          variant="soft"
-          :loading="status === 'pending'"
-          @click="refresh"
-          >Refresh</UButton
-        >
-        </div>
+        </template>
+        <template #actions>
+          <UButton
+            color="neutral"
+            variant="soft"
+            :loading="status === 'pending'"
+            @click="refresh"
+            >Refresh</UButton
+          >
+        </template>
+      </PageHeader>
 
-        <div class="mt-6 flex flex-wrap items-end gap-3">
+        <div class="flex flex-wrap items-end gap-3">
           <UFormField label="Search" class="min-w-48 flex-1">
             <UInput
               v-model="query"

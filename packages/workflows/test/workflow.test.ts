@@ -1114,4 +1114,239 @@ describeDatabase('Telegram request workflow kernel', () => {
     expect(detail.clientName).toBe('Webbin');
     expect(detail.clientKey).toBe('webbin');
   });
+
+  it('queues enrollment and request admin messages with pairing gates', async () => {
+    await expect(
+      service.sendEnrollmentMessage(
+        'enrollment-webbin',
+        'Please check your catalog.',
+        'admin:owner',
+        'correlation-enroll-msg-unpaired',
+        'idempotency-enroll-msg-unpaired',
+      ),
+    ).rejects.toMatchObject({
+      category: 'conflict_error',
+      metadata: { code: 'client_not_paired' },
+    });
+
+    await service.handleTelegramUpdate(
+      update('1', '/start pairing-token-abcdefghijklmnopqrstuvwxyz'),
+    );
+    await withPlatformOwnerScope(
+      database.db,
+      {
+        actorId: 'fixture',
+        correlationId: 'client-bot-username',
+        reason: 'Set client bot username for message target',
+      },
+      async (scoped) => {
+        await scoped
+          .update(schema.providerCredentials)
+          .set({
+            configuration: { expectedUsername: 'WebbinClientBot' },
+          })
+          .where(eq(schema.providerCredentials.id, 'telegram-client'));
+      },
+    );
+
+    const target = await service.getEnrollmentMessageTarget(
+      'enrollment-webbin',
+      'admin:owner',
+      'correlation-enroll-target',
+    );
+    expect(target).toEqual({
+      botUsername: 'WebbinClientBot',
+      clientName: 'Webbin',
+      paired: true,
+      projectKey: 'webbin',
+      tenantKey: 'webbin',
+    });
+    expect(JSON.stringify(target)).not.toMatch(/chat/i);
+
+    const queued = await service.sendEnrollmentMessage(
+      'enrollment-webbin',
+      'Please check your catalog.',
+      'admin:owner',
+      'correlation-enroll-msg',
+      'idempotency-enroll-msg',
+    );
+    expect(queued).toEqual({
+      notificationType: 'admin.direct_message',
+      queued: true,
+    });
+    const replay = await service.sendEnrollmentMessage(
+      'enrollment-webbin',
+      'Please check your catalog.',
+      'admin:owner',
+      'correlation-enroll-msg-replay',
+      'idempotency-enroll-msg',
+    );
+    expect(replay).toEqual(queued);
+
+    const notices = await database.db
+      .select()
+      .from(schema.outboxEvents)
+      .where(
+        eq(schema.outboxEvents.eventType, 'client.notification_requested'),
+      );
+    expect(notices).toHaveLength(1);
+    expect(notices[0]).toMatchObject({
+      aggregateId: 'enrollment-webbin',
+      aggregateType: 'enrollment',
+      payload: {
+        enrollmentId: 'enrollment-webbin',
+        notificationType: 'admin.direct_message',
+      },
+    });
+    expect(
+      (notices[0]?.payload as { message: string }).message,
+    ).toContain('Please check your catalog.');
+    expect(
+      (notices[0]?.payload as { message: string }).message,
+    ).toContain('Mensaje del administrador de Binflow');
+
+    const plan = await service.handleTelegramUpdate(
+      update('2', '/create_blog Automatización segura con IA'),
+    );
+    const [created] = await database.db.select().from(schema.requests);
+    await expect(
+      service.sendRequestMessage(
+        plan.requestId!,
+        created!.version,
+        'Category needs work.',
+        'admin:owner',
+        'correlation-req-msg-blocked',
+        'idempotency-req-msg-blocked',
+      ),
+    ).rejects.toMatchObject({
+      category: 'conflict_error',
+      metadata: { code: 'request_message_not_allowed' },
+    });
+
+    await database.db
+      .update(schema.requests)
+      .set({
+        terminalResult: { approvalStatus: 'admin_rejected' },
+      })
+      .where(eq(schema.requests.id, plan.requestId!));
+
+    const requestQueued = await service.sendRequestMessage(
+      plan.requestId!,
+      created!.version,
+      'Category needs work.',
+      'admin:owner',
+      'correlation-req-msg',
+      'idempotency-req-msg',
+    );
+    expect(requestQueued).toEqual({
+      notificationType: 'admin.request_message',
+      queued: true,
+    });
+    const requestNotices = await database.db
+      .select()
+      .from(schema.outboxEvents)
+      .where(
+        eq(schema.outboxEvents.eventType, 'client.notification_requested'),
+      );
+    expect(
+      requestNotices.filter(
+        (event) =>
+          (event.payload as { notificationType?: string }).notificationType ===
+          'admin.request_message',
+      ),
+    ).toHaveLength(1);
+  });
+
+  it('does not enqueue client messages when admin rejects', async () => {
+    await service.handleTelegramUpdate(
+      update('1', '/start pairing-token-abcdefghijklmnopqrstuvwxyz'),
+    );
+    const plan = await service.handleTelegramUpdate(
+      update('2', '/create_blog Categoría nueva para rechazar'),
+    );
+    const confirmation = plan.actionTokens.find(
+      (action) => action.action === 'confirm_plan',
+    )!;
+    await service.handleTelegramUpdate(
+      update('3', `/action ${confirmation.token}`),
+    );
+    const [request] = await database.db.select().from(schema.requests);
+    const [version] = await database.db.select().from(schema.requestVersions);
+    await withPlatformOwnerScope(
+      database.db,
+      {
+        actorId: 'fixture',
+        correlationId: 'reject-fixture',
+        reason: 'Seed preview evidence for reject',
+      },
+      async (scoped) => {
+        await scoped.insert(schema.artifacts).values({
+          bytes: 12,
+          id: 'artifact-reject',
+          kind: 'preview_bundle',
+          mime: 'text/markdown',
+          projectId: 'project-webbin',
+          requestId: request!.id,
+          requestVersionId: version!.id,
+          sha256: 'a'.repeat(64),
+          storageKey: 'artifact-reject',
+          tenantId: 'tenant-webbin',
+        });
+        await scoped.insert(schema.repoChanges).values({
+          artifactHashes: {},
+          baseSha: 'base1234567',
+          branch: 'preview/reject',
+          files: [],
+          headSha: 'abcdef1234567',
+          id: 'repo-reject',
+          projectId: 'project-webbin',
+          requestId: request!.id,
+          requestVersionId: version!.id,
+          tenantId: 'tenant-webbin',
+        });
+        await scoped.insert(schema.deployments).values({
+          commitSha: 'abcdef1234567',
+          environment: 'preview',
+          id: 'deploy-reject',
+          projectId: 'project-webbin',
+          providerId: 'preview-reject-1',
+          requestVersionId: version!.id,
+          state: 'ready',
+          tenantId: 'tenant-webbin',
+          urls: {},
+        });
+        await scoped
+          .update(schema.requests)
+          .set({
+            state: 'AWAITING_ADMIN_APPROVAL',
+            terminalResult: {
+              approvalStatus: 'awaiting_admin',
+              categoryKind: 'new',
+            },
+            version: request!.version,
+          })
+          .where(eq(schema.requests.id, request!.id));
+      },
+    );
+    const before = await database.db.select().from(schema.outboxEvents);
+    await service.rejectAsAdmin(
+      request!.id,
+      request!.version,
+      'admin:owner',
+      'correlation-reject',
+      'idempotency-reject',
+    );
+    const after = await database.db.select().from(schema.outboxEvents);
+    expect(after).toHaveLength(before.length);
+    expect(
+      after.filter(
+        (event) =>
+          event.eventType === 'client.notification_requested' &&
+          ((event.payload as { notificationType?: string }).notificationType ===
+            'admin.direct_message' ||
+            (event.payload as { notificationType?: string })
+              .notificationType === 'admin.request_message'),
+      ),
+    ).toHaveLength(0);
+  });
 });

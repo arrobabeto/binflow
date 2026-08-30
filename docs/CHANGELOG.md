@@ -4,13 +4,36 @@ All notable changes to product behavior, architecture, contracts, security, oper
 
 ## Unreleased
 
+### Dark control-plane design system (ADR-0044)
+
+- Dashboard adopts a dark-only sidebar shell and documented tokens in
+  `docs/DESIGN-SYSTEM.md` (Nuxt UI + Binflow CSS variables).
+- Top-bar Tools/System dropdowns become direct sidebar links.
+- Auth pages (login, two-factor, security) share the dark centered card pattern.
+
+### new-feature agent skill (governance gate)
+
+- Project skill `.cursor/skills/new-feature/`: interview → classify → impact
+  matrix (docs/ADR/tools) → approval STOP on rule changes → write
+  `docs/specs/` + ADRs/changelog → handoff to create-tool or impl plan.
+  Does not implement product code. Linked from DEVELOPMENT and create-tool.
+
+### Admin→client Telegram direct messages (ADR-0043)
+
+- Dashboard Message modal (Home client cards; request detail only after
+  `admin_rejected`) queues bounded freeform text to the paired client Telegram
+  conversation via `client.notification_requested`.
+- New routes: enrollment message-target + messages; request message-target +
+  messages.
+- Reject/approve remain independent of messaging.
+
 ### Requests inbox stacked layout and approval tones
 
 - Requests page stacks **Needs admin approval** above **Requests** (no longer
   side-by-side columns).
 - Request summaries expose nullable `approvalStatus` from `terminalResult`.
-  Lower-section cards render light green after admin approval / publish and
-  light red after admin rejection.
+  Lower-section cards use emerald / rose surface tones after admin approval or
+  rejection (dark control-plane palette).
 - Approval queue no longer shows a “Next approval batch” control; the Requests
   section paginates with **Previous requests batch** and **Next requests batch**.
 

@@ -37,16 +37,22 @@ const createPairingLink = async () => {
 </script>
 
 <template>
-  <main class="mx-auto max-w-5xl px-6 py-10">
-    <h1 class="text-3xl font-semibold tracking-tight">Admin notifications</h1>
-    <p class="mt-2 text-muted">
-      Pair the verified global admin bot to receive client activity and
-      approval alerts.
-    </p>
-      <p v-if="errorMessage" class="mt-4 text-sm text-error">
+  <main class="mx-auto max-w-5xl px-6 py-8 lg:px-8">
+    <PageHeader :crumbs="['System', 'Operations']">
+      <template #title>
+        <h1 class="mt-1 text-3xl font-semibold tracking-tight text-white">
+          Admin notifications
+        </h1>
+        <p class="mt-2 text-muted">
+          Pair the verified global admin bot to receive client activity and
+          approval alerts.
+        </p>
+      </template>
+    </PageHeader>
+      <p v-if="errorMessage" class="text-sm text-error">
         {{ errorMessage }}
       </p>
-      <UCard class="mt-8">
+      <UCard class="binflow-surface !ring-0">
         <template v-if="target">
           <p class="font-semibold">Active target</p>
           <dl class="mt-4 grid gap-3 text-sm md:grid-cols-2">

@@ -107,8 +107,9 @@ export const requestCardTone = (
 };
 
 export const requestCardToneClass = (tone: RequestCardTone): string => {
-  if (tone === 'approved') return 'bg-emerald-50 ring-1 ring-emerald-100';
-  if (tone === 'rejected') return 'bg-rose-50 ring-1 ring-rose-100';
+  if (tone === 'approved')
+    return 'bg-emerald-500/10 ring-1 ring-emerald-500/35';
+  if (tone === 'rejected') return 'bg-rose-500/10 ring-1 ring-rose-500/35';
   return '';
 };
 

@@ -151,7 +151,7 @@ describe('request inbox helpers', () => {
         state: 'QUEUED',
       }),
     ).toBe('default');
-    expect(requestCardToneClass('approved')).toContain('emerald');
-    expect(requestCardToneClass('rejected')).toContain('rose');
+    expect(requestCardToneClass('approved')).toContain('emerald-500/10');
+    expect(requestCardToneClass('rejected')).toContain('rose-500/10');
   });
 });

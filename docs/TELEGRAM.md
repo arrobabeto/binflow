@@ -265,12 +265,21 @@ Required events:
   dashboard. The notice is the neutral terminal copy already used for
   client-initiated `/cancel`; it does not attribute the cancellation, name the
   platform owner or expose dashboard paths.
+- `admin.direct_message` / `admin.request_message`: bounded freeform plain text
+  (max 2000 characters) queued from the dashboard Message modal (ADR-0043).
+  Enrollment-scoped and request-scoped (only after `admin_rejected`) sends share
+  the same outbox type. A short code-owned prefix may precede the owner-authored
+  body. Approve/reject/revise never auto-enqueue these events.
 
-The message is rendered when the event is enqueued, in the `conversationLocale`
-stored for that conversation. A request whose locale cannot be resolved produces
-no event instead of an English fallback. The destination chat is always resolved
-at delivery time from the paired channel identity, never read from the event
-payload.
+The message is rendered when the event is enqueued. For workflow notices such as
+cancellation, the `conversationLocale` stored for that conversation is required;
+a request whose locale cannot be resolved produces no cancellation event instead
+of an English fallback. Freeform admin messages may use a neutral English prefix
+when locale is missing; the freeform body is never auto-translated. The
+destination chat is always resolved at delivery time from the paired channel
+identity, never read from the event payload. Enrollment-scoped events resolve
+via the enrollment’s tenant/project active channel identity; request-scoped
+events resolve via the request’s user.
 
 Client-initiated `/cancel` keeps its synchronous in-thread reply and enqueues
 nothing, so the client never receives the same copy twice.

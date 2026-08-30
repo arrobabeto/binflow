@@ -1,10 +1,13 @@
 import Fastify, { type FastifyInstance } from 'fastify';
 
 import {
+  adminClientMessageInputSchema,
+  adminClientMessageQueuedSchema,
   adminTelegramPairingLinkSchema,
   adminTelegramTargetSchema,
   activationBlockersResponseSchema,
   capabilityCatalogResponseSchema,
+  clientMessageTargetSchema,
   createEnrollmentInputSchema,
   credentialPageSchema,
   credentialSummarySchema,
@@ -88,9 +91,13 @@ export const buildApp = (
       | 'createAdminPairingLink'
       | 'get'
       | 'getAdminTelegramTarget'
+      | 'getEnrollmentMessageTarget'
+      | 'getRequestMessageTarget'
       | 'list'
       | 'rejectAsAdmin'
       | 'reviseAsAdmin'
+      | 'sendEnrollmentMessage'
+      | 'sendRequestMessage'
     >;
     trustedOrigin?: string;
   }> = {},
@@ -436,6 +443,39 @@ export const buildApp = (
     },
   );
 
+  app.get<{ Params: { id: string } }>(
+    '/api/v1/requests/:id/message-target',
+    async (request) => {
+      const session = await requireSession(request);
+      return clientMessageTargetSchema.parse(
+        await requireWorkflowService().getRequestMessageTarget(
+          request.params.id,
+          session.actorId,
+          request.id,
+        ),
+      );
+    },
+  );
+
+  app.post<{ Params: { id: string } }>(
+    '/api/v1/requests/:id/messages',
+    async (request) => {
+      const session = await requireSession(request, true);
+      const mutation = requireMutationHeaders(request.headers);
+      const body = adminClientMessageInputSchema.parse(request.body);
+      return adminClientMessageQueuedSchema.parse(
+        await requireWorkflowService().sendRequestMessage(
+          request.params.id,
+          mutation.expectedVersion,
+          body.message,
+          session.actorId,
+          request.id,
+          mutation.idempotencyKey,
+        ),
+      );
+    },
+  );
+
   app.get('/api/v1/admin/integrations', async (request) => {
     const session = await requireSession(request);
     const items = await requireIntegrationService().list(
@@ -558,6 +598,38 @@ export const buildApp = (
         request.id,
       );
       return projectManifestResponseSchema.parse(manifest);
+    },
+  );
+
+  app.get<{ Params: { id: string } }>(
+    '/api/v1/admin/enrollments/:id/message-target',
+    async (request) => {
+      const session = await requireSession(request);
+      return clientMessageTargetSchema.parse(
+        await requireWorkflowService().getEnrollmentMessageTarget(
+          request.params.id,
+          session.actorId,
+          request.id,
+        ),
+      );
+    },
+  );
+
+  app.post<{ Params: { id: string } }>(
+    '/api/v1/admin/enrollments/:id/messages',
+    async (request) => {
+      const session = await requireSession(request, true);
+      const mutation = requireMutationHeaders(request.headers, false);
+      const body = adminClientMessageInputSchema.parse(request.body);
+      return adminClientMessageQueuedSchema.parse(
+        await requireWorkflowService().sendEnrollmentMessage(
+          request.params.id,
+          body.message,
+          session.actorId,
+          request.id,
+          mutation.idempotencyKey,
+        ),
+      );
     },
   );
 

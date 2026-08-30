@@ -14,13 +14,15 @@
 
 A change is ready for implementation when:
 
-- Goal, user and success criteria are documented.
+- Goal, user and success criteria are documented (use
+  [new-feature](../.cursor/skills/new-feature/SKILL.md) for non-trivial features).
 - In/out-of-scope behavior is explicit.
 - Public contracts and state transitions are defined.
 - Security, tenancy, retention and approval impact is reviewed.
 - Failure/retry/recovery behavior is specified.
 - Acceptance tests are listed.
 - Durable decisions have an accepted/proposed ADR.
+- Rule changes (SCOPE/MVP/ADR/SECURITY) were explicitly approved when required.
 
 ## Definition of Done
 
@@ -38,6 +40,15 @@ A change is complete only when:
 - No secrets, production data or unrelated changes are included.
 
 Documentation may not be deferred to a follow-up issue or PR.
+
+## Agent skills (repo)
+
+| Skill | Role |
+|-------|------|
+| [`.cursor/skills/new-feature/`](../.cursor/skills/new-feature/SKILL.md) | Documentation-first **governance gate**: classify feature, impact vs docs/ADRs/tools, STOP for rule changes, write specs/ADRs/changelog, hand off. No product code. |
+| [`.cursor/skills/create-tool/`](../.cursor/skills/create-tool/SKILL.md) | New **capability** pipeline (brief → scaffold → implement → post-ship). Run after new-feature when stack/ADR/SCOPE may change. |
+| [`.cursor/skills/test-tool/`](../.cursor/skills/test-tool/SKILL.md) | Post-ship client-realistic audit |
+| [`.cursor/skills/edit-node-config/`](../.cursor/skills/edit-node-config/SKILL.md) | Edit declarative node config |
 
 ## TypeScript standards
 

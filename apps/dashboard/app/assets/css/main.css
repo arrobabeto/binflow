@@ -2,19 +2,57 @@
 @import '@nuxt/ui';
 
 :root {
-  --ui-primary: var(--ui-color-primary-600);
-  --ui-secondary: var(--ui-color-secondary-600);
-  --ui-success: var(--ui-color-success-600);
-  --ui-info: var(--ui-color-info-600);
-  --ui-warning: var(--ui-color-warning-700);
-  --ui-error: var(--ui-color-error-600);
-  --ui-radius: 0.75rem;
+  --binflow-canvas: #0b0c10;
+  --binflow-sidebar: #0b0c10;
+  --binflow-surface: #13161f;
+  --binflow-elevated: #1f2433;
+  --binflow-border: #2a3142;
+  --binflow-text: #f3f4f6;
+  --binflow-muted: #6b7280;
+  --binflow-primary: #3b82f6;
+  --binflow-accent: #22d3ee;
+  --binflow-success: #10b981;
+  --binflow-warning: #f59e0b;
+  --binflow-error: #ef4444;
+
+  --ui-primary: var(--ui-color-primary-500);
+  --ui-secondary: var(--ui-color-secondary-500);
+  --ui-success: var(--ui-color-success-500);
+  --ui-info: var(--ui-color-info-500);
+  --ui-warning: var(--ui-color-warning-500);
+  --ui-error: var(--ui-color-error-500);
+  --ui-radius: 0.625rem;
+  --ui-bg: var(--binflow-canvas);
+  --ui-text: var(--binflow-text);
+  --ui-border: var(--binflow-border);
+}
+
+html.dark {
+  color-scheme: dark;
 }
 
 body {
   min-width: 320px;
-  background: #f4f7f5;
-  color: #17211c;
+  background: var(--binflow-canvas);
+  color: var(--binflow-text);
+  font-family:
+    'Geist',
+    ui-sans-serif,
+    system-ui,
+    sans-serif;
+}
+
+.font-mono,
+code,
+kbd,
+samp,
+.tabular-mono {
+  font-family:
+    'Geist Mono',
+    ui-monospace,
+    SFMono-Regular,
+    Menlo,
+    monospace;
 }
 
 .auth-shell {
@@ -24,11 +62,11 @@ body {
   padding: 2rem 1rem;
   background:
     radial-gradient(
-      circle at 15% 10%,
-      rgb(16 185 129 / 12%),
-      transparent 34rem
+      circle at 20% 0%,
+      rgb(59 130 246 / 14%),
+      transparent 32rem
     ),
-    #f4f7f5;
+    var(--binflow-canvas);
 }
 
 .auth-card {
@@ -36,9 +74,48 @@ body {
 }
 
 .eyebrow {
-  color: #047857;
+  color: var(--binflow-accent);
   font-size: 0.75rem;
   font-weight: 700;
   letter-spacing: 0.12em;
   text-transform: uppercase;
+}
+
+.binflow-shell {
+  display: flex;
+  min-height: 100dvh;
+  min-width: 64rem;
+  background: var(--binflow-canvas);
+}
+
+.binflow-sidebar {
+  display: flex;
+  width: 15rem;
+  flex-shrink: 0;
+  flex-direction: column;
+  border-right: 1px solid var(--binflow-border);
+  background: var(--binflow-sidebar);
+}
+
+.binflow-main {
+  min-width: 0;
+  flex: 1;
+}
+
+.binflow-surface {
+  background: var(--binflow-surface);
+  border: 1px solid var(--binflow-border);
+  border-radius: var(--ui-radius);
+}
+
+.binflow-inset {
+  background: var(--binflow-elevated);
+  border: 1px solid var(--binflow-border);
+  border-radius: calc(var(--ui-radius) - 2px);
+}
+
+.tool-graph-panel {
+  background: #e9edf5;
+  color: #0b0c10;
+  border-radius: var(--ui-radius);
 }

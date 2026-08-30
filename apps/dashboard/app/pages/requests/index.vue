@@ -114,24 +114,28 @@ const inboxLoading = computed(
 </script>
 
 <template>
-  <main class="mx-auto max-w-6xl px-6 py-10">
-    <div class="flex flex-wrap items-end justify-between gap-4">
-      <div>
-        <h1 class="text-3xl font-semibold tracking-tight">Workflow requests</h1>
+  <main class="mx-auto max-w-6xl px-6 py-8 lg:px-8">
+    <PageHeader :crumbs="['Requests']">
+      <template #title>
+        <h1 class="mt-1 text-3xl font-semibold tracking-tight text-white">
+          Workflow requests
+        </h1>
         <p class="mt-2 text-muted">
           Needs admin approval on top. All other requests below — green after
           admin approval, red after admin rejection.
         </p>
-      </div>
-      <UButton
-        color="neutral"
-        variant="soft"
-        :loading="inboxLoading"
-        @click="refreshInbox"
-        >Refresh</UButton
-      >
-    </div>
-    <div class="mt-6 flex flex-wrap items-end gap-4">
+      </template>
+      <template #actions>
+        <UButton
+          color="neutral"
+          variant="soft"
+          :loading="inboxLoading"
+          @click="refreshInbox"
+          >Refresh</UButton
+        >
+      </template>
+    </PageHeader>
+    <div class="flex flex-wrap items-end gap-4">
       <UFormField label="Client" class="min-w-56">
         <USelect
           v-model="selectedProjectId"
@@ -158,37 +162,44 @@ const inboxLoading = computed(
     />
 
     <section class="mt-8 min-w-0">
-      <h2 class="text-lg font-semibold">Needs admin approval</h2>
+      <h2 class="text-lg font-semibold text-white">Needs admin approval</h2>
       <p v-if="approvalFetchStatus === 'pending'" class="mt-4 text-muted">
         Loading approval queue…
       </p>
       <div v-else class="mt-4 grid gap-4">
         <UCard
           v-if="!approvalError && (approvalPage?.items.length ?? 0) === 0"
+          class="binflow-surface !ring-0"
         >
-          <p class="font-medium">No approval queue</p>
+          <p class="font-medium text-white">No approval queue</p>
           <p class="mt-1 text-sm text-muted">
             New-category blogs appear here until you decide.
           </p>
         </UCard>
-        <UCard v-for="item in approvalPage?.items ?? []" :key="item.id">
+        <UCard
+          v-for="item in approvalPage?.items ?? []"
+          :key="item.id"
+          class="binflow-surface !ring-0"
+        >
           <p class="text-xs font-medium tracking-wide text-muted uppercase">
             {{ item.clientName }}
           </p>
           <div class="mt-1 flex flex-wrap items-center justify-between gap-4">
             <div>
               <div class="flex items-center gap-2">
-                <p class="font-semibold">{{ item.topic ?? 'No topic' }}</p>
-                <UBadge color="neutral" variant="soft">{{ item.state }}</UBadge>
+                <p class="font-semibold text-white">
+                  {{ item.topic ?? 'No topic' }}
+                </p>
+                <UBadge color="warning" variant="soft">{{ item.state }}</UBadge>
               </div>
-              <p class="mt-1 text-sm text-muted">
+              <p class="mt-1 font-mono text-sm text-[var(--binflow-accent)]">
                 {{ item.capabilityId }} · version {{ item.currentVersion }}
               </p>
             </div>
             <UButton
               :to="`/requests/${item.id}`"
               color="neutral"
-              variant="outline"
+              variant="soft"
               >Open request</UButton
             >
           </div>
@@ -196,14 +207,17 @@ const inboxLoading = computed(
       </div>
     </section>
 
-    <section class="mt-10 min-w-0 border-t border-default pt-10">
-      <h2 class="text-lg font-semibold">Requests</h2>
+    <section class="mt-10 min-w-0 border-t border-[var(--binflow-border)] pt-10">
+      <h2 class="text-lg font-semibold text-white">Requests</h2>
       <p v-if="otherFetchStatus === 'pending'" class="mt-4 text-muted">
         Loading requests…
       </p>
       <div v-else class="mt-4 grid gap-4">
-        <UCard v-if="!otherError && (otherPage?.items.length ?? 0) === 0">
-          <p class="font-medium">No other requests</p>
+        <UCard
+          v-if="!otherError && (otherPage?.items.length ?? 0) === 0"
+          class="binflow-surface !ring-0"
+        >
+          <p class="font-medium text-white">No other requests</p>
           <p class="mt-1 text-sm text-muted">
             Paired clients can begin with /create_blog.
           </p>
@@ -211,6 +225,7 @@ const inboxLoading = computed(
         <UCard
           v-for="item in otherPage?.items ?? []"
           :key="item.id"
+          class="binflow-surface !ring-0"
           :class="cardClass(item)"
         >
           <p class="text-xs font-medium tracking-wide text-muted uppercase">
@@ -219,24 +234,26 @@ const inboxLoading = computed(
           <div class="mt-1 flex flex-wrap items-center justify-between gap-4">
             <div>
               <div class="flex items-center gap-2">
-                <p class="font-semibold">{{ item.topic ?? 'No topic' }}</p>
+                <p class="font-semibold text-white">
+                  {{ item.topic ?? 'No topic' }}
+                </p>
                 <UBadge color="neutral" variant="soft">{{ item.state }}</UBadge>
               </div>
-              <p class="mt-1 text-sm text-muted">
+              <p class="mt-1 font-mono text-sm text-[var(--binflow-accent)]">
                 {{ item.capabilityId }} · version {{ item.currentVersion }}
               </p>
             </div>
             <UButton
               :to="`/requests/${item.id}`"
               color="neutral"
-              variant="outline"
+              variant="soft"
               >Open request</UButton
             >
           </div>
         </UCard>
       </div>
       <div
-        class="mt-8 flex flex-wrap items-center justify-between gap-4 border-t border-default pt-6"
+        class="mt-8 flex flex-wrap items-center justify-between gap-4 border-t border-[var(--binflow-border)] pt-6"
       >
         <UFormField label="Batch size">
           <USelect

@@ -107,21 +107,33 @@ const attentionItems = computed(() =>
     readinessStatus: readiness.value?.status,
   }),
 );
+
+const messageOpen = ref(false);
+const messageEnrollmentId = ref<string | undefined>();
+
+const openMessage = (enrollmentId: string) => {
+  messageEnrollmentId.value = enrollmentId;
+  messageOpen.value = true;
+};
 </script>
 
 <template>
-  <main class="mx-auto max-w-6xl px-6 py-10">
-    <div class="flex flex-wrap items-end justify-between gap-4">
-      <div>
-        <h1 class="text-3xl font-semibold tracking-tight">Home</h1>
+  <main class="mx-auto max-w-6xl px-6 py-8 lg:px-8">
+    <PageHeader :crumbs="['Home']">
+      <template #title>
+        <h1 class="mt-1 text-3xl font-semibold tracking-tight text-white">
+          Home
+        </h1>
         <p class="mt-2 text-muted">
           Client status, daily request volume, and platform readiness.
         </p>
-      </div>
-      <UButton to="/clients/new">Add client</UButton>
-    </div>
+      </template>
+      <template #actions>
+        <UButton to="/clients/new">Add client</UButton>
+      </template>
+    </PageHeader>
 
-    <div class="mt-8 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+    <div class="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
       <StatusMetricCard
         label="System"
         :value="systemHealth.status"
@@ -159,15 +171,17 @@ const attentionItems = computed(() =>
     <div class="mt-10">
       <div class="flex flex-wrap items-end justify-between gap-3">
         <div>
-          <h2 class="text-xl font-semibold tracking-tight">Clients</h2>
+          <h2 class="text-xl font-semibold tracking-tight text-white">
+            Clients
+          </h2>
           <p class="mt-1 text-sm text-muted">
             Open an enrollment or jump to that client’s requests.
           </p>
         </div>
       </div>
       <div class="mt-4 grid gap-4 md:grid-cols-2 xl:grid-cols-3">
-        <UCard v-if="clientCards.length === 0">
-          <p class="font-medium">No clients yet</p>
+        <UCard v-if="clientCards.length === 0" class="binflow-surface !ring-0">
+          <p class="font-medium text-white">No clients yet</p>
           <p class="mt-1 text-sm text-muted">
             Create the first enrollment to start operating Binflow.
           </p>
@@ -177,6 +191,7 @@ const attentionItems = computed(() =>
           v-for="client in clientCards"
           :key="client.id"
           :client="client"
+          @message="openMessage(client.id)"
         />
       </div>
     </div>
@@ -184,5 +199,10 @@ const attentionItems = computed(() =>
     <div class="mt-10">
       <NeedsAttentionList :items="attentionItems" />
     </div>
+
+    <SendClientMessageModal
+      v-model:open="messageOpen"
+      :enrollment-id="messageEnrollmentId"
+    />
   </main>
 </template>

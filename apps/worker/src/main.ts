@@ -1330,18 +1330,45 @@ const dispatchClientNotifications = async (): Promise<void> => {
         if (claimed === undefined) continue;
         // The destination is always derived from the paired identity, never
         // from the stored payload.
-        const [target] = await scoped
-          .select({
-            botId: schema.channelIdentities.botId,
-            chatId: schema.channelIdentities.chatId,
-          })
-          .from(schema.requests)
-          .innerJoin(
-            schema.channelIdentities,
-            eq(schema.channelIdentities.userId, schema.requests.userId),
-          )
-          .where(eq(schema.requests.id, claimed.aggregateId))
-          .limit(1);
+        const [target] =
+          claimed.aggregateType === 'enrollment'
+            ? await scoped
+                .select({
+                  botId: schema.channelIdentities.botId,
+                  chatId: schema.channelIdentities.chatId,
+                })
+                .from(schema.clientEnrollments)
+                .innerJoin(
+                  schema.channelIdentities,
+                  and(
+                    eq(
+                      schema.channelIdentities.tenantId,
+                      schema.clientEnrollments.tenantId,
+                    ),
+                    eq(
+                      schema.channelIdentities.projectId,
+                      schema.clientEnrollments.projectId,
+                    ),
+                    eq(schema.channelIdentities.status, 'active'),
+                  ),
+                )
+                .where(eq(schema.clientEnrollments.id, claimed.aggregateId))
+                .limit(1)
+            : await scoped
+                .select({
+                  botId: schema.channelIdentities.botId,
+                  chatId: schema.channelIdentities.chatId,
+                })
+                .from(schema.requests)
+                .innerJoin(
+                  schema.channelIdentities,
+                  and(
+                    eq(schema.channelIdentities.userId, schema.requests.userId),
+                    eq(schema.channelIdentities.status, 'active'),
+                  ),
+                )
+                .where(eq(schema.requests.id, claimed.aggregateId))
+                .limit(1);
         const runtime =
           target === undefined
             ? undefined
@@ -1366,13 +1393,23 @@ const dispatchClientNotifications = async (): Promise<void> => {
           continue;
         }
         await markOutboxPublished(scoped, claimed);
+        const notificationType = (
+          claimed.payload as { notificationType?: unknown }
+        ).notificationType;
         await scoped.insert(schema.auditEvents).values({
           action: 'client.notification_delivered',
           actorId: 'worker:notifications',
           actorType: 'system',
           correlationId: claimed.jobKey,
           id: uuidv7(),
-          metadata: { outboxEventId: claimed.id },
+          metadata: {
+            messageLength:
+              typeof message === 'string' ? message.length : undefined,
+            outboxEventId: claimed.id,
+            ...(typeof notificationType === 'string'
+              ? { notificationType }
+              : {}),
+          },
           objectId: claimed.aggregateId,
           objectType: claimed.aggregateType,
           ...(claimed.projectId === null

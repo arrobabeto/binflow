@@ -92,34 +92,52 @@ const mutate = async (action: 'approve' | 'reject' | 'cancel') => {
       error instanceof Error ? error.message : 'The action failed.';
   }
 };
+
+const messageOpen = ref(false);
+const canMessageClient = computed(
+  () => detail.value?.approvalStatus === 'admin_rejected',
+);
 </script>
 
 <template>
-  <main class="mx-auto max-w-5xl px-6 py-10">
-    <div class="mb-6">
-      <UButton to="/requests" color="neutral" variant="ghost"
-        >Back to requests</UButton
-      >
-    </div>
-    <div class="flex flex-wrap items-start justify-between gap-4">
-      <div>
-        <p
-          v-if="detail?.clientName"
-          class="text-xs font-medium tracking-wide text-muted uppercase"
+  <main class="mx-auto max-w-5xl px-6 py-8 lg:px-8">
+    <PageHeader
+      :crumbs="[
+        'Requests',
+        detail?.topic ?? (loading ? 'Loading…' : 'Request'),
+      ]"
+    >
+      <template #title>
+        <UButton
+          to="/requests"
+          color="neutral"
+          variant="ghost"
+          class="mb-2 -ml-2"
+          >Back to requests</UButton
         >
-          {{ detail.clientName }}
-        </p>
-        <h1 class="mt-1 text-3xl font-semibold tracking-tight">
-          {{ detail?.topic ?? (loading ? 'Loading request…' : 'Request') }}
-        </h1>
-        <p class="mt-2 font-mono text-sm text-muted">
-          {{ detail?.id ?? requestId }}
-        </p>
-      </div>
-      <UBadge v-if="detail" color="neutral" variant="soft">{{
-        detail.state
-      }}</UBadge>
-    </div>
+        <div class="flex flex-wrap items-start gap-3">
+          <div class="min-w-0">
+            <p
+              v-if="detail?.clientName"
+              class="text-xs font-medium tracking-wide text-muted uppercase"
+            >
+              {{ detail.clientName }}
+            </p>
+            <h1 class="mt-1 text-3xl font-semibold tracking-tight text-white">
+              {{ detail?.topic ?? (loading ? 'Loading request…' : 'Request') }}
+            </h1>
+            <p
+              class="mt-2 font-mono text-sm text-[var(--binflow-accent)]"
+            >
+              {{ detail?.id ?? requestId }}
+            </p>
+          </div>
+          <UBadge v-if="detail" color="neutral" variant="soft">{{
+            detail.state
+          }}</UBadge>
+        </div>
+      </template>
+    </PageHeader>
 
       <UAlert
         v-if="loadError"
@@ -154,87 +172,105 @@ const mutate = async (action: 'approve' | 'reject' | 'cancel') => {
         {{ actionError }}
       </p>
 
-      <div v-if="detail" class="mt-8 grid gap-4 md:grid-cols-2">
-        <UCard>
+      <div v-if="detail" class="mt-2 grid gap-4 md:grid-cols-2">
+        <UCard class="binflow-surface !ring-0">
           <p class="text-sm text-muted">Capability</p>
-          <p class="mt-2 font-semibold">{{ detail.capabilityId }}</p>
+          <p class="mt-2 font-mono font-semibold text-[var(--binflow-accent)]">
+            {{ detail.capabilityId }}
+          </p>
         </UCard>
-        <UCard>
+        <UCard class="binflow-surface !ring-0">
           <p class="text-sm text-muted">Version</p>
-          <p class="mt-2 font-semibold">{{ detail.currentVersion }}</p>
+          <p class="mt-2 font-semibold text-white">{{ detail.currentVersion }}</p>
         </UCard>
-        <UCard>
+        <UCard class="binflow-surface !ring-0">
           <p class="text-sm text-muted">Created</p>
-          <p class="mt-2 font-mono text-sm">{{ detail.createdAt }}</p>
+          <p class="mt-2 font-mono text-sm text-white">{{ detail.createdAt }}</p>
         </UCard>
-        <UCard>
+        <UCard class="binflow-surface !ring-0">
           <p class="text-sm text-muted">Updated</p>
-          <p class="mt-2 font-mono text-sm">{{ detail.updatedAt }}</p>
+          <p class="mt-2 font-mono text-sm text-white">{{ detail.updatedAt }}</p>
         </UCard>
-        <UCard class="md:col-span-2">
-          <p class="font-semibold">Interpreted input</p>
+        <UCard class="binflow-surface md:col-span-2 !ring-0">
+          <p class="font-semibold text-white">Interpreted input</p>
           <dl
             v-if="inputFields.length > 0"
             class="mt-4 grid gap-3 text-sm md:grid-cols-2"
           >
             <div v-for="field in inputFields" :key="field.label">
               <dt class="text-muted">{{ field.label }}</dt>
-              <dd class="mt-1 font-medium">{{ field.value }}</dd>
+              <dd class="mt-1 font-medium text-white">{{ field.value }}</dd>
             </div>
           </dl>
           <p v-else class="mt-3 text-sm text-muted">No structured input yet.</p>
         </UCard>
-        <UCard class="md:col-span-2">
-          <p class="font-semibold">Confirmed plan</p>
+        <UCard class="binflow-surface md:col-span-2 !ring-0">
+          <p class="font-semibold text-white">Confirmed plan</p>
           <dl
             v-if="planFields.length > 0"
             class="mt-4 grid gap-3 text-sm md:grid-cols-2"
           >
             <div v-for="field in planFields" :key="field.label">
               <dt class="text-muted">{{ field.label }}</dt>
-              <dd class="mt-1 font-medium">{{ field.value }}</dd>
+              <dd class="mt-1 font-medium text-white">{{ field.value }}</dd>
             </div>
           </dl>
           <p v-else class="mt-3 text-sm text-muted">No confirmed plan yet.</p>
         </UCard>
-        <UCard v-if="detail.stages.length > 0" class="md:col-span-2">
-          <p class="font-semibold">Stage log</p>
+        <UCard
+          v-if="detail.stages.length > 0"
+          class="binflow-surface md:col-span-2 !ring-0"
+        >
+          <p class="font-semibold text-white">Stage log</p>
           <ol class="mt-4 space-y-3">
             <li
               v-for="stage in detail.stages"
               :key="stage.sequence"
-              class="flex flex-wrap items-baseline justify-between gap-2 border-b border-default pb-3 last:border-b-0 last:pb-0"
+              class="flex flex-wrap items-baseline gap-3 border-b border-[var(--binflow-border)] pb-3 last:border-b-0 last:pb-0"
             >
-              <div>
-                <p class="font-medium">{{ stage.node }}</p>
+              <span
+                class="mt-1 size-2.5 shrink-0 rounded-full bg-primary"
+                aria-hidden="true"
+              />
+              <div class="min-w-0 flex-1">
+                <div class="flex flex-wrap items-baseline justify-between gap-2">
+                  <p class="font-medium text-white">{{ stage.node }}</p>
+                  <p class="font-mono text-xs text-muted">
+                    {{ stage.createdAt }}
+                  </p>
+                </div>
                 <p class="text-sm text-muted">{{ stage.summary }}</p>
               </div>
-              <p class="font-mono text-xs text-muted">{{ stage.createdAt }}</p>
             </li>
           </ol>
         </UCard>
-        <UCard v-if="hasPreviewEvidence" class="md:col-span-2">
-          <p class="font-semibold">Exact preview evidence</p>
+        <UCard
+          v-if="hasPreviewEvidence"
+          class="binflow-surface md:col-span-2 !ring-0"
+        >
+          <p class="font-semibold text-white">Exact preview evidence</p>
           <dl class="mt-4 grid gap-3 text-sm md:grid-cols-2">
             <div>
               <dt class="text-muted">Approval</dt>
-              <dd class="font-medium">
+              <dd class="font-medium text-white">
                 {{ detail.execution?.approvalStatus }}
               </dd>
             </div>
             <div>
               <dt class="text-muted">Category decision</dt>
-              <dd class="font-medium">{{ detail.execution?.categoryKind }}</dd>
+              <dd class="font-medium text-white">
+                {{ detail.execution?.categoryKind }}
+              </dd>
             </div>
             <div>
               <dt class="text-muted">Head commit</dt>
-              <dd class="break-all font-mono">
+              <dd class="break-all font-mono text-[var(--binflow-accent)]">
                 {{ detail.execution?.headCommitSha }}
               </dd>
             </div>
             <div>
               <dt class="text-muted">Branch</dt>
-              <dd class="break-all font-mono">
+              <dd class="break-all font-mono text-[var(--binflow-accent)]">
                 {{ detail.execution?.branch }}
               </dd>
             </div>
@@ -254,7 +290,7 @@ const mutate = async (action: 'approve' | 'reject' | 'cancel') => {
               :to="detail.execution.pullRequestUrl"
               target="_blank"
               color="neutral"
-              variant="soft"
+              variant="ghost"
               >Open pull request</UButton
             >
           </div>
@@ -270,6 +306,11 @@ const mutate = async (action: 'approve' | 'reject' | 'cancel') => {
           >Request revision</UButton
         >
       </div>
+      <div v-if="canMessageClient" class="mt-6">
+        <UButton color="neutral" variant="soft" @click="messageOpen = true"
+          >Message client</UButton
+        >
+      </div>
       <UButton
         v-if="detail && !isTerminal"
         class="mt-6"
@@ -278,5 +319,11 @@ const mutate = async (action: 'approve' | 'reject' | 'cancel') => {
         @click="mutate('cancel')"
         >Cancel request</UButton
       >
+
+    <SendClientMessageModal
+      v-model:open="messageOpen"
+      :request-id="requestId"
+      :revision="detail?.revision"
+    />
   </main>
 </template>

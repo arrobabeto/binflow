@@ -104,15 +104,19 @@ onMounted(() => {
 </script>
 
 <template>
-  <main class="mx-auto max-w-6xl px-6 py-10">
-    <h1 class="text-3xl font-semibold tracking-tight">
-      Client tool customizations
-    </h1>
-    <p class="mt-2 text-muted">
-      Download the native template, edit style guidance, and upload a new
-      version. Customization cannot change models, paths or approvals.
-    </p>
-      <div class="mt-8 grid gap-4 md:grid-cols-2">
+  <main class="mx-auto max-w-6xl px-6 py-8 lg:px-8">
+    <PageHeader :crumbs="['Tools', 'Customizations']">
+      <template #title>
+        <h1 class="mt-1 text-3xl font-semibold tracking-tight text-white">
+          Client tool customizations
+        </h1>
+        <p class="mt-2 text-muted">
+          Download the native template, edit style guidance, and upload a new
+          version. Customization cannot change models, paths or approvals.
+        </p>
+      </template>
+    </PageHeader>
+      <div class="grid gap-4 md:grid-cols-2">
         <UFormField label="Client project">
           <USelect
             v-model="selectedProjectId"

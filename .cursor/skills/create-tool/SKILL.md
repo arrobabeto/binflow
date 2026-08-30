@@ -3,6 +3,12 @@
 Create a new Binflow capability in one guided run: interview → brief → scaffold →
 implement → post-ship → conform.
 
+If the ask is broader than one capability (new **stack/profile**, integration,
+dashboard, trust boundary, or anything that may change SCOPE/MVP/ADRs), run
+[`new-feature`](../new-feature/SKILL.md) **first**. Use this skill after
+governance docs/ADR are aligned, or when the feature is clearly a single tool on
+an existing profile.
+
 ## Preconditions
 
 1. Read `docs/README.md`, ADR-0030, ADR-0038, ADR-0039, ADR-0042, and `packages/tools/README.md`.

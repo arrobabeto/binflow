@@ -9,26 +9,27 @@ The first-MVP dashboard UI is English.
 ## Navigation
 
 ```text
-Home
-Clients
-Requests
-Tools ▸ Catalog · Customizations
-System ▸ Integrations · Operations
+Sidebar
+  Main: Home · Clients · Requests
+  Tools: Catalog · Customizations
+  System: Integrations · Operations
+  (footer) email · Sign out
 ```
 
-Primary navigation is a persistent shell (`AppShell`) on every authenticated
-operational page. Zones:
+Primary navigation is a persistent left **sidebar** (`AppShell`) on every
+authenticated operational page (ADR-0044, [DESIGN-SYSTEM.md](DESIGN-SYSTEM.md)).
+Zones:
 
-- **Primary:** Home, Clients, Requests — daily operations.
-- **Tools menu:** Catalog (`/tools`) and Customizations — capability and voice
-  configuration.
-- **System menu:** Integrations and Operations — platform readiness. Login,
-  two-factor, and Security use the auth layout without the shell. Security is
-  not listed in the System menu; it remains reachable for mandatory TOTP
-  enrollment and session management when the auth flow requires it.
+- **Main:** Home, Clients, Requests — daily operations.
+- **Tools:** Catalog (`/tools`) and Customizations — capability and voice
+  configuration (direct sidebar links, not a dropdown).
+- **System:** Integrations and Operations — platform readiness (direct links).
+  Login, two-factor, and Security use the auth layout without the shell.
+  Security is not listed in the System menu; it remains reachable for mandatory
+  TOTP enrollment and session management when the auth flow requires it.
 
 Approvals are not a separate top-level page; pending admin approvals surface on
-Home and in the left column of Requests.
+Home and in the top section of Requests.
 
 Documented but not yet built as pages: Projects, Content catalog, Usage, Audit,
 and a dedicated Settings hub (Integrations / Operations cover the MVP platform
@@ -122,6 +123,8 @@ Home is the operations cockpit (`/`). It displays:
   lifecycle state, project key, requests today and pending approvals for that
   project (from the same recent batches), enrollment step when not operational,
   a settings (cog) control in the card corner that opens the enrollment detail,
+  a **Message** control next to **Requests** that opens a modal to queue a
+  bounded freeform Telegram note to that client’s paired channel (ADR-0043),
   and a Requests link filtered to that project (`/requests?projectId=…`).
 - **Needs attention** actionable links only: pending approvals, unverified or
   invalid credentials, readiness not ready, and enrollments in
@@ -246,7 +249,10 @@ Cancelling from the detail page also queues a neutral, localized notice to the
 client's Telegram conversation (ADR-0027). The dashboard does not confirm
 delivery: the response reports the committed transition, and the notice is
 delivered asynchronously by the worker. Approve, reject and revise do not notify
-the client yet.
+the client. After a reject that records `approvalStatus: admin_rejected`, the
+detail page shows **Message client** so the owner may optionally queue a bounded
+freeform explanation (ADR-0043). The Message modal seeds a read-only Sending-to
+channel summary; reject itself never requires or sends that message.
 
 The Operations settings screen creates the one-time admin Telegram pairing
 link and projects the redacted active target. Pairing requires a non-idle,

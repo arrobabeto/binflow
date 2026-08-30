@@ -256,31 +256,38 @@ const saveCapabilities = () =>
 </script>
 
 <template>
-  <main class="mx-auto max-w-5xl px-6 py-10">
-    <div class="flex flex-wrap items-center justify-between gap-4">
-      <div>
-        <UButton to="/clients" color="neutral" variant="ghost"
+  <main class="mx-auto max-w-5xl px-6 py-8 lg:px-8">
+    <PageHeader
+      :crumbs="['Clients', enrollment?.tenantKey ?? 'Enrollment']"
+    >
+      <template #title>
+        <UButton to="/clients" color="neutral" variant="ghost" class="mb-2 -ml-2"
           >Back to clients</UButton
         >
-        <h1 class="mt-4 text-3xl font-semibold">
+        <h1 class="text-3xl font-semibold tracking-tight text-white">
           {{ enrollment?.tenantKey ?? 'Enrollment' }}
         </h1>
-      </div>
-      <div class="flex gap-2">
-        <UBadge color="neutral" variant="soft">{{ enrollment?.state }}</UBadge
-        ><UBadge color="neutral" variant="outline"
+        <p
+          v-if="enrollment?.projectKey"
+          class="mt-1 font-mono text-sm text-[var(--binflow-accent)]"
+        >
+          Project {{ enrollment.projectKey }}
+        </p>
+      </template>
+      <template #actions>
+        <UBadge color="neutral" variant="soft">{{ enrollment?.state }}</UBadge>
+        <UBadge color="neutral" variant="outline"
           >Version {{ enrollment?.version }}</UBadge
         >
-      </div>
-    </div>
+      </template>
+    </PageHeader>
     <UAlert
-      class="mt-6"
       color="warning"
       title="Activation remains fail-closed"
       description="Mutable GitHub, Vercel, Telegram, catalog and pairing evidence must be completed by later modules. No Webbin mutation is performed here."
     />
     <div class="mt-8 grid gap-6 lg:grid-cols-[1fr_20rem]">
-      <UCard>
+      <UCard class="binflow-surface !ring-0">
         <template #header
           ><div>
             <p class="font-semibold">Client and content contract</p>

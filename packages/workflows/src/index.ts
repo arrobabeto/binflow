@@ -4,8 +4,11 @@ import { and, asc, desc, eq, inArray, isNull, ne, sql } from 'drizzle-orm';
 import { v7 as uuidv7 } from 'uuid';
 
 import {
+  adminClientMessageInputSchema,
+  adminClientMessageQueuedSchema,
   adminTelegramPairingLinkSchema,
   adminTelegramTargetSchema,
+  clientMessageTargetSchema,
   createBlogDraftInputSchema,
   createProjectAstroInputSchema,
   deleteBlogDraftInputSchema,
@@ -20,6 +23,8 @@ import {
   summarizeRequestStageSummary,
   telegramIngressSchema,
   telegramReplySchema,
+  type AdminClientMessageQueued,
+  type ClientMessageTarget,
   type RequestDetail,
   type RequestSummary,
   type RequestListQuery,
@@ -126,6 +131,7 @@ const copy = {
   de: {
     accessDenied: 'Dieser Telegram-Benutzer ist nicht mit Binflow verbunden.',
     cancelled: 'Die Anfrage wurde abgebrochen.',
+    adminMessagePrefix: 'Nachricht vom Binflow-Admin:\n\n',
     cancelPrompt:
       'Bestätige, dass du die letzte aktive Anfrage abbrechen möchtest.',
     confirm: 'Entwurf erstellen',
@@ -184,6 +190,7 @@ const copy = {
   en: {
     accessDenied: 'This Telegram user is not paired with Binflow.',
     cancelled: 'The request was cancelled.',
+    adminMessagePrefix: 'Message from Binflow admin:\n\n',
     cancelPrompt: 'Confirm that you want to cancel the latest active request.',
     confirm: 'Create draft',
     cancel: 'Cancel',
@@ -239,6 +246,7 @@ const copy = {
   es: {
     accessDenied: 'Este usuario de Telegram no está vinculado con Binflow.',
     cancelled: 'La solicitud fue cancelada.',
+    adminMessagePrefix: 'Mensaje del administrador de Binflow:\n\n',
     cancelPrompt:
       'Confirma que quieres cancelar la solicitud activa más reciente.',
     confirm: 'Crear borrador',
@@ -771,6 +779,251 @@ export class WorkflowService {
     );
   }
 
+  public async getEnrollmentMessageTarget(
+    enrollmentId: string,
+    actorId: string,
+    correlationId: string,
+  ): Promise<ClientMessageTarget> {
+    return withPlatformOwnerScope(
+      this.database,
+      {
+        actorId,
+        correlationId,
+        reason: 'Read enrollment client message target',
+      },
+      async (database) => this.resolveEnrollmentMessageTarget(database, enrollmentId),
+    );
+  }
+
+  public async getRequestMessageTarget(
+    requestId: string,
+    actorId: string,
+    correlationId: string,
+  ): Promise<ClientMessageTarget> {
+    return withPlatformOwnerScope(
+      this.database,
+      { actorId, correlationId, reason: 'Read request client message target' },
+      async (database) => this.resolveRequestMessageTarget(database, requestId),
+    );
+  }
+
+  public async sendEnrollmentMessage(
+    enrollmentId: string,
+    message: string,
+    actorId: string,
+    correlationId: string,
+    idempotencyKey: string,
+  ): Promise<AdminClientMessageQueued> {
+    const body = adminClientMessageInputSchema.parse({ message }).message;
+    return withPlatformOwnerScope(
+      this.database,
+      {
+        actorId,
+        correlationId,
+        reason: 'Queue enrollment client direct message',
+      },
+      async (database) => {
+        const route = `/api/v1/admin/enrollments/${enrollmentId}/messages`;
+        const reserved = await reserveIdempotencyKey(database, {
+          actorId,
+          expiresAt: new Date(this.clock.now().getTime() + ACTION_TTL_MS),
+          idempotencyKey,
+          method: 'POST',
+          requestHash: hashCanonicalRequest({ message: body }),
+          route,
+        });
+        if (reserved.kind === 'replay')
+          return adminClientMessageQueuedSchema.parse(reserved.responseBody);
+        const [enrollment] = await database
+          .select({
+            id: schema.clientEnrollments.id,
+            projectId: schema.clientEnrollments.projectId,
+            tenantId: schema.clientEnrollments.tenantId,
+            version: schema.clientEnrollments.version,
+          })
+          .from(schema.clientEnrollments)
+          .where(eq(schema.clientEnrollments.id, enrollmentId))
+          .limit(1);
+        if (enrollment === undefined)
+          throw new DomainError(
+            'validation_error',
+            'Enrollment was not found.',
+            { code: 'enrollment_not_found' },
+          );
+        const paired = await this.activeChannelForProject(
+          database,
+          enrollment.tenantId,
+          enrollment.projectId,
+        );
+        if (paired === undefined)
+          throw new DomainError(
+            'conflict_error',
+            'Client Telegram is not paired for this enrollment.',
+            { code: 'client_not_paired' },
+          );
+        const locale =
+          (await this.projectConversationLocale(
+            database,
+            enrollment.tenantId,
+            enrollment.projectId,
+          )) ?? 'en';
+        const notificationType = 'admin.direct_message';
+        await this.enqueueClientNotification(database, {
+          aggregateId: enrollment.id,
+          aggregateType: 'enrollment',
+          enrollmentId: enrollment.id,
+          eventVersion: enrollment.version,
+          jobKey: `client.notification:${notificationType}:${enrollment.id}:${digest(idempotencyKey)}`,
+          message: `${copy[locale].adminMessagePrefix}${body}`,
+          notificationType,
+          projectId: enrollment.projectId,
+          tenantId: enrollment.tenantId,
+        });
+        await database.insert(schema.auditEvents).values({
+          action: 'client.admin_message_queued',
+          actorId,
+          actorType: 'platform_owner',
+          correlationId,
+          id: uuidv7(),
+          metadata: {
+            messageLength: body.length,
+            notificationType,
+          },
+          objectId: enrollment.id,
+          objectType: 'enrollment',
+          projectId: enrollment.projectId,
+          tenantId: enrollment.tenantId,
+        });
+        const response = adminClientMessageQueuedSchema.parse({
+          notificationType,
+          queued: true,
+        });
+        await completeIdempotencyRecord(database, {
+          id: reserved.id,
+          responseBody: response,
+          responseStatus: 200,
+          status: 'completed',
+        });
+        return response;
+      },
+    );
+  }
+
+  public async sendRequestMessage(
+    requestId: string,
+    expectedVersion: number,
+    message: string,
+    actorId: string,
+    correlationId: string,
+    idempotencyKey: string,
+  ): Promise<AdminClientMessageQueued> {
+    const body = adminClientMessageInputSchema.parse({ message }).message;
+    return withPlatformOwnerScope(
+      this.database,
+      { actorId, correlationId, reason: 'Queue request client direct message' },
+      async (database) => {
+        const route = `/api/v1/requests/${requestId}/messages`;
+        const reserved = await reserveIdempotencyKey(database, {
+          actorId,
+          expiresAt: new Date(this.clock.now().getTime() + ACTION_TTL_MS),
+          idempotencyKey,
+          method: 'POST',
+          requestHash: hashCanonicalRequest({
+            expectedVersion,
+            message: body,
+          }),
+          route,
+        });
+        if (reserved.kind === 'replay')
+          return adminClientMessageQueuedSchema.parse(reserved.responseBody);
+        await database.execute(
+          sql`select pg_advisory_xact_lock(hashtext(${`request:${requestId}`}))`,
+        );
+        const [request] = await database
+          .select()
+          .from(schema.requests)
+          .where(
+            and(
+              eq(schema.requests.id, requestId),
+              eq(schema.requests.version, expectedVersion),
+            ),
+          )
+          .limit(1);
+        if (request === undefined)
+          throw new DomainError(
+            'conflict_error',
+            'Request message targets a stale or missing revision.',
+            { code: 'stale_request' },
+          );
+        const approvalStatus = (
+          request.terminalResult as { approvalStatus?: unknown } | null
+        )?.approvalStatus;
+        if (approvalStatus !== 'admin_rejected')
+          throw new DomainError(
+            'conflict_error',
+            'Request messages are allowed only after admin rejection.',
+            { code: 'request_message_not_allowed' },
+          );
+        const [identity] = await database
+          .select({ id: schema.channelIdentities.id })
+          .from(schema.channelIdentities)
+          .where(
+            and(
+              eq(schema.channelIdentities.userId, request.userId),
+              eq(schema.channelIdentities.status, 'active'),
+            ),
+          )
+          .limit(1);
+        if (identity === undefined)
+          throw new DomainError(
+            'conflict_error',
+            'Client Telegram is not paired for this request.',
+            { code: 'client_not_paired' },
+          );
+        const locale =
+          (await this.clientConversationLocale(database, request)) ?? 'en';
+        const notificationType = 'admin.request_message';
+        await this.enqueueClientNotification(database, {
+          aggregateId: request.id,
+          aggregateType: 'request',
+          eventVersion: request.version,
+          jobKey: `client.notification:${notificationType}:${request.id}:${digest(idempotencyKey)}`,
+          message: `${copy[locale].adminMessagePrefix}${body}`,
+          notificationType,
+          projectId: request.projectId,
+          requestId: request.id,
+          tenantId: request.tenantId,
+        });
+        await database.insert(schema.auditEvents).values({
+          action: 'client.admin_message_queued',
+          actorId,
+          actorType: 'platform_owner',
+          correlationId,
+          id: uuidv7(),
+          metadata: {
+            messageLength: body.length,
+            notificationType,
+          },
+          objectId: request.id,
+          objectType: 'request',
+          projectId: request.projectId,
+          tenantId: request.tenantId,
+        });
+        const response = adminClientMessageQueuedSchema.parse({
+          notificationType,
+          queued: true,
+        });
+        await completeIdempotencyRecord(database, {
+          id: reserved.id,
+          responseBody: response,
+          responseStatus: 200,
+          status: 'completed',
+        });
+        return response;
+      },
+    );
+  }
+
   public async handleAdminTelegramUpdate(
     raw: TelegramIngress,
   ): Promise<TelegramReply> {
@@ -1102,13 +1355,17 @@ export class WorkflowService {
         );
         const locale = await this.clientConversationLocale(database, row);
         if (locale !== undefined)
-          await this.enqueueClientNotification(
-            database,
-            row,
-            'request.cancelled',
-            copy[locale].cancelled,
-            row.version,
-          );
+          await this.enqueueClientNotification(database, {
+            aggregateId: row.id,
+            aggregateType: 'request',
+            eventVersion: row.version,
+            jobKey: `client.notification:request.cancelled:${row.id}:${String(row.version)}`,
+            message: copy[locale].cancelled,
+            notificationType: 'request.cancelled',
+            projectId: row.projectId,
+            requestId: row.id,
+            tenantId: row.tenantId,
+          });
         const summary = toSummary(
           row,
           await requireTenant(database, row.tenantId),
@@ -4099,25 +4356,191 @@ export class WorkflowService {
    */
   private async enqueueClientNotification(
     database: ScopedDatabase,
-    request: Pick<
-      typeof schema.requests.$inferSelect,
-      'id' | 'projectId' | 'tenantId'
-    >,
-    notificationType: string,
-    message: string,
-    eventVersion: number,
+    input: Readonly<{
+      aggregateId: string;
+      aggregateType: 'enrollment' | 'request';
+      enrollmentId?: string;
+      eventVersion: number;
+      jobKey: string;
+      message: string;
+      notificationType: string;
+      projectId: string;
+      requestId?: string;
+      tenantId: string;
+    }>,
   ): Promise<void> {
     await database.insert(schema.outboxEvents).values({
-      aggregateId: request.id,
-      aggregateType: 'request',
+      aggregateId: input.aggregateId,
+      aggregateType: input.aggregateType,
       eventType: 'client.notification_requested',
-      eventVersion,
+      eventVersion: input.eventVersion,
       id: uuidv7(),
-      jobKey: `client.notification:${notificationType}:${request.id}:${String(eventVersion)}`,
-      payload: { message, notificationType, requestId: request.id },
-      projectId: request.projectId,
-      tenantId: request.tenantId,
+      jobKey: input.jobKey,
+      payload: {
+        message: input.message,
+        notificationType: input.notificationType,
+        ...(input.enrollmentId === undefined
+          ? {}
+          : { enrollmentId: input.enrollmentId }),
+        ...(input.requestId === undefined
+          ? {}
+          : { requestId: input.requestId }),
+      },
+      projectId: input.projectId,
+      tenantId: input.tenantId,
     });
+  }
+
+  private async activeChannelForProject(
+    database: ScopedDatabase,
+    tenantId: string,
+    projectId: string,
+  ): Promise<{ botCredentialId: string } | undefined> {
+    const [row] = await database
+      .select({ botCredentialId: schema.channelIdentities.botCredentialId })
+      .from(schema.channelIdentities)
+      .where(
+        and(
+          eq(schema.channelIdentities.tenantId, tenantId),
+          eq(schema.channelIdentities.projectId, projectId),
+          eq(schema.channelIdentities.status, 'active'),
+        ),
+      )
+      .limit(1);
+    return row;
+  }
+
+  private async resolveEnrollmentMessageTarget(
+    database: ScopedDatabase,
+    enrollmentId: string,
+  ): Promise<ClientMessageTarget> {
+    const [row] = await database
+      .select({
+        configuration: schema.providerCredentials.configuration,
+        displayName: schema.tenants.displayName,
+        identityId: schema.channelIdentities.id,
+        projectKey: schema.projects.key,
+        tenantKey: schema.tenants.key,
+      })
+      .from(schema.clientEnrollments)
+      .innerJoin(
+        schema.tenants,
+        eq(schema.tenants.id, schema.clientEnrollments.tenantId),
+      )
+      .innerJoin(
+        schema.projects,
+        eq(schema.projects.id, schema.clientEnrollments.projectId),
+      )
+      .leftJoin(
+        schema.channelIdentities,
+        and(
+          eq(
+            schema.channelIdentities.tenantId,
+            schema.clientEnrollments.tenantId,
+          ),
+          eq(
+            schema.channelIdentities.projectId,
+            schema.clientEnrollments.projectId,
+          ),
+          eq(schema.channelIdentities.status, 'active'),
+        ),
+      )
+      .leftJoin(
+        schema.providerCredentials,
+        eq(
+          schema.providerCredentials.id,
+          schema.channelIdentities.botCredentialId,
+        ),
+      )
+      .where(eq(schema.clientEnrollments.id, enrollmentId))
+      .limit(1);
+    if (row === undefined)
+      throw new DomainError('validation_error', 'Enrollment was not found.', {
+        code: 'enrollment_not_found',
+      });
+    const username = (
+      row.configuration as { expectedUsername?: unknown } | null
+    )?.expectedUsername;
+    return clientMessageTargetSchema.parse({
+      botUsername: typeof username === 'string' ? username : null,
+      clientName: row.displayName.trim() || row.tenantKey,
+      paired: row.identityId !== null,
+      projectKey: row.projectKey,
+      tenantKey: row.tenantKey,
+    });
+  }
+
+  private async resolveRequestMessageTarget(
+    database: ScopedDatabase,
+    requestId: string,
+  ): Promise<ClientMessageTarget> {
+    const [row] = await database
+      .select({
+        configuration: schema.providerCredentials.configuration,
+        displayName: schema.tenants.displayName,
+        identityId: schema.channelIdentities.id,
+        projectKey: schema.projects.key,
+        tenantKey: schema.tenants.key,
+      })
+      .from(schema.requests)
+      .innerJoin(
+        schema.tenants,
+        eq(schema.tenants.id, schema.requests.tenantId),
+      )
+      .innerJoin(
+        schema.projects,
+        eq(schema.projects.id, schema.requests.projectId),
+      )
+      .leftJoin(
+        schema.channelIdentities,
+        and(
+          eq(schema.channelIdentities.userId, schema.requests.userId),
+          eq(schema.channelIdentities.status, 'active'),
+        ),
+      )
+      .leftJoin(
+        schema.providerCredentials,
+        eq(
+          schema.providerCredentials.id,
+          schema.channelIdentities.botCredentialId,
+        ),
+      )
+      .where(eq(schema.requests.id, requestId))
+      .limit(1);
+    if (row === undefined)
+      throw new DomainError('validation_error', 'Request was not found.', {
+        code: 'request_not_found',
+      });
+    const username = (
+      row.configuration as { expectedUsername?: unknown } | null
+    )?.expectedUsername;
+    return clientMessageTargetSchema.parse({
+      botUsername: typeof username === 'string' ? username : null,
+      clientName: row.displayName.trim() || row.tenantKey,
+      paired: row.identityId !== null,
+      projectKey: row.projectKey,
+      tenantKey: row.tenantKey,
+    });
+  }
+
+  private async projectConversationLocale(
+    database: ScopedDatabase,
+    tenantId: string,
+    projectId: string,
+  ): Promise<SupportedLocale | undefined> {
+    const [row] = await database
+      .select({ locale: schema.conversations.locale })
+      .from(schema.conversations)
+      .where(
+        and(
+          eq(schema.conversations.tenantId, tenantId),
+          eq(schema.conversations.projectId, projectId),
+        ),
+      )
+      .orderBy(desc(schema.conversations.lastMessageAt))
+      .limit(1);
+    if (row === undefined) return undefined;
+    return row.locale in copy ? row.locale : undefined;
   }
 
   /**
