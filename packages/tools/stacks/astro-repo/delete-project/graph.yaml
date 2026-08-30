@@ -26,4 +26,4 @@ nodes:
   - id: merge_or_publish
   - id: verify_production
   - id: completed
-version: stacks/astro_repo/delete-project@1
+version: stacks/astro-repo/delete-project@1

@@ -261,7 +261,13 @@ const saveCapabilities = () =>
       :crumbs="['Clients', enrollment?.tenantKey ?? 'Enrollment']"
     >
       <template #title>
-        <UButton to="/clients" color="neutral" variant="ghost" class="mb-2 -ml-2"
+        <UButton
+          to="/clients"
+          color="neutral"
+          variant="soft"
+          size="sm"
+          icon="i-lucide-arrow-left"
+          class="mb-3"
           >Back to clients</UButton
         >
         <h1 class="text-3xl font-semibold tracking-tight text-white">

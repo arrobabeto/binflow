@@ -29,7 +29,7 @@ describe('@binflow/tools catalog', () => {
     expect(project?.graph.version).toBe('stacks/astro-repo/create-project@4');
     expect(deleteBlog?.graph.version).toBe('stacks/astro-repo/delete-blog@1');
     expect(deleteProject?.graph.version).toBe(
-      'stacks/astro_repo/delete-project@1',
+      'stacks/astro-repo/delete-project@1',
     );
     expect(deleteProject?.nodes.some((node) => node.id === 'open_deletion_pr')).toBe(
       true,

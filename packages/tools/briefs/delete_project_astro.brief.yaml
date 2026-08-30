@@ -1,7 +1,7 @@
 identity:
   id: delete_project_astro
   version: 2
-  stack: astro_repo
+  stack: astro-repo
   toolDir: delete-project
   graphVersionSuffix: '@1'
   displayName: Delete portfolio project

@@ -36,7 +36,7 @@ from code and marked **unverified-live**.
 | requiresPreview | `false` |
 | approval | admin-only (`webbin-project-deletion@1`) |
 | executorId | `workflow.delete_project@1` |
-| graph version | `stacks/astro_repo/delete-project@1` (catalog `@2`) |
+| graph version | `stacks/astro-repo/delete-project@1` (catalog `@2`) |
 | Telegram command | `/delete_project` |
 | NL stems | delete verbs + portfolio cues (`proyecto`, `portafolio`, …) |
 | interrupt nodes | `awaiting_admin_approval` |

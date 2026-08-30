@@ -83,8 +83,10 @@ pattern.
 |---|---|
 | Primary button | Solid primary blue, white label |
 | Secondary / ghost | Dark surface, light border |
+| Back navigation | Soft neutral button with leading `arrow-left` icon (“Back to …”); never plain ghost text that reads as a label |
 | Destructive | Error soft / outline (Revoke, Cancel request) |
-| Badge | Soft pill; map enrollment/request states to success/warning/error/neutral |
+| Badge | Soft pill; map enrollment/request states to success/warning/error/primary/neutral. Request inbox: `COMPLETED`/publish path → success; `CANCELLED`/failed → error; awaiting/revision → warning; in-progress → primary |
+| Request inbox card | Left: client (accent color), title, mono capability. Right column: status badge above **Open request**. Card: dark surface + **left border accent by state** (green / blue / amber / grey / rose), not full-card approval fills |
 | Metric card | Label, large value, detail, optional Open link |
 | Attention banner | Full-width surface with warning CTA text |
 | Client / list row | Surface card, status badge, mono project key, primary/secondary actions |
