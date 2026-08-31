@@ -1945,3 +1945,91 @@ export const projectToolCustomizations = pgTable(
     }),
   ],
 ).enableRLS();
+
+export const ticketState = pgEnum('ticket_state', [
+  'new',
+  'in_process',
+  'declined',
+  'closed',
+]);
+
+export const ticketPriority = pgEnum('ticket_priority', [
+  'low',
+  'medium',
+  'high',
+]);
+
+export const tickets = pgTable(
+  'tickets',
+  {
+    id: text('id').primaryKey(),
+    publicId: text('public_id').notNull(),
+    tenantId: text('tenant_id').notNull(),
+    projectId: text('project_id').notNull(),
+    title: text('title').notNull(),
+    excerpt: text('excerpt').notNull(),
+    body: text('body').notNull(),
+    state: ticketState('state').notNull().default('new'),
+    priority: ticketPriority('priority'),
+    category: text('category'),
+    adminNotes: text('admin_notes').notNull().default(''),
+    readAt: timestamp('read_at', { withTimezone: true }),
+    version: integer('version').notNull().default(1),
+    createdAt: timestamp('created_at', { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+    updatedAt: timestamp('updated_at', { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (table) => [
+    uniqueIndex('tickets_public_id_unique').on(table.publicId),
+    index('tickets_tab_updated_idx').on(table.state, table.updatedAt),
+    index('tickets_project_updated_idx').on(table.projectId, table.updatedAt),
+    check('tickets_version_positive', sql`${table.version} > 0`),
+    foreignKey({
+      columns: [table.projectId, table.tenantId],
+      foreignColumns: [projects.id, projects.tenantId],
+      name: 'tickets_project_tenant_fk',
+    }),
+    pgPolicy('tickets_tenant_isolation', {
+      for: 'all',
+      using: sql`${table.tenantId} = nullif(current_setting('app.tenant_id', true), '') OR current_setting('app.platform_owner', true) = 'true'`,
+      withCheck: sql`${table.tenantId} = nullif(current_setting('app.tenant_id', true), '') OR current_setting('app.platform_owner', true) = 'true'`,
+    }),
+  ],
+).enableRLS();
+
+export const ticketActivities = pgTable(
+  'ticket_activities',
+  {
+    id: text('id').primaryKey(),
+    ticketId: text('ticket_id')
+      .notNull()
+      .references(() => tickets.id),
+    tenantId: text('tenant_id').notNull(),
+    projectId: text('project_id').notNull(),
+    kind: text('kind').notNull(),
+    summary: text('summary').notNull(),
+    actorType: text('actor_type').notNull(),
+    createdAt: timestamp('created_at', { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (table) => [
+    index('ticket_activities_ticket_created_idx').on(
+      table.ticketId,
+      table.createdAt,
+    ),
+    foreignKey({
+      columns: [table.projectId, table.tenantId],
+      foreignColumns: [projects.id, projects.tenantId],
+      name: 'ticket_activities_project_tenant_fk',
+    }),
+    pgPolicy('ticket_activities_tenant_isolation', {
+      for: 'all',
+      using: sql`${table.tenantId} = nullif(current_setting('app.tenant_id', true), '') OR current_setting('app.platform_owner', true) = 'true'`,
+      withCheck: sql`${table.tenantId} = nullif(current_setting('app.tenant_id', true), '') OR current_setting('app.platform_owner', true) = 'true'`,
+    }),
+  ],
+).enableRLS();

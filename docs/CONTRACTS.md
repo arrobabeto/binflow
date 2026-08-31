@@ -342,8 +342,9 @@ Telegram command: `/update_menu`.
 See `docs/specs/update-menu.md` and ADR-0049. Profile `astro_orbitype` only.
 Input schema: `updateMenuInputSchema` (`collect` | `execute` modes). Telegram
 ingress accepts `documentArtifactKey` (PDF, max 10 MB). Reply actions:
-`toggle_menu_cta`, `confirm_menu_selection`, then generic `confirm_plan` at plan
-confirm. `BlogFile.mime` includes `application/pdf` for versioned menu artifacts
+`toggle_menu_cta`, `select_all_menu_ctas`, `confirm_menu_selection`, `cancel` on
+the selection step (opt-in: `selectedCtaKeys` starts empty), then generic
+`confirm_plan` at plan confirm. `BlogFile.mime` includes `application/pdf` for versioned menu artifacts
 under `public/documents/*.pdf`.
 
 ```ts
@@ -777,6 +778,12 @@ POST   /api/v1/admin/enrollments/:id/activate
 POST   /api/v1/admin/enrollments/:id/suspend
 POST   /api/v1/admin/enrollments/:id/archive
 POST   /api/v1/admin/enrollments/:id/pairing-link
+GET    /api/v1/admin/tickets
+GET    /api/v1/admin/tickets/:id
+PATCH  /api/v1/admin/tickets/:id
+POST   /api/v1/admin/tickets/:id/read
+GET    /api/v1/admin/tickets/:id/message-target
+POST   /api/v1/admin/tickets/:id/messages
 GET    /api/v1/admin/integrations
 POST   /api/v1/admin/integrations
 POST   /api/v1/admin/integrations/:id/verify
@@ -790,19 +797,46 @@ GET    /api/v1/admin/telegram/target
 **`CANCELLED`** and enqueues **`request.cancelled`** to the client (ADR-0050).
 It no longer sets `REVISION_REQUESTED` / `approvalStatus: admin_rejected`.
 
-`POST /api/v1/admin/enrollments/:id/messages` and
-`POST /api/v1/requests/:requestId/messages` accept
+`POST /api/v1/admin/enrollments/:id/messages`,
+`POST /api/v1/requests/:requestId/messages`, and
+`POST /api/v1/admin/tickets/:id/messages` accept
 `{ "message": "<plain text>" }` (1–2000 characters after trim), require a fresh
 TOTP session and `Idempotency-Key`, and enqueue `client.notification_requested`
-(ADR-0043). **Enrollment-scoped** send remains. Request-scoped send after
-`admin_rejected` is deprecated for new rejects (ADR-0050). Responses are
-`{ "queued": true, "notificationType": "admin.direct_message" | "admin.request_message" }`.
+(ADR-0043 / ADR-0055). **Enrollment-scoped** and **ticket-scoped** send remain.
+Request-scoped send after `admin_rejected` is deprecated for new rejects
+(ADR-0050). Responses are
+`{ "queued": true, "notificationType": "admin.direct_message" | "admin.request_message" | "admin.ticket_message" }`.
 
-`GET /api/v1/admin/enrollments/:id/message-target` and
-`GET /api/v1/requests/:requestId/message-target` return a redacted channel
+`GET /api/v1/admin/enrollments/:id/message-target`,
+`GET /api/v1/requests/:requestId/message-target`, and
+`GET /api/v1/admin/tickets/:id/message-target` return a redacted channel
 summary:
 `clientName`, `tenantKey`, `projectKey`, `botUsername`, `paired` — never chat
 IDs, tokens or ciphertext.
+
+### Admin tickets (ADR-0055)
+
+`ticketState`: `new` | `in_process` | `declined` | `closed`.
+`ticketPriority` (optional): `low` | `medium` | `high`.
+
+`TicketSummary`: `id`, `publicId`, `projectId`, `clientName`, `clientKey`,
+`title`, `excerpt`, `state`, optional `priority`/`category`, `readAt`
+(null | ISO), `createdAt`, `updatedAt`, `revision`.
+
+`TicketDetail`: summary fields plus `body`, `adminNotes`, `activity[]`
+(`id`, `kind`, `summary`, `createdAt`, `actorType`).
+
+`GET /api/v1/admin/tickets` is a cursor page. Query: `tab=pending|history|all`
+(required semantics: pending = `new`+`in_process`, history = `declined`+`closed`,
+`all` = every state),
+optional `projectId`, optional `state` (must belong to the tab when tab is not
+`all`), `limit` in
+`{10,30,50}` (default 10), optional opaque `cursor`. Ordered
+`updatedAt DESC, id DESC`. Response includes `pendingCount` (open queue) and
+`totalCount` (all states) for Home KPIs.
+
+`PATCH /api/v1/admin/tickets/:id` updates `state` and/or `adminNotes` with
+`If-Match` revision. `POST …/read` sets `readAt` when null (idempotent).
 
 Module 7 implements a redacted request projection with request ID,
 tenant/project, `clientName`, `clientKey`, `create_blog_draft` capability, state,

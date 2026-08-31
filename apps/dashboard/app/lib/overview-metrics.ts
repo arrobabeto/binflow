@@ -81,6 +81,17 @@ export const countPendingApprovals = (
   value: items.length,
 });
 
+/** Exact pending count from a full (or truncated) request catalog. */
+export const countAwaitingAdminApproval = (
+  items: readonly Pick<RequestSummary, 'state'>[],
+  truncated: boolean,
+): ApproximateCount => {
+  const value = items.filter(
+    (item) => item.state === 'AWAITING_ADMIN_APPROVAL',
+  ).length;
+  return { approximate: truncated && value > 0, value };
+};
+
 export const countRequestsOnUtcDay = (
   items: readonly Pick<RequestSummary, 'createdAt'>[],
   utcDay: string,

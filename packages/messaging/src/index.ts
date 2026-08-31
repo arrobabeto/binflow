@@ -100,6 +100,7 @@ const actionButtonStyle = (
     action === 'confirm_image_plan' ||
     action === 'confirm_text_plan' ||
     action === 'confirm_text_style_plan' ||
+    action === 'confirm_menu_selection' ||
     action === 'done_text_style_attrs'
   )
     return 'primary';
@@ -1033,6 +1034,12 @@ export const createTelegramRuntime = async (
   return { adapter, chat };
 };
 
+/**
+ * Push the Telegram slash-command menu for a client bot.
+ * Prefer building `commands` with
+ * `@binflow/workflows` `buildTelegramClientCommands(locale, enabledIds)`
+ * so descriptions match `/tools` (ADR-0054).
+ */
 export const syncTelegramBotCommands = async (
   botToken: string,
   commands: ReadonlyArray<Readonly<{ command: string; description: string }>>,

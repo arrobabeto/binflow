@@ -319,6 +319,7 @@ export {
   DEFAULT_MENU_CTA_KEYWORDS,
   discoverMenuCtas,
   toggleMenuCtaSelection,
+  selectAllMenuCtaKeys,
   buildVersionedMenuPdfPath,
   publicUrlForMenuPdfPath,
 } from './discover-menu-ctas.js';

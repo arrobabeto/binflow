@@ -92,6 +92,8 @@ describeDatabase('Telegram request workflow kernel', () => {
         request_actions,
         request_versions,
         requests,
+        ticket_activities,
+        tickets,
         channel_messages,
         conversations,
         channel_identities,

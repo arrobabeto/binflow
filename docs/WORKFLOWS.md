@@ -235,8 +235,9 @@ draft → merge GitHub → publish Orbitype pages → verify production → comp
 No `wait_preview` or client preview approval; **`AWAITING_PLAN_CONFIRMATION`**
 is the sole client gate (`confirm_plan`).
 
-- Telegram collection: PDF upload → multi-select menu CTAs → plan summary with
-  public PDF URL → execute on confirm.
+- Telegram collection: PDF upload → **opt-in** multi-select menu CTAs (empty
+  start, Select all shortcut, Continuar) → plan summary with public PDF URL →
+  execute on confirm.
 - Dual-write: versioned `public/documents/menu-{date}-{suffix}.pdf` on GitHub
   plus `pages.sections` href patches on Orbitype.
 - Runtime kind `update_menu`; catalog sync scope `pages` with empty

@@ -23,6 +23,7 @@ import {
   summarizeRequestStageSummary,
   telegramIngressSchema,
   telegramReplySchema,
+  openTicketCollectInputSchema,
   type AdminClientMessageQueued,
   type ClientMessageTarget,
   type RequestDetail,
@@ -94,6 +95,7 @@ import {
 import { parseMenuCtaKeywordSection } from './update-menu-ingress.js';
 import {
   continueUpdateMenuCollection,
+  consumeUpdateMenuSelectAll,
   consumeUpdateMenuSelection,
   consumeUpdateMenuToggle,
   createUpdateMenuRequest,
@@ -132,8 +134,36 @@ import {
   type EditImageContentLoader,
   type PersistReplacementImage,
 } from './edit-image-collection.js';
+import {
+  formatInfoChooserMessage,
+  formatInfoDetailMessage,
+  formatInfoMissMessage,
+  formatToolsListMessage,
+  resolveClientToolCatalogEntry,
+} from './client-tool-catalog.js';
+import {
+  buildTicketBody,
+  continueOpenTicketCollection,
+  conversationalCourtesyReply,
+  consumeOpenTicketKind,
+  consumeOpenTicketStart,
+  consumeOpenTicketUrgency,
+  createOpenTicketChoice,
+  createOpenTicketInterview,
+  enqueueAdminTicketCreatedNotice,
+  fallbackTicketEstimate,
+  matchConversationalCourtesy,
+  OPEN_TICKET_CAPABILITY_ID,
+  openTicketSentMessage,
+  ticketPriorityFromUrgency,
+  type TicketEstimatePort,
+} from './open-ticket.js';
+import { TicketService } from './tickets.js';
 
 export * from './blog-runtime.js';
+export * from './client-tool-catalog.js';
+export * from './open-ticket.js';
+export * from './tickets.js';
 export * from './delete-blog-catalog.js';
 export * from './delete-blog-runtime.js';
 export * from './delete-project-runtime.js';
@@ -146,6 +176,7 @@ export * from './menu-runtime.js';
 export * from './project-runtime.js';
 export * from './text-runtime.js';
 export * from './text-style-runtime.js';
+export { TicketService } from './tickets.js';
 export { graphVersionForCapability } from './capability-graph.js';
 export {
   capabilityIngressRoutes,
@@ -220,9 +251,10 @@ const copy = {
       'Plan bereit für Portfolio-Projekt: Katalog synchronisieren, Ähnlichkeit prüfen, zweisprachige Fallstudie erzeugen, Cover vorbereiten und Preview bauen.',
     projectCollecting:
       'Wir sammeln noch Projektdaten. Antworte mit dem nächsten fehlenden Fakt.',
-    help: 'Befehle: /tools, /create_blog <Thema>, /create_project <Brief>, /revise <Feedback>, /status, /cancel und /help.',
+    help: 'Nutze /tools für die Tool-Liste, /info <tool> für Details und /open_ticket für eine individuelle Anfrage. Weitere Befehle: /status, /cancel, /help.',
     noRequests: 'Es gibt noch keine Anfragen.',
-    paired: 'Verbindung hergestellt. Du kannst jetzt /tools verwenden.',
+    paired:
+      'Verbindung hergestellt. Nutze /tools, /info oder /open_ticket.',
     previewApproved:
       'Vorschau genehmigt. Die Veröffentlichung wurde sicher in die Warteschlange gestellt.',
     adminPending:
@@ -284,9 +316,10 @@ const copy = {
       'Plan ready for portfolio project: sync catalog, check similarity, generate bilingual case study, prepare cover and build preview.',
     projectCollecting:
       'Still collecting project facts. Reply with the next missing detail.',
-    help: 'Commands: /tools, /create_blog <topic>, /create_project <brief>, /revise <feedback>, /status, /cancel and /help.',
+    help: 'Use /tools for the tool list, /info <tool> for details, and /open_ticket for a custom request. Other commands: /status, /cancel, /help.',
     noRequests: 'There are no requests yet.',
-    paired: 'Pairing complete. You can now use /tools.',
+    paired:
+      'Pairing complete. Use /tools, /info, or /open_ticket.',
     previewApproved: 'Preview approved. Publication was queued safely.',
     adminPending:
       'Preview approved. The new category is now waiting for admin approval.',
@@ -350,9 +383,10 @@ const copy = {
       'Plan listo para proyecto de portafolio: sincronizar catálogo, revisar similitud, generar case study bilingüe, preparar portada y construir preview.',
     projectCollecting:
       'Seguimos recopilando datos del proyecto. Responde con el siguiente dato que falta.',
-    help: 'Comandos: /tools, /create_blog <tema>, /create_project <brief>, /revise <comentarios>, /status, /cancel y /help.',
+    help: 'Usa /tools para ver las tools, /info <tool> para el detalle y /open_ticket para una petición personalizada. Otros: /status, /cancel, /help.',
     noRequests: 'Todavía no hay solicitudes.',
-    paired: 'Vinculación completada. Ya puedes usar /tools.',
+    paired:
+      'Vinculación completada. Usa /tools, /info o /open_ticket.',
     previewApproved:
       'Preview aprobado. La publicación quedó encolada de forma segura.',
     adminPending:
@@ -514,6 +548,8 @@ export class WorkflowService {
     private readonly updateMenuPagesLoader?: UpdateMenuPagesLoader,
     private readonly editImageContentLoader?: EditImageContentLoader,
     private readonly persistReplacementImage?: PersistReplacementImage,
+    private readonly ticketEstimate: TicketEstimatePort = async (input) =>
+      fallbackTicketEstimate(input),
   ) {}
 
   public async handleTelegramUpdate(
@@ -1823,16 +1859,51 @@ export class WorkflowService {
       );
       if (enabled.length === 0)
         return this.reply(identity.locale, localeCopy.accessDenied, null);
-      const lines = enabled.map(
-        (item) => `${item.command} — ${item.displayName}`,
+      return this.reply(
+        identity.locale,
+        formatToolsListMessage(identity.locale, enabled),
+        null,
       );
-      const heading =
-        identity.locale === 'es'
-          ? 'Tools disponibles:'
-          : identity.locale === 'de'
-            ? 'Verfügbare Tools:'
-            : 'Available tools:';
-      return this.reply(identity.locale, `${heading}\n${lines.join('\n')}`, null);
+    }
+    const infoMatch = /^\/info(?:@\w+)?(?:\s+([\s\S]{1,200}))?$/u.exec(text);
+    if (infoMatch !== null) {
+      const enabled = await this.listEnabledCapabilities(
+        database,
+        identity.projectId,
+      );
+      if (enabled.length === 0)
+        return this.reply(identity.locale, localeCopy.accessDenied, null);
+      const query = infoMatch[1]?.trim();
+      if (query === undefined || query.length === 0)
+        return this.reply(
+          identity.locale,
+          formatInfoChooserMessage(identity.locale, enabled),
+          null,
+        );
+      const enabledIds = new Set(enabled.map((item) => item.id));
+      const entry = resolveClientToolCatalogEntry(query, enabledIds);
+      if (entry === undefined)
+        return this.reply(
+          identity.locale,
+          formatInfoMissMessage(identity.locale),
+          null,
+        );
+      return this.reply(
+        identity.locale,
+        formatInfoDetailMessage(identity.locale, entry),
+        null,
+      );
+    }
+    if (/^\/open_ticket(?:@\w+)?(?:\s+([\s\S]{1,4000}))?$/u.test(text)) {
+      const seed = text.replace(/^\/open_ticket(?:@\w+)?\s*/u, '').trim();
+      return createOpenTicketInterview({
+        createAction: (db, request, requestVersionId, userId, action) =>
+          this.createAction(db, request, requestVersionId, userId, action),
+        database,
+        identity,
+        reply: this.reply.bind(this),
+        ...(seed.length > 0 ? { seedText: seed } : {}),
+      });
     }
     if (/^\/status(?:@\w+)?$/u.test(text)) {
       const latest = await this.latestRequest(database, identity);
@@ -1944,6 +2015,17 @@ export class WorkflowService {
               args.projectId,
               args.tenantId,
             ),
+          reply: this.reply.bind(this),
+          request: latestCollecting,
+          text: text.trim(),
+          version: await this.currentRequestVersion(database, latestCollecting),
+        });
+      if (latestCollecting.capabilityId === OPEN_TICKET_CAPABILITY_ID)
+        return continueOpenTicketCollection({
+          createAction: (db, request, requestVersionId, userId, action) =>
+            this.createAction(db, request, requestVersionId, userId, action),
+          database,
+          identity,
           reply: this.reply.bind(this),
           request: latestCollecting,
           text: text.trim(),
@@ -2424,7 +2506,21 @@ export class WorkflowService {
         return this.reply(identity.locale, localeCopy.messageTooLong, null);
       return this.createRequest(database, identity, brief);
     }
-    return this.reply(identity.locale, localeCopy.unknown, null);
+    const courtesy = matchConversationalCourtesy(text);
+    if (courtesy !== null)
+      return this.reply(
+        identity.locale,
+        conversationalCourtesyReply(identity.locale, courtesy),
+        null,
+      );
+    return createOpenTicketChoice({
+      createAction: (db, request, requestVersionId, userId, action) =>
+        this.createAction(db, request, requestVersionId, userId, action),
+      database,
+      identity,
+      reply: this.reply.bind(this),
+      seedText: text.trim().slice(0, 4_000),
+    });
   }
 
   private async createRequest(
@@ -4613,6 +4709,180 @@ export class WorkflowService {
         version: currentVersion,
       });
     }
+    if (action.action === 'start_open_ticket') {
+      if (
+        request.capabilityId !== OPEN_TICKET_CAPABILITY_ID ||
+        request.state !== 'NEEDS_INPUT'
+      )
+        throw new DomainError(
+          'conflict_error',
+          'Request is not waiting for open-ticket start.',
+        );
+      return consumeOpenTicketStart({
+        createAction: (db, req, requestVersionId, userId, actionName) =>
+          this.createAction(db, req, requestVersionId, userId, actionName),
+        database,
+        identity,
+        reply: this.reply.bind(this),
+        request,
+        version: currentVersion,
+      });
+    }
+    if (action.action === 'show_tools') {
+      if (
+        request.capabilityId !== OPEN_TICKET_CAPABILITY_ID ||
+        request.state !== 'NEEDS_INPUT'
+      )
+        throw new DomainError(
+          'conflict_error',
+          'Request is not waiting for tools list choice.',
+        );
+      await database
+        .update(schema.requests)
+        .set({
+          state: 'CANCELLED',
+          updatedAt: this.clock.now(),
+          version: request.version + 1,
+        })
+        .where(eq(schema.requests.id, request.id));
+      const enabled = await this.listEnabledCapabilities(
+        database,
+        identity.projectId,
+      );
+      return this.reply(
+        identity.locale,
+        formatToolsListMessage(identity.locale, enabled),
+        null,
+      );
+    }
+    if (action.action.startsWith('pick_ticket_urgency:')) {
+      if (
+        request.capabilityId !== OPEN_TICKET_CAPABILITY_ID ||
+        request.state !== 'NEEDS_INPUT'
+      )
+        throw new DomainError(
+          'conflict_error',
+          'Request is not waiting for ticket urgency.',
+        );
+      const urgency = action.action.slice('pick_ticket_urgency:'.length);
+      if (
+        urgency !== 'low' &&
+        urgency !== 'normal' &&
+        urgency !== 'high' &&
+        urgency !== 'urgent'
+      )
+        throw new DomainError('validation_error', 'Unsupported ticket urgency.');
+      return consumeOpenTicketUrgency({
+        createAction: (db, req, requestVersionId, userId, actionName) =>
+          this.createAction(db, req, requestVersionId, userId, actionName),
+        database,
+        identity,
+        reply: this.reply.bind(this),
+        request,
+        urgency,
+        version: currentVersion,
+      });
+    }
+    if (action.action.startsWith('pick_ticket_kind:')) {
+      if (
+        request.capabilityId !== OPEN_TICKET_CAPABILITY_ID ||
+        request.state !== 'NEEDS_INPUT'
+      )
+        throw new DomainError(
+          'conflict_error',
+          'Request is not waiting for ticket kind.',
+        );
+      const kind = action.action.slice('pick_ticket_kind:'.length);
+      if (kind !== 'improvement' && kind !== 'style' && kind !== 'bug')
+        throw new DomainError('validation_error', 'Unsupported ticket kind.');
+      return consumeOpenTicketKind({
+        createAction: (db, req, requestVersionId, userId, actionName) =>
+          this.createAction(db, req, requestVersionId, userId, actionName),
+        database,
+        estimate: this.ticketEstimate,
+        identity,
+        kind,
+        reply: this.reply.bind(this),
+        request,
+        version: currentVersion,
+      });
+    }
+    if (action.action === 'confirm_ticket_send') {
+      if (
+        request.capabilityId !== OPEN_TICKET_CAPABILITY_ID ||
+        request.state !== 'NEEDS_INPUT'
+      )
+        throw new DomainError(
+          'conflict_error',
+          'Request is not waiting for ticket send confirmation.',
+        );
+      const collect = openTicketCollectInputSchema.parse(
+        currentVersion.interpretedInput,
+      );
+      if (
+        collect.collectionStep !== 'await_confirm' ||
+        collect.title === undefined ||
+        collect.summary === undefined
+      )
+        throw new DomainError(
+          'validation_error',
+          'Ticket summary is incomplete.',
+        );
+      const tickets = new TicketService(this.database, this.clock);
+      const created = await tickets.createTicket(
+        {
+          body: buildTicketBody(collect),
+          category: collect.kind,
+          excerpt: collect.summary.slice(0, 280),
+          ...(collect.urgency === undefined
+            ? {}
+            : { priority: ticketPriorityFromUrgency(collect.urgency) }),
+          projectId: identity.projectId,
+          tenantId: identity.tenantId,
+          title: collect.title,
+        },
+        `telegram:${identity.userId}`,
+        `telegram-open-ticket:${request.id}`,
+      );
+      const [tenant] = await database
+        .select({
+          displayName: schema.tenants.displayName,
+          key: schema.tenants.key,
+        })
+        .from(schema.tenants)
+        .where(eq(schema.tenants.id, identity.tenantId))
+        .limit(1);
+      await enqueueAdminTicketCreatedNotice(database, {
+        clientLabel:
+          tenant === undefined
+            ? identity.projectId
+            : tenant.displayName.trim() || tenant.key,
+        eventVersion: 1,
+        projectId: identity.projectId,
+        publicId: created.publicId,
+        tenantId: identity.tenantId,
+        ticketId: created.id,
+        title: created.title,
+      });
+      await database
+        .update(schema.requests)
+        .set({
+          state: 'COMPLETED',
+          terminalResult: {
+            publicId: created.publicId,
+            ticketId: created.id,
+          },
+          topic: created.title.slice(0, 200),
+          updatedAt: this.clock.now(),
+          version: request.version + 1,
+        })
+        .where(eq(schema.requests.id, request.id));
+      return this.reply(
+        identity.locale,
+        openTicketSentMessage(identity.locale, created.publicId),
+        request.id,
+      );
+    }
     if (action.action.startsWith('pick_image_target:')) {
       if (request.capabilityId !== 'edit_image' || request.state !== 'NEEDS_INPUT')
         throw new DomainError(
@@ -4692,6 +4962,22 @@ export class WorkflowService {
         createAction: (db, req, requestVersionId, userId, actionName) =>
           this.createAction(db, req, requestVersionId, userId, actionName),
         ctaKey: action.action.slice('toggle_menu_cta:'.length),
+        database,
+        identity,
+        reply: this.reply.bind(this),
+        request,
+        version: currentVersion,
+      });
+    }
+    if (action.action === 'select_all_menu_ctas') {
+      if (request.capabilityId !== 'update_menu' || request.state !== 'NEEDS_INPUT')
+        throw new DomainError(
+          'conflict_error',
+          'Request is not waiting for menu button selection.',
+        );
+      return consumeUpdateMenuSelectAll({
+        createAction: (db, req, requestVersionId, userId, actionName) =>
+          this.createAction(db, req, requestVersionId, userId, actionName),
         database,
         identity,
         reply: this.reply.bind(this),

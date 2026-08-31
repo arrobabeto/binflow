@@ -59,7 +59,7 @@ palette tokens so solid action buttons keep readable contrast.
 - Fixed left sidebar ≈ 240px.
 - Brand: Binflow mark + “CONTROL PLANE”.
 - Nav groups with uppercase section labels:
-  - Main: Home, Clients, Requests
+  - Main: Home, Clients, Requests, Tickets
   - Tools: Catalog (`/tools`), Customizations
   - System: Integrations, Operations
 - Active item: elevated surface + primary accent indicator.
@@ -85,9 +85,13 @@ pattern.
 | Secondary / ghost | Dark surface, light border |
 | Back navigation | Soft neutral button with leading `arrow-left` icon (“Back to …”), `text-[15px]`; never plain ghost text that reads as a label. Detail breadcrumbs stay short (section only) so the page `h1` is the single title |
 | Clock chip | Home only: button-shaped mono chip (`dd-mm-yy · HH:mm:ss`, local TZ) above primary page actions |
+| Home open-tickets KPI | Status strip card: large open (pending) count; detail `N tickets in total`; amber left accent when open > 0 |
+| Home status accents | System emerald/rose; Pending approvals + Open tickets amber when non-zero (same border language as request inbox) |
 | Destructive | Error soft / outline (Revoke, Cancel request) |
 | Badge | Soft pill; map enrollment/request states to success/warning/error/primary/neutral. Request inbox: `COMPLETED`/publish path → success; `CANCELLED`/failed → error; awaiting/revision → warning; in-progress → primary |
 | Request inbox card | Left: client (accent color), title, mono capability. Right column: status badge above **Open request**. Card: dark surface + **left border accent by state** (green / blue / amber / grey / rose), not full-card approval fills |
+| Ticket inbox row | Unread: cyan left border + cyan unread dot. Read: neutral border. Client tag, title, excerpt, relative time, status badge (`new` primary, `in_process` warning, `declined` error, `closed` success/neutral), **Open ticket** |
+| Ticket detail | Soft **Back to tickets**; mono cyan public id; meta cards; admin notes; activity log; footer Message + Mark as resolved |
 | Metric card | Label, large value, detail, optional Open link |
 | Analytics KPI | Same surface language; soon state shows title + “Available soon” without fake values |
 | Analytics donut | Dark card + SVG ring + legend; Tool Usage/Failures from request batches; Models from tool-graph agent nodes |
@@ -107,6 +111,8 @@ pattern.
 | add-client | `/clients/new` |
 | client-detail | `/clients/:id` |
 | requests-inbox | `/requests` |
+| tickets-inbox | `/tickets` |
+| ticket-detail | `/tickets/:id` |
 | request-detail | `/requests/:id` |
 | tools-catalog | `/tools` |
 | tool-graph-detail | `/tools/:toolId` |

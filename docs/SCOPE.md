@@ -23,7 +23,12 @@
 - Natural-language intent routing and explicit slash commands.
 - Dynamic tool menu, status, revision, approval and cancellation.
 - Admin notifications and approvals shared with the dashboard.
-- Bounded admin→client Telegram direct messages from the dashboard (ADR-0043).
+- Bounded admin→client Telegram direct messages from the dashboard (ADR-0043),
+  including ticket-scoped messages (ADR-0055).
+- Admin **Tickets** queue for out-of-catalog client requests (states, read
+  receipt, messaging). Clients open tickets via Telegram `/open_ticket` or the
+  unmatched-message fallback; greeting heuristics reply politely without a
+  ticket (ADR-0055).
 
 ### First capability
 
@@ -85,3 +90,4 @@ The following remain out of scope unless a separate product and security design 
 | New typed binding within existing global capability | Admin onboarding/configuration change with validation. |
 | Capability requiring a new executor                 | Product development proposal and ADR if architectural. |
 | General code/layout/infrastructure request          | Human development brief; never automatic execution.    |
+| Out-of-catalog custom ask (ticket)                  | Admin ticket queue; no invented capability run.        |

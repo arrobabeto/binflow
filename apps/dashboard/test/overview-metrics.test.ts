@@ -5,6 +5,7 @@ import type { Enrollment, RequestSummary } from '@binflow/contracts';
 import {
   buildAttentionItems,
   buildClientSummaries,
+  countAwaitingAdminApproval,
   countPendingApprovals,
   countRequestsOnUtcDay,
   formatApproximateCount,
@@ -113,6 +114,20 @@ describe('overview-metrics', () => {
       approximate: true,
       value: 2,
     });
+    expect(
+      countAwaitingAdminApproval(
+        [
+          ...items,
+          request({
+            createdAt: '2026-08-29T11:00:00.000Z',
+            id: 'r3',
+            projectId: 'p2',
+            state: 'COMPLETED',
+          }),
+        ],
+        false,
+      ),
+    ).toEqual({ approximate: false, value: 2 });
     expect(countRequestsOnUtcDay(items, '2026-08-29', true)).toEqual({
       approximate: true,
       value: 1,

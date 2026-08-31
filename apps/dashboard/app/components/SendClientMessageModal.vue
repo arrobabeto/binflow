@@ -9,6 +9,7 @@ const open = defineModel<boolean>('open', { required: true });
 const props = defineProps<{
   enrollmentId?: string;
   requestId?: string;
+  ticketId?: string;
   revision?: number;
 }>();
 
@@ -28,6 +29,8 @@ const targetUrl = computed(() => {
     return `/api/v1/admin/enrollments/${props.enrollmentId}/message-target`;
   if (props.requestId !== undefined)
     return `/api/v1/requests/${props.requestId}/message-target`;
+  if (props.ticketId !== undefined)
+    return `/api/v1/admin/tickets/${props.ticketId}/message-target`;
   return null;
 });
 
@@ -96,6 +99,14 @@ const send = async () => {
           'If-Match': `"${String(props.revision)}"`,
         },
       });
+    } else if (props.ticketId !== undefined) {
+      await $fetch(`/api/v1/admin/tickets/${props.ticketId}/messages`, {
+        method: 'POST',
+        body: { message: message.value },
+        headers: {
+          'Idempotency-Key': crypto.randomUUID(),
+        },
+      });
     } else {
       throw new Error('Message destination is incomplete.');
     }
@@ -153,11 +164,13 @@ const send = async () => {
         </div>
 
         <UFormField
+          class="w-full"
           label="Message"
           :hint="`${String(Math.max(0, remaining))} characters left`"
         >
           <UTextarea
             v-model="message"
+            class="w-full"
             :rows="5"
             :maxlength="ADMIN_CLIENT_MESSAGE_MAX_LENGTH"
             :disabled="!target?.paired"

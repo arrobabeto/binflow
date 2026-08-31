@@ -1,7 +1,8 @@
 # ADR-0049: Update menu PDF for Astro+Orbitype restaurant sites
 
-- Status: Proposed
+- Status: Accepted
 - Date: 2026-08-31
+- Amended: 2026-08-31 (opt-in CTA selection interview)
 - Supersedes: None
 - Superseded by: None
 - Extends: [ADR-0030](0030-declarative-tools-and-client-customization.md),
@@ -38,8 +39,12 @@ Operators want:
    `persistInboundDocument` — `application/pdf`, max 10 MB, same attachment
    pipeline pattern as images.
 3. **Ingress collection.** Before execute: PDF → discover menu CTAs →
-   multi-select → plan confirm (`Publicar menú` / `Menü veröffentlichen` /
-   `Publish menu`). Plan confirm is the **sole** client approval gate.
+   **opt-in** multi-select (none selected at start; client taps buttons to
+   mark; `Seleccionar todos` / `Select all` / `Alle auswählen` shortcut;
+   `Continuar` / `Continue` / `Weiter` advances; Cancel aborts) → plan
+   confirm (`Publicar menú` / `Menü veröffentlichen` / `Publish menu`).
+   Plan confirm is the **sole** client approval gate. Empty confirm stays on
+   selection with “pick at least one” copy (not the no-CTAs-found message).
 4. **Graph (no preview nodes).** Linear pipeline:
    `sync_pages` → `validate_menu_update` → `render_menu_artifacts` →
    `open_menu_update_pr` → `apply_orbitype_draft` → `merge_github` →

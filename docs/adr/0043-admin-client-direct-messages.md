@@ -26,37 +26,43 @@ the client must see why a category was rejected when the owner chooses to say so
    client conversation through the existing `client.notification_requested`
    outbox. Maximum body length is **2000** Unicode characters after trim;
    empty bodies are rejected. No HTML/Markdown editor; the body is sent as typed.
-2. Two entry points exist:
+2. Three entry points exist:
    - Enrollment-scoped: `POST /api/v1/admin/enrollments/:id/messages`
    - Request-scoped: `POST /api/v1/requests/:id/messages`, allowed **only** when
      the request’s `terminalResult.approvalStatus` is `admin_rejected`.
      **Superseded for new rejects** by ADR-0050 (reject → `CANCELLED` with
      automatic `request.cancelled`; no `admin_rejected` state).
+   - Ticket-scoped (ADR-0055): `POST /api/v1/admin/tickets/:id/messages` for any
+     open ticket whose project is paired.
 3. Approve, reject, and revise remain independent of messaging. Reject never
    requires or auto-sends a message. The Message control on request detail
    appears only after rejection.
 4. Destination chat IDs never appear in the outbox payload. Enrollment-scoped
    events use `aggregateType: enrollment`; request-scoped events use
-   `aggregateType: request`. The worker resolves the active channel identity at
-   delivery time (project/tenant for enrollment; request user for request).
+   `aggregateType: request`; ticket-scoped events use `aggregateType: ticket`
+   (ADR-0055). The worker resolves the active channel identity at delivery time
+   (project/tenant for enrollment and ticket; request user for request).
 5. A short code-owned locale prefix (from the conversation locale when
    resolvable) may precede the admin body. Missing locale uses a neutral
    English prefix rather than translating the freeform body (ADR-0011 still
    forbids inventing a client locale for workflow copy; freeform is owner-authored).
 6. The Message modal shows a redacted **Sending to** channel summary
    (`clientName`, `tenantKey`, `projectKey`, `botUsername`) loaded for the same
-   enrollment or request id. There is no recipient picker; the POST is bound to
-   that id.
+   enrollment, request, or ticket id. There is no recipient picker; the POST is
+   bound to that id.
 7. Delivery is asynchronous. The API response means “queued,” not “delivered.”
    Audit records enqueue and delivery without logging the full freeform body in
    worker metadata (length and outbox id only).
+8. Ticket-scoped entry point (ADR-0055):
+   `GET/POST /api/v1/admin/tickets/:id/message-target|messages` with
+   `notificationType: admin.ticket_message`.
 
 ## Consequences
 
 - Owners can explain rejections and message a client without a new transport.
 - Freeform text is an audited exception to code-owned workflow copy, tightly
   gated by length, pairing, and (for requests) prior admin rejection.
-- Worker drain must handle both `request` and `enrollment` aggregates for
+- Worker drain must handle `request`, `enrollment`, and `ticket` aggregates for
   client notifications.
 
 ## Alternatives considered

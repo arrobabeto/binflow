@@ -10,7 +10,7 @@ The first-MVP dashboard UI is English.
 
 ```text
 Sidebar
-  Main: Home · Clients · Requests
+  Main: Home · Clients · Requests · Tickets
   Tools: Catalog · Customizations
   System: Integrations · Operations · Analytics
   (footer) email · Sign out
@@ -20,7 +20,7 @@ Primary navigation is a persistent left **sidebar** (`AppShell`) on every
 authenticated operational page (ADR-0044, [DESIGN-SYSTEM.md](DESIGN-SYSTEM.md)).
 Zones:
 
-- **Main:** Home, Clients, Requests — daily operations.
+- **Main:** Home, Clients, Requests, Tickets — daily operations.
 - **Tools:** Catalog (`/tools`) and Customizations — capability and voice
   configuration (direct sidebar links, not a dropdown).
 - **System:** Integrations, Operations, and Analytics — platform readiness and
@@ -115,16 +115,20 @@ Home is the operations cockpit (`/`). It displays:
 - **Status strip**
   - System health from `GET /api/v1/health` plus `GET /api/v1/readiness`
     (Healthy when API is `ok` and readiness is `ready`).
-  - Requests created today (UTC), counted from recent request list batches
-    (`limit=50` for approval and other columns). When a batch has
-    `nextCursor`, the count may show a `+` suffix (approximate).
-  - Pending admin approvals from `GET /api/v1/requests?needsAdminApproval=true`
-    (same approximate rule).
-  - Client mix: active (including `revalidation_required`) over total
-    enrollments, with an attention hint when enrollments need action.
+  - Requests created today (UTC) and pending admin approvals from a **full
+    cursor walk** of `GET /api/v1/requests` (same helper as Analytics; SSR uses
+    `useRequestFetch` so session cookies apply). Counts are exact unless the
+    walk hits the page cap (`+` suffix). Request summaries include platform
+    `open_ticket` collection rows (ADR-0055).
+  - **Open tickets** (large): pending count (`new` + `in_process`) from
+    `GET /api/v1/admin/tickets`; detail line shows **tickets in total**. Polls
+    ~5s and on tab focus. Replaces the prior Clients mix KPI on this strip.
+  - Status-strip accents (same left-border language as request inbox): System
+    green when healthy / red when not; Pending approvals and Open tickets amber
+    when count > 0.
 - **Client cards** for every enrollment: display label (from tenant key),
   lifecycle state, project key, requests today and pending approvals for that
-  project (from the same recent batches), enrollment step when not operational,
+  project (from the full request catalog), enrollment step when not operational,
   a settings (cog) control in the card corner that opens the enrollment detail,
   a **Message** control next to **Requests** that opens a modal to queue a
   bounded freeform Telegram note to that client’s paired channel (ADR-0043),
@@ -209,6 +213,32 @@ approval behavior remain read-only in the UI.
 The Tools detail page can assign a tool to validated clients with the same API,
 filtering the list to enrollments whose `projectProfile` matches the tool
 profile.
+
+## Tickets
+
+Tickets are the admin queue for out-of-catalog client asks (ADR-0055). Nav link
+**Tickets** sits under Main, directly below Requests. List route `/tickets`
+(query `tab=pending|history`); detail `/tickets/:id`. English UI; no list
+breadcrumbs—title **Tickets** only. Detail uses **Back to tickets**, not a
+crumb trail.
+
+States: `new` (default), `in_process`, `declined`, `closed`. **Pending** tab:
+`new` + `in_process` (badge = pending count). **History**: `declined` +
+`closed`. Figma “Mark as resolved” / “Resolved” maps to `closed`. Display label
+for `in_process` is **In progress**.
+
+Inbox: Client + Status filters, unread cyan left border + dot when `readAt` is
+null, client tag, title, excerpt, relative time, status badge, **Open ticket**,
+batch pagination (same 10/30/50 cursor pattern as Requests). Empty Pending
+shows **No pending tickets**; empty History shows **No history tickets** — an
+empty queue is not an error. Empty list remains valid until Telegram ingest
+exists.
+
+Detail: status select, **Mark as resolved** → `closed`, title + public ticket
+id (mono cyan), meta (Client, Submitted, Priority, Category), request body,
+admin notes, activity log, footer **Message client** (same modal as
+enrollment/request; ticket-scoped API) + **Mark as resolved**. Opening detail
+calls `POST …/read` (idempotent). Never show chat IDs or secrets.
 
 ## Requests
 

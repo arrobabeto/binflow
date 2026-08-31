@@ -12,16 +12,22 @@ import {
 
 export const updateMenuActionLabels = {
   de: {
+    cancel: 'Abbrechen',
     confirmPlan: 'Menü veröffentlichen',
-    confirmSelection: 'Auswahl bestätigen',
+    confirmSelection: 'Weiter',
+    selectAll: 'Alle auswählen',
   },
   en: {
+    cancel: 'Cancel',
     confirmPlan: 'Publish menu',
-    confirmSelection: 'Confirm selection',
+    confirmSelection: 'Continue',
+    selectAll: 'Select all',
   },
   es: {
+    cancel: 'Cancelar',
     confirmPlan: 'Publicar menú',
-    confirmSelection: 'Confirmar selección',
+    confirmSelection: 'Continuar',
+    selectAll: 'Seleccionar todos',
   },
 } as const;
 
@@ -43,11 +49,29 @@ export const updateMenuNoCtasMessage = {
   es: 'No encontramos botones de menú editables.',
 } as const;
 
-export const updateMenuSelectPrompt = {
-  de: 'Wähle die Buttons, die zum PDF führen sollen. Tippe **Auswahl bestätigen**, wenn du fertig bist.',
-  en: 'Select the buttons that should open the PDF. Tap **Confirm selection** when done.',
-  es: 'Elige los botones que deben abrir el PDF. Pulsa **Confirmar selección** cuando termines.',
+export const updateMenuEmptySelectionMessage = {
+  de: 'Wähle mindestens einen Button aus.',
+  en: 'Choose at least one button.',
+  es: 'Elige al menos un botón.',
 } as const;
+
+export const updateMenuSelectPrompt = {
+  de: 'Tippe die Buttons, die du mit diesem PDF aktualisieren willst. Noch keiner ist markiert. Dann **Weiter**.',
+  en: 'Tap the buttons you want to update with this PDF. None are selected yet. Then tap **Continue**.',
+  es: 'Toca los botones que quieres actualizar con este PDF. Ninguno está marcado. Luego pulsa **Continuar**.',
+} as const;
+
+const selectedCountLine = (
+  locale: SupportedLocale,
+  count: number,
+): string => {
+  const copy = {
+    de: `Ausgewählt: ${String(count)}`,
+    en: `Selected: ${String(count)}`,
+    es: `Seleccionados: ${String(count)}`,
+  } as const;
+  return copy[locale];
+};
 
 export const buildUpdateMenuPlanMessage = (
   locale: SupportedLocale,
@@ -75,12 +99,51 @@ export const buildUpdateMenuSelectionMessage = (
     const mark = selectedKeys.has(cta.key) ? '✓ ' : '';
     return `${mark}${cta.label} · /${cta.pageSlug}`;
   });
-  const copy = {
-    de: `${updateMenuSelectPrompt.de}\n\n${lines.join('\n')}`,
-    en: `${updateMenuSelectPrompt.en}\n\n${lines.join('\n')}`,
-    es: `${updateMenuSelectPrompt.es}\n\n${lines.join('\n')}`,
-  } as const;
-  return copy[locale];
+  return `${updateMenuSelectPrompt[locale]}\n\n${selectedCountLine(locale, selected.length)}\n${lines.join('\n')}`;
+};
+
+/** Specs for selection-step Telegram buttons (tokens filled by collection). */
+export type UpdateMenuSelectionActionSpec = Readonly<{
+  action:
+    | 'toggle_menu_cta'
+    | 'select_all_menu_ctas'
+    | 'confirm_menu_selection'
+    | 'cancel';
+  label: string;
+  /** Value stored on the action token (may include CTA key suffix). */
+  tokenAction: string;
+}>;
+
+export const buildUpdateMenuSelectionActionSpecs = (
+  locale: SupportedLocale,
+  discovered: readonly MenuCtaCandidate[],
+  selectedKeys: readonly string[],
+): readonly UpdateMenuSelectionActionSpec[] => {
+  const selected = new Set(selectedKeys);
+  const specs: UpdateMenuSelectionActionSpec[] = [];
+  for (const cta of discovered.slice(0, 8)) {
+    specs.push({
+      action: 'toggle_menu_cta',
+      label: formatMenuToggleLabel(cta, selected.has(cta.key)),
+      tokenAction: `toggle_menu_cta:${cta.key}`,
+    });
+  }
+  specs.push({
+    action: 'select_all_menu_ctas',
+    label: updateMenuActionLabels[locale].selectAll,
+    tokenAction: 'select_all_menu_ctas',
+  });
+  specs.push({
+    action: 'confirm_menu_selection',
+    label: updateMenuActionLabels[locale].confirmSelection,
+    tokenAction: 'confirm_menu_selection',
+  });
+  specs.push({
+    action: 'cancel',
+    label: updateMenuActionLabels[locale].cancel,
+    tokenAction: 'cancel',
+  });
+  return specs;
 };
 
 export const parseUpdateMenuExecuteInput = (
