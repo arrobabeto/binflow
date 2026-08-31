@@ -216,6 +216,9 @@ importers:
       '@binflow/secrets':
         specifier: workspace:*
         version: link:../../packages/secrets
+      '@binflow/text':
+        specifier: workspace:*
+        version: link:../../packages/text
       '@binflow/vercel':
         specifier: workspace:*
         version: link:../../packages/vercel
@@ -631,6 +634,25 @@ importers:
         specifier: 24.13.3
         version: 24.13.3
 
+  packages/text:
+    dependencies:
+      '@binflow/blog':
+        specifier: workspace:*
+        version: link:../blog
+      '@binflow/contracts':
+        specifier: workspace:*
+        version: link:../contracts
+      '@binflow/domain':
+        specifier: workspace:*
+        version: link:../domain
+      '@binflow/menu':
+        specifier: workspace:*
+        version: link:../menu
+    devDependencies:
+      '@types/node':
+        specifier: 24.13.3
+        version: 24.13.3
+
   packages/tools:
     dependencies:
       '@binflow/contracts':
@@ -713,6 +735,9 @@ importers:
       '@binflow/projects':
         specifier: workspace:*
         version: link:../projects
+      '@binflow/text':
+        specifier: workspace:*
+        version: link:../text
       '@binflow/tools':
         specifier: workspace:*
         version: link:../tools

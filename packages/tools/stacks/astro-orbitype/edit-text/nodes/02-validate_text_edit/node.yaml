@@ -1,0 +1,4 @@
+kind: compute
+label: Validate locale, target, and denylist
+nodeKind: text.validate_edit@1
+acceptsClientCustomization: false

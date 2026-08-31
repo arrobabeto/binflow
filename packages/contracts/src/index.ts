@@ -912,6 +912,57 @@ const updateMenuSharedSchema = {
   projectId: z.string().min(1),
 } as const;
 
+export const textEditCandidateSchema = z
+  .object({
+    currentValue: z.string().trim().min(1).max(10_000),
+    field: z.string().trim().min(1).max(80),
+    key: z.string().trim().min(1).max(160),
+    label: z.string().trim().min(1).max(200),
+    locale: z.enum(['de', 'en', 'es']),
+    pageId: z.string().trim().min(1).max(80),
+    pageSlug: z.string().trim().min(1).max(120),
+    pageTitle: z.string().trim().min(1).max(200),
+    sectionIndex: z.number().int().nonnegative(),
+  })
+  .strict();
+
+const editTextSharedSchema = {
+  projectId: z.string().min(1),
+} as const;
+
+export const editTextInputSchema = z.discriminatedUnion('mode', [
+  z
+    .object({
+      collectionComplete: z.boolean().default(false),
+      collectionStep: z
+        .enum([
+          'await_locale',
+          'await_target',
+          'disambiguate',
+          'confirm_target',
+          'await_replacement',
+          'ready',
+        ])
+        .default('await_target'),
+      contentLocale: z.enum(['de', 'en', 'es']).optional(),
+      discoveredTargets: z.array(textEditCandidateSchema).max(40).default([]),
+      messages: z.array(z.string().trim().max(10_000)).max(40).default([]),
+      mode: z.literal('collect'),
+      newValue: z.string().trim().max(10_000).optional(),
+      targetKey: z.string().trim().min(1).max(160).optional(),
+    })
+    .strict(),
+  z
+    .object({
+      ...editTextSharedSchema,
+      contentLocale: z.enum(['de', 'en', 'es']),
+      mode: z.literal('execute'),
+      newValue: z.string().trim().min(1).max(10_000),
+      targetKey: z.string().trim().min(1).max(160),
+    })
+    .strict(),
+]);
+
 export const updateMenuInputSchema = z.discriminatedUnion('mode', [
   z
     .object({
@@ -947,6 +998,7 @@ export const capabilityInputSchema = z.union([
   createProjectAstroInputSchema,
   deleteBlogDraftInputSchema,
   deleteProjectAstroInputSchema,
+  editTextInputSchema,
   updateMenuInputSchema,
 ]);
 
@@ -1118,6 +1170,8 @@ export type SourceReference = z.infer<typeof sourceReferenceSchema>;
 export type CreateBlogDraftInput = z.infer<typeof createBlogDraftInputSchema>;
 export type DeleteBlogDraftInput = z.infer<typeof deleteBlogDraftInputSchema>;
 export type UpdateMenuInput = z.infer<typeof updateMenuInputSchema>;
+export type EditTextInput = z.infer<typeof editTextInputSchema>;
+export type TextEditCandidate = z.infer<typeof textEditCandidateSchema>;
 export type DeleteProjectAstroInput = z.infer<typeof deleteProjectAstroInputSchema>;
 export type CreateProjectAstroInput = z.infer<typeof createProjectAstroInputSchema>;
 /** @deprecated Use CreateProjectAstroInput */
@@ -1173,6 +1227,7 @@ export const capabilityIdSchema = z.enum([
   'create_project_draft',
   'delete_blog_draft',
   'delete_project_astro',
+  'edit_text',
   'update_menu',
 ]);
 
@@ -1690,6 +1745,10 @@ export const telegramReplySchema = z
               'confirm_plan',
               'confirm_delete_target',
               'confirm_menu_selection',
+              'confirm_text_plan',
+              'confirm_text_target',
+              'pick_text_locale',
+              'pick_text_target',
               'approve_preview',
               'request_revision',
               'confirm_revision_plan',
@@ -1697,6 +1756,8 @@ export const telegramReplySchema = z
               'cancel_revision',
               'toggle_menu_cta',
               'cancel',
+              'approve_publish',
+              'reject',
             ]),
             label: z.string().min(1),
             token: z.string().min(32),

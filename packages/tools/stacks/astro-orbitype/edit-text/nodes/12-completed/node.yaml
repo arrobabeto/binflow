@@ -1,0 +1,4 @@
+kind: compute
+label: Completed
+nodeKind: workflow.completed@1
+acceptsClientCustomization: false

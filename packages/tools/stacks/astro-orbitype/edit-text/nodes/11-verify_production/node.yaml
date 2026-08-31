@@ -1,0 +1,6 @@
+kind: effect
+label: Verify production copy
+nodeKind: text.verify_production@1
+acceptsClientCustomization: false
+permissions:
+  - vercel:deployments:read

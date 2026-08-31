@@ -64,6 +64,8 @@ Deliver a locally operable Binflow control plane that enrolls Webbin, serves one
 - Existing category publication requires client approval only.
 - New category publication requires client and admin approval.
 - Bot and dashboard admin actions use the same idempotent approval service.
+- Admin reject (either surface) cancels the request and notifies the client
+  (ADR-0050).
 
 ### Production and audit
 

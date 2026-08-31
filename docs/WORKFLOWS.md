@@ -41,6 +41,8 @@ Rules:
 
 - A revision creates a new request version and marks the previous version `SUPERSEDED`.
 - Approval is impossible before `PREVIEW_READY`.
+- Admin **reject** (dashboard or admin Telegram, ADR-0050) transitions to
+  **`CANCELLED`** and notifies the client; it does not return to client revision.
 - `APPROVED_FOR_PUBLISH` always transitions through `REVALIDATING`.
 - Cancellation is terminal and revokes active action tokens. A cancellation
   initiated from the dashboard also notifies the client conversation through the

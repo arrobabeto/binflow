@@ -1,0 +1,229 @@
+identity:
+  id: edit_text
+  version: 1
+  stack: astro-orbitype
+  toolDir: edit-text
+  graphVersionSuffix: '@1'
+  displayName: Edit page text
+  command: /edit_text
+  description: >
+    Lets astro_orbitype clients replace one allowlisted paragraph or non-H1
+    section title per request with exact literal text (no LLM rewrite). Dual-writes
+    GitHub plus Orbitype pages. Collection interviews until the target string is
+    unambiguous; client confirms target and plan, reviews Vercel preview (approve
+    or cancel only), then admin approves before production merge.
+  profile: astro_orbitype
+  executorId: workflow.edit_text@1
+  riskClass: medium
+  requiresPreview: true
+  mutationClass: update
+  approvalPolicyId: astro-orbitype-text-edit@1
+
+specTitle: Edit page text (Astro + Orbitype) — capability specification
+
+migration:
+  inputSchemaId: edit_text.input@1
+  outputSchemaId: edit_text.output@1
+  allowedProfiles:
+    - astro_orbitype
+  requiredPermissions:
+    - github:metadata:read
+    - github:contents:write
+    - github:pull_requests:write
+    - github:checks:read
+    - github:statuses:read
+    - vercel:deployments:read
+    - orbitype:content:read
+    - orbitype:content:write
+  timeoutSeconds: 1800
+  retryPolicy:
+    maxAttempts: 3
+    retryableErrors:
+      - provider_retryable
+      - deployment_pending
+  budget:
+    maxEstimatedCostCents: 50
+    maxModelCalls: 1
+    maxTokens: 1000
+
+nodes:
+  - sortPrefix: '01'
+    id: sync_editable_copy
+    kind: effect
+    nodeKind: text.sync_editable_copy@1
+    label: Sync editable copy corpus
+    acceptsClientCustomization: false
+    parameters:
+      catalogScope: pages
+    permissions:
+      - orbitype:content:read
+      - github:metadata:read
+  - sortPrefix: '02'
+    id: validate_text_edit
+    kind: compute
+    nodeKind: text.validate_edit@1
+    label: Validate locale, target, and denylist
+    acceptsClientCustomization: false
+  - sortPrefix: '03'
+    id: render_text_patch
+    kind: compute
+    nodeKind: text.render_patch@1
+    label: Build literal Orbitype and GitHub patches
+    acceptsClientCustomization: false
+  - sortPrefix: '04'
+    id: open_text_edit_pr
+    kind: effect
+    nodeKind: text.open_edit_pr@1
+    label: Open text edit pull request
+    acceptsClientCustomization: false
+    permissions:
+      - github:contents:write
+      - github:pull_requests:write
+  - sortPrefix: '05'
+    id: apply_orbitype_draft
+    kind: effect
+    nodeKind: text.apply_orbitype_draft@1
+    label: Apply Orbitype pages draft
+    acceptsClientCustomization: false
+    permissions:
+      - orbitype:content:write
+  - sortPrefix: '06'
+    id: wait_preview
+    kind: effect
+    nodeKind: deployment.wait_preview@1
+    label: Wait for Vercel preview
+    acceptsClientCustomization: false
+    permissions:
+      - vercel:deployments:read
+  - sortPrefix: '07'
+    id: awaiting_client_approval
+    kind: interrupt
+    nodeKind: workflow.awaiting_client_approval@1
+    label: Awaiting client preview approval
+    acceptsClientCustomization: false
+    actor: client
+    ttlHours: 72
+  - sortPrefix: '08'
+    id: awaiting_admin_approval
+    kind: interrupt
+    nodeKind: workflow.awaiting_admin_approval@1
+    label: Awaiting admin publication approval
+    acceptsClientCustomization: false
+    actor: admin
+    ttlHours: 72
+  - sortPrefix: '09'
+    id: merge_github
+    kind: effect
+    nodeKind: publication.merge_github@1
+    label: Merge GitHub PR
+    acceptsClientCustomization: false
+    permissions:
+      - github:pull_requests:write
+      - github:contents:write
+  - sortPrefix: '10'
+    id: publish_orbitype_pages
+    kind: effect
+    nodeKind: text.publish_orbitype_pages@1
+    label: Publish Orbitype pages
+    acceptsClientCustomization: false
+    permissions:
+      - orbitype:content:write
+  - sortPrefix: '11'
+    id: verify_production
+    kind: effect
+    nodeKind: text.verify_production@1
+    label: Verify production copy
+    acceptsClientCustomization: false
+    permissions:
+      - vercel:deployments:read
+  - sortPrefix: '12'
+    id: completed
+    kind: compute
+    nodeKind: workflow.completed@1
+    label: Completed
+    acceptsClientCustomization: false
+
+edges:
+  - from: sync_editable_copy
+    to: validate_text_edit
+  - from: validate_text_edit
+    to: render_text_patch
+  - from: render_text_patch
+    to: open_text_edit_pr
+  - from: open_text_edit_pr
+    to: apply_orbitype_draft
+  - from: apply_orbitype_draft
+    to: wait_preview
+  - from: wait_preview
+    to: awaiting_client_approval
+  - from: awaiting_client_approval
+    to: awaiting_admin_approval
+  - from: awaiting_admin_approval
+    to: merge_github
+  - from: merge_github
+    to: publish_orbitype_pages
+  - from: publish_orbitype_pages
+    to: verify_production
+  - from: verify_production
+    to: completed
+
+contentSchemaFields: []
+
+customizableNodeIds: []
+
+layerAssignments:
+  - layer: code
+    behavior: >
+      Allowlisted editable copy paths (paragraphs and non-H1 section titles only).
+      Denylist H1, button labels, link text, nav, and footer menus. Exact
+      substring match corpus from Orbitype pages plus GitHub mirror paths. One
+      replacement per request per locale. Literal oldValue→newValue patch with no
+      LLM mutation. Collection: optional locale pick, target disambiguation,
+      confirm_target, await_replacement, plan confirm. Preview approve/cancel only
+      (no revision). Admin approval required before merge.
+  - layer: manifest
+    behavior: >
+      contentLocales for locale gate and corpus labels; editablePaths for GitHub
+      page copy files; deployment.productionOrigin; publicationTargets
+      github+orbitype.
+  - layer: customization
+    behavior: >
+      Optional editorial hints for collection prompts only. No paths, models,
+      permissions, or approval overrides.
+
+typedErrors:
+  - code: text_target_not_found
+    when: Substring search finds no allowlisted string in the chosen locale.
+  - code: text_target_ambiguous
+    when: Substring matches more than one allowlisted field.
+  - code: text_field_denied
+    when: Resolved path is H1, button, link, nav, or footer (denylist).
+  - code: text_locale_required
+    when: Project is multilingual and locale was not closed in collection.
+  - code: text_replacement_empty
+    when: Client confirms plan with empty new text.
+  - code: text_target_stale
+    when: oldValue no longer matches at execute time.
+  - code: orbitype_pages_patch_failed
+    when: Orbitype rejects the pages sections patch (4xx).
+  - code: github_pr_failed
+    when: Text edit PR cannot be opened or updated.
+  - code: preview_not_ready
+    when: Vercel preview does not become ready for the PR head.
+  - code: production_text_mismatch
+    when: Production page does not show the approved new text after publish.
+
+verification:
+  scenarios:
+    - Monolingual project skips locale question; multilingual asks once.
+    - Denylist blocks H1, buttons, links, nav, and footer from discovery.
+    - Ambiguous substring returns numbered disambiguation, not auto-pick.
+    - confirm_target then plan confirm show exact old and new strings only.
+    - Execute performs literal replacement without LLM paraphrase.
+    - Preview shows changed copy on enrolled origin routes; client Approve or Cancel only.
+    - After client preview approval, admin approval is required before merge.
+    - One field replacement per request; second change needs a new request.
+    - NL ingress de/es/en edit-text phrases dispatch to edit_text.
+    - verify_production polls until new text is visible on production.
+  fixtures:
+    - docs/customizations/bistro-edit-text.md

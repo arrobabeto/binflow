@@ -367,6 +367,43 @@ type UpdateMenuInput =
     };
 ```
 
+## `edit_text`
+
+Telegram command: `/edit_text`.
+
+See `docs/specs/edit-text.md` and ADR-0051. Profile `astro_orbitype` only.
+Input schema: `editTextInputSchema` (`collect` | `execute` modes). Reply actions:
+`pick_text_locale`, `pick_text_target`, `confirm_text_target`, `confirm_text_plan`,
+then generic `confirm_plan` is not used (plan confirm uses `confirm_text_plan`).
+Preview actions: `approve_preview`, `cancel` only (no revision).
+
+```ts
+type EditTextInput =
+  | {
+      mode: 'collect';
+      projectId: string;
+      collectionStep:
+        | 'await_locale'
+        | 'await_target'
+        | 'disambiguate'
+        | 'confirm_target'
+        | 'await_replacement'
+        | 'ready';
+      contentLocale?: SupportedLocale;
+      targetKey?: string;
+      newValue?: string;
+      discoveredTargets: TextEditCandidate[];
+      /* … */
+    }
+  | {
+      mode: 'execute';
+      projectId: string;
+      contentLocale: SupportedLocale;
+      targetKey: string;
+      newValue: string;
+    };
+```
+
 ```ts
 type CreateProjectAstroInput =
   | {
@@ -577,15 +614,21 @@ Any artifact identifier change invalidates the approval. Duplicate approval acti
 
 Client action tokens support `approve_preview`, `request_revision`,
 `confirm_revision_plan`, `adjust_revision_plan`, `cancel_revision`, `reject`
-and `cancel` after preview or revision-plan gates. Admin action tokens support `approve_publish` and
-`reject` only for a new-category request. Tokens are opaque, hashed, expire in
-24 hours and bind to one request version, PR head SHA and preview deployment.
-The Telegram client surface presents those tokens as inline buttons on every
+and `cancel` after preview or revision-plan gates.
+
+Admin action tokens (ADR-0050) support `approve_publish` and `reject` for requests
+in `AWAITING_ADMIN_APPROVAL` only. Tokens are opaque, hashed, expire within the
+action TTL, and bind to one request version, PR head SHA, preview deployment,
+and artifact. The admin Telegram surface presents them as inline **Approve** /
+**Reject** buttons on the `admin_approval_required` card; ingress is still
+`text: "/action <token>"` from `callback_query` or typed fallback. Only the
+paired `adminNotificationTargets` identity may consume admin tokens.
+
+The Telegram client surface presents client tokens as inline buttons on every
 decision step, including worker-originated preview notices and revision-plan
-notices; the
-ingress contract is still `text: "/action <token>"` whether the client tapped
-a button or typed the fallback command. Visible Telegram copy never includes
-the `/action` form.
+notices; the ingress contract is still `text: "/action <token>"` whether the
+client tapped a button or typed the fallback command. Visible Telegram copy
+never includes the `/action` form.
 
 Publication resume signals use the same stable request/request-version
 identity as generation and add a code-owned reason: `execute`, `publish` or
@@ -651,12 +694,16 @@ POST   /api/v1/admin/telegram/pairing-link
 GET    /api/v1/admin/telegram/target
 ```
 
+`POST /api/v1/requests/:requestId/reject` transitions the request to
+**`CANCELLED`** and enqueues **`request.cancelled`** to the client (ADR-0050).
+It no longer sets `REVISION_REQUESTED` / `approvalStatus: admin_rejected`.
+
 `POST /api/v1/admin/enrollments/:id/messages` and
 `POST /api/v1/requests/:requestId/messages` accept
 `{ "message": "<plain text>" }` (1–2000 characters after trim), require a fresh
 TOTP session and `Idempotency-Key`, and enqueue `client.notification_requested`
-(ADR-0043). Request-scoped send also requires `If-Match` on the request revision
-and is allowed only when `approvalStatus` is `admin_rejected`. Responses are
+(ADR-0043). **Enrollment-scoped** send remains. Request-scoped send after
+`admin_rejected` is deprecated for new rejects (ADR-0050). Responses are
 `{ "queued": true, "notificationType": "admin.direct_message" | "admin.request_message" }`.
 
 `GET /api/v1/admin/enrollments/:id/message-target` and

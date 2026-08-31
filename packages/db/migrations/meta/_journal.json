@@ -192,10 +192,10 @@
       "breakpoints": true
     },
     {
-      "idx": 27,
+      "idx": 28,
       "version": "7",
-      "when": 1788200000000,
-      "tag": "0027_update_menu_capability",
+      "when": 1788300000000,
+      "tag": "0028_edit_text_capability",
       "breakpoints": true
     }
   ]

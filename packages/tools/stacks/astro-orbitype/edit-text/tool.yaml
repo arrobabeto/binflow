@@ -1,0 +1,14 @@
+command: /edit_text
+description: Lets astro_orbitype clients replace one allowlisted paragraph or
+  non-H1 section title per request with exact literal text (no LLM rewrite).
+  Dual-writes GitHub plus Orbitype pages. Collection interviews until the target
+  string is unambiguous; client confirms target and plan, reviews Vercel preview
+  (approve or cancel only), then admin approves before production merge.
+displayName: Edit page text
+executorId: workflow.edit_text@1
+graphVersion: stacks/astro-orbitype/edit-text@1
+id: edit_text
+profile: astro_orbitype
+requiresPreview: true
+riskClass: medium
+version: 1

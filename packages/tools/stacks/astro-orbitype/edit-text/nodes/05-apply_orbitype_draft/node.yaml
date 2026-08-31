@@ -1,0 +1,6 @@
+kind: effect
+label: Apply Orbitype pages draft
+nodeKind: text.apply_orbitype_draft@1
+acceptsClientCustomization: false
+permissions:
+  - orbitype:content:write

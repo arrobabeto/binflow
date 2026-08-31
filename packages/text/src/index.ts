@@ -1,0 +1,15 @@
+export {
+  EditTextExecutor,
+  applyTextFieldPatch,
+  buildTextEditKey,
+  discoverEditableCopy,
+  resolveTextEditCandidate,
+  searchEditableCopy,
+  verifyProductionTextVisible,
+  type EditTextExecuteInput,
+  type TextEditPatchArtifact,
+  type TextEditPreviewResult,
+  type TextEditPublishResult,
+  type OrbitypeTextPagesPort,
+  type TextEditCandidate,
+} from './edit-text.js';

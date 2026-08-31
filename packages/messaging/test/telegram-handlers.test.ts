@@ -4,12 +4,15 @@ import type {
 } from '@chat-adapter/telegram';
 import { describe, expect, it, vi } from 'vitest';
 
+import { DomainError } from '@binflow/domain';
+
 import {
   isCardElement,
   previewUrlButtons,
   registerAdminTelegramHandlers,
   registerClientTelegramHandlers,
   renderClientTelegramReply,
+  renderAdminTelegramReply,
   renderDeleteAdminPendingNotice,
   renderDeletePublicationCompleteNotice,
   renderPreviewReadyNotice,
@@ -445,5 +448,102 @@ describe('Telegram client reply rendering', () => {
     expect(JSON.stringify(notice)).toContain('Mi Proyecto');
     expect(JSON.stringify(notice)).toContain('proyecto');
     expect(JSON.stringify(notice)).not.toContain('artículo');
+  });
+
+  it('posts admin approval card with approve and reject buttons', () => {
+    const notice = renderAdminTelegramReply({
+      actionTokens: [
+        {
+          action: 'approve_publish',
+          label: 'Approve',
+          token: actionToken,
+        },
+        {
+          action: 'reject',
+          label: 'Reject',
+          token: `${actionToken}-reject`,
+        },
+      ],
+      text: 'Admin approval required for new blog category.',
+    });
+    expect(JSON.stringify(notice)).toContain('Admin approval required');
+    expect(JSON.stringify(notice)).not.toContain('/action');
+    expect(buttonIds(notice)).toEqual([actionToken, `${actionToken}-reject`]);
+    expect(linkUrls(notice)).toEqual([]);
+  });
+
+  it('routes admin callback clicks through /action ingress', async () => {
+    const fake = fakeRuntime();
+    const handler = vi.fn(async () => ({
+      actionTokens: [],
+      locale: 'en' as const,
+      requestId: 'request-1',
+      text: 'Request approved. Publication was queued safely.',
+    }));
+    const post = vi.fn(async () => undefined);
+    registerAdminTelegramHandlers(fake.runtime, {
+      botId: '8664708110',
+      handler,
+    });
+
+    const callback: TelegramCallbackQuery = {
+      chat_instance: 'instance',
+      data: actionToken,
+      from: { first_name: 'Owner', id: 42, is_bot: false },
+      id: '9001',
+      message: {
+        ...rawMessage('Admin approval required.'),
+        from: { first_name: 'Bot', id: 1, is_bot: true },
+      },
+    };
+
+    await fake.action()?.({
+      actionId: actionToken,
+      raw: callback,
+      thread: { post },
+    });
+
+    expect(handler).toHaveBeenCalledWith({
+      botId: '8664708110',
+      chatId: '8080',
+      externalUserId: '42',
+      receivedAt: expect.stringMatching(/^\d{4}-\d{2}-\d{2}T/),
+      text: `/action ${actionToken}`,
+      updateId: '9001',
+    });
+    expect(post).toHaveBeenCalledWith(
+      'Request approved. Publication was queued safely.',
+    );
+  });
+
+  it('posts admin action errors instead of failing silently', async () => {
+    const fake = fakeRuntime();
+    const handler = vi.fn(async () => {
+      throw new DomainError('conflict_error', 'Action is invalid or expired.', {
+        code: 'invalid_action',
+      });
+    });
+    const post = vi.fn(async () => undefined);
+    registerAdminTelegramHandlers(fake.runtime, {
+      botId: '8664708110',
+      handler,
+    });
+
+    await fake.action()?.({
+      actionId: actionToken,
+      raw: {
+        chat_instance: 'instance',
+        data: actionToken,
+        from: { first_name: 'Owner', id: 42, is_bot: false },
+        id: '9002',
+        message: {
+          ...rawMessage('Admin approval required.'),
+          from: { first_name: 'Bot', id: 1, is_bot: true },
+        },
+      },
+      thread: { post },
+    });
+
+    expect(post).toHaveBeenCalledWith('Action is invalid or expired.');
   });
 });

@@ -11,8 +11,10 @@ delivery never authorizes or advances a request.
 ### Admin bot
 
 One platform bot serves the platform owner and receives operational
-notifications. Approval decisions remain in the non-idle, TOTP-verified dashboard
-surface for the local-first MVP.
+notifications. The owner may **approve or reject** requests in
+`AWAITING_ADMIN_APPROVAL` from this bot using inline buttons (ADR-0050), in
+addition to the TOTP-verified dashboard. Pairing still requires a fresh dashboard
+session; credential and enrollment mutations remain dashboard-only.
 
 ### Client bot
 
@@ -100,6 +102,7 @@ For the local MVP router:
 
 - **Blog:** messages mentioning *blog*, *article*, *artículo*, *Beitrag*, *post*, etc. start the project's assigned create-blog capability (`create_blog_draft` on `astro_repo`, `create_blog_orbitype` on `astro_orbitype`).
 - **Menu update (`astro_orbitype`):** messages mentioning *menú*, *carta*, *Speisekarte*, *update menu*, *upload menu*, etc. start `update_menu` when assigned.
+- **Text edit (`astro_orbitype`):** messages mentioning *editar texto*, *cambiar texto*, *edit text*, *Text ändern*, etc. start `edit_text` when assigned.
 - **Portfolio project:** messages mentioning *proyecto*, *portafolio*, *portfolio*, *case study*, etc., or briefs with at least two structural cues (`Stack:`, `Rol:`, `Estado:`, `confidencial`, …), start `create_project_astro` when assigned — with or without the `/create_project` prefix.
 - **`/create_project <brief>`** always routes to the portfolio tool when it is enabled.
 - Portfolio collection (ADR-0035/0037): new project requests enter `NEEDS_INPUT`
@@ -241,11 +244,18 @@ plan summary with the three buttons above. Confirm applies the surgical or full
 path; adjust returns to waiting for feedback; cancel restores the prior preview
 approval gate.
 
-Admin approval:
+Admin approval (requests in `AWAITING_ADMIN_APPROVAL` only — ADR-0050):
 
-- `Open preview`
-- `Approve new category and publication`
-- `Reject`
+- Summary card: tenant/project, capability, topic/target, why admin approval is
+  required, and what approve vs reject implies.
+- Optional preview URL buttons when policy allows.
+- `Approve` / localized approve label — queues the same path as dashboard approve.
+- `Reject` / localized reject label — **`CANCELLED`** + client
+  `request.cancelled` notice (same as dashboard reject).
+
+Admin informational notices (`request.created`, `request.failed_final`,
+`request.published`) remain text or card without decision buttons unless
+documented otherwise.
 
 Plan, preview, revision and cancel controls are Telegram inline buttons on
 every step that needs a decision, including worker-originated preview-ready
@@ -263,7 +273,9 @@ and clients without button support can still decide.
 Required events:
 
 - `request.created`: every client capability use.
-- `approval.required`: any policy requiring admin authority.
+- `approval.required`: any policy requiring admin authority. Delivers the
+  ADR-0050 summary card with Approve/Reject buttons when the request is in
+  `AWAITING_ADMIN_APPROVAL`.
 - `request.failed_final`: failure requiring intervention. The admin message
   includes request ID, failed node, error message and the dashboard path
   `/requests/{id}`.
@@ -283,18 +295,18 @@ the same schedule as admin notifications.
 
 Required events:
 
-- `request.cancelled`: the platform owner cancelled the request from the
-  dashboard. The notice is the neutral terminal copy already used for
-  client-initiated `/cancel`; it does not attribute the cancellation, name the
+- `request.cancelled`: the platform owner cancelled or **rejected** the request
+  (dashboard or admin Telegram). The notice is the neutral terminal copy already
+  used for client-initiated `/cancel`; it does not attribute the actor, name the
   platform owner or expose dashboard paths.
 - `request.failed_final`: the request reached a terminal failure. The notice
   includes the request ID and error summary so the client is not left without
   a reply after plan confirmation; it does not include dashboard paths.
 - `admin.direct_message` / `admin.request_message`: bounded freeform plain text
   (max 2000 characters) queued from the dashboard Message modal (ADR-0043).
-  Enrollment-scoped and request-scoped (only after `admin_rejected`) sends share
-  the same outbox type. A short code-owned prefix may precede the owner-authored
-  body. Approve/reject/revise never auto-enqueue these events.
+  Enrollment-scoped sends remain. Request-scoped sends after **`admin_rejected`**
+  are **deprecated** for new rejects (ADR-0050: reject → `CANCELLED` with
+  automatic `request.cancelled` instead).
 
 The message is rendered when the event is enqueued. For workflow notices such as
 cancellation, the `conversationLocale` stored for that conversation is required;

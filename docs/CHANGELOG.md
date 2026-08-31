@@ -4,6 +4,27 @@ All notable changes to product behavior, architecture, contracts, security, oper
 
 ## Unreleased
 
+### Edit page text (`edit_text`, astro_orbitype)
+
+- New capability **`edit_text@1`** (ADR-0051): literal replacement of one
+  allowlisted paragraph or non-H1 section title per request; dual-write GitHub
+  `cms/collections/**` mirror plus Orbitype `pages.sections`; Vercel preview with
+  client **Approve/Cancel only**; admin approval before merge.
+- Isolated package `@binflow/text`; additive runtime/ingress/worker wiring — no
+  changes to existing tool graphs or executors.
+- Migration `0028_edit_text_capability.sql`; graph
+  `stacks/astro-orbitype/edit-text@1`.
+- Spec: `docs/specs/edit-text.md`.
+
+### Admin Telegram approval actions (ADR-0050)
+
+- Spec: `docs/specs/admin-telegram-approval.md`.
+- Paired admin bot receives summary card with **Approve** / **Reject** for
+  `AWAITING_ADMIN_APPROVAL`; same idempotent service as dashboard.
+- Reject (Telegram or dashboard) → **`CANCELLED`** + client `request.cancelled`;
+  no longer `REVISION_REQUESTED` / `admin_rejected`.
+- ADR-0043 request-scoped Message after reject superseded for new rejects.
+
 ### Update menu verify polling
 
 - `verify_production` polls the public menu PDF URL for up to 120s after merge

@@ -22,6 +22,7 @@
     "@binflow/db": "workspace:*",
     "@binflow/domain": "workspace:*",
     "@binflow/menu": "workspace:*",
+    "@binflow/text": "workspace:*",
     "@binflow/orbitype": "workspace:*",
     "@binflow/projects": "workspace:*",
     "@binflow/policies": "workspace:*",

@@ -1,0 +1,37 @@
+edges:
+  - from: sync_editable_copy
+    to: validate_text_edit
+  - from: validate_text_edit
+    to: render_text_patch
+  - from: render_text_patch
+    to: open_text_edit_pr
+  - from: open_text_edit_pr
+    to: apply_orbitype_draft
+  - from: apply_orbitype_draft
+    to: wait_preview
+  - from: wait_preview
+    to: awaiting_client_approval
+  - from: awaiting_client_approval
+    to: awaiting_admin_approval
+  - from: awaiting_admin_approval
+    to: merge_github
+  - from: merge_github
+    to: publish_orbitype_pages
+  - from: publish_orbitype_pages
+    to: verify_production
+  - from: verify_production
+    to: completed
+nodes:
+  - id: sync_editable_copy
+  - id: validate_text_edit
+  - id: render_text_patch
+  - id: open_text_edit_pr
+  - id: apply_orbitype_draft
+  - id: wait_preview
+  - id: awaiting_client_approval
+  - id: awaiting_admin_approval
+  - id: merge_github
+  - id: publish_orbitype_pages
+  - id: verify_production
+  - id: completed
+version: stacks/astro-orbitype/edit-text@1

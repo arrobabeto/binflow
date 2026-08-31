@@ -285,14 +285,17 @@ card renders only when head commit or preview URLs exist.
 Approve, reject, revise and cancel use the same idempotent application service
 as Telegram; the UI never calculates approval policy.
 
-Cancelling from the detail page also queues a neutral, localized notice to the
-client's Telegram conversation (ADR-0027). The dashboard does not confirm
-delivery: the response reports the committed transition, and the notice is
-delivered asynchronously by the worker. Approve, reject and revise do not notify
-the client. After a reject that records `approvalStatus: admin_rejected`, the
-detail page shows **Message client** so the owner may optionally queue a bounded
-freeform explanation (ADR-0043). The Message modal seeds a read-only Sending-to
-channel summary; reject itself never requires or sends that message.
+**Reject** (dashboard or admin Telegram) transitions the request to **`CANCELLED`**
+and enqueues a neutral **`request.cancelled`** notice to the client (ADR-0050).
+Reject no longer leaves the request in `REVISION_REQUESTED` with
+`approvalStatus: admin_rejected`.
+
+Cancelling from the detail page also queues the same client notice (ADR-0027).
+The dashboard does not confirm delivery: the response reports the committed
+transition, and the notice is delivered asynchronously by the worker. Approve
+and revise do not notify the client. Optional freeform **Message client** remains
+enrollment-scoped only; post-reject request messaging is superseded by automatic
+cancellation notice.
 
 The Operations settings screen creates the one-time admin Telegram pairing
 link and projects the redacted active target. Pairing requires a non-idle,
@@ -304,7 +307,8 @@ session returns the owner to login before another link can be created.
 
 - Approval view shows project, capability, risk, request version, exact preview, checks, diff summary and expiry.
 - Admin approval is available only when effective policy requires it.
-- Approve/reject uses optimistic concurrency and the same idempotent application service as Telegram.
+- Approve/reject uses optimistic concurrency and the same idempotent application service as Telegram (ADR-0050).
+- Admin Telegram: paired owner may approve/reject `AWAITING_ADMIN_APPROVAL` via inline buttons; reject cancels with client notice.
 - A stale page, changed SHA or already-decided action refreshes current state instead of repeating the action.
 - Existing-category Webbin blogs do not ask admin approval; the admin still receives activity notifications.
 
