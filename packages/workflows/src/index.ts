@@ -194,6 +194,8 @@ const copy = {
       'Vorschau genehmigt. Die Veröffentlichung wurde sicher in die Warteschlange gestellt.',
     adminPending:
       'Vorschau genehmigt. Die neue Kategorie wartet jetzt auf die Admin-Freigabe.',
+    adminPendingTextEdit:
+      'Vorschau genehmigt. Die Textänderung wartet jetzt auf die Admin-Freigabe.',
     revisionPrompt:
       'Revision angefordert. Sende dein Feedback als nächste Nachricht (oder /revise <Text>).',
     revisionQueued:
@@ -251,6 +253,8 @@ const copy = {
     previewApproved: 'Preview approved. Publication was queued safely.',
     adminPending:
       'Preview approved. The new category is now waiting for admin approval.',
+    adminPendingTextEdit:
+      'Preview approved. The text change is now waiting for admin approval.',
     revisionPrompt:
       'Revision requested. Send your feedback as the next message (or /revise <text>).',
     revisionQueued: 'Feedback saved. Preparing the change plan.',
@@ -312,6 +316,8 @@ const copy = {
       'Preview aprobado. La publicación quedó encolada de forma segura.',
     adminPending:
       'Preview aprobado. La categoría nueva ahora espera aprobación del admin.',
+    adminPendingTextEdit:
+      'Preview aprobado. El cambio de texto ahora espera aprobación del admin.',
     revisionPrompt:
       'Revisión solicitada. Envía tu cambio como el siguiente mensaje (o /revise <texto>).',
     revisionQueued: 'Comentarios guardados. Preparando el plan de cambio.',
@@ -2003,6 +2009,18 @@ export class WorkflowService {
         database,
         hasCapability: this.hasCapability.bind(this),
         identity,
+        ...(editTextCommand[1]?.trim()
+          ? {
+              initialQuery: editTextCommand[1].trim(),
+              loadPages: (args) =>
+                this.loadEditTextPages(
+                  args.database,
+                  args.manifest,
+                  args.projectId,
+                  args.tenantId,
+                ),
+            }
+          : {}),
         reply: this.reply.bind(this),
       });
     }
@@ -4524,6 +4542,10 @@ export class WorkflowService {
           )
           .where(eq(schema.projects.id, request.projectId))
           .limit(1);
+        const adminAction =
+          request.capabilityId === 'edit_text'
+            ? 'text edit approval required'
+            : 'new blog category approval required';
         await enqueueAdminApprovalRequired(database, {
           bindings: {
             artifactId: evidence.artifactId,
@@ -4535,7 +4557,7 @@ export class WorkflowService {
           eventVersion: request.version + 1,
           message: [
             `Client: ${scope?.tenantKey ?? request.tenantId} / ${scope?.projectKey ?? request.projectId}`,
-            `Action: new blog category approval required`,
+            `Action: ${adminAction}`,
             `Topic: ${request.topic ?? '—'}`,
             `Capability: ${request.capabilityId}`,
             `Request: ${request.id}`,
@@ -4555,9 +4577,13 @@ export class WorkflowService {
         `request:${request.id}`,
         'request.client_approved',
       );
+      const clientPendingCopy =
+        request.capabilityId === 'edit_text'
+          ? localeCopy.adminPendingTextEdit
+          : localeCopy.adminPending;
       return this.reply(
         identity.locale,
-        needsAdmin ? localeCopy.adminPending : localeCopy.previewApproved,
+        needsAdmin ? clientPendingCopy : localeCopy.previewApproved,
         request.id,
       );
     }

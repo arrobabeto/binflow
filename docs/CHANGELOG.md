@@ -10,11 +10,18 @@ All notable changes to product behavior, architecture, contracts, security, oper
   allowlisted paragraph or non-H1 section title per request; dual-write GitHub
   `cms/collections/**` mirror plus Orbitype `pages.sections`; Vercel preview with
   client **Approve/Cancel only**; admin approval before merge.
-- Isolated package `@binflow/text`; additive runtime/ingress/worker wiring — no
+- Packages: `@binflow/text`; additive runtime/ingress/worker wiring — no
   changes to existing tool graphs or executors.
+- GitHub draft always includes ≥1 file under `cms/collections/**` (patch existing
+  mirror when found, otherwise write `cms/collections/pages/{slug}.json`) so
+  `createDraft` never fails with empty files.
+- Admin/client approval copy for `edit_text` is capability-specific (text edit,
+  not blog category); blog category wording unchanged.
 - Migration `0028_edit_text_capability.sql`; graph
   `stacks/astro-orbitype/edit-text@1`.
 - Spec: `docs/specs/edit-text.md`.
+- Bistro manifest binding script: `packages/tools/scripts/add-bistro-edit-text-binding.ts`
+  (manifest v8+ includes `edit_text@1` alongside existing blog/menu tools).
 
 ### Admin Telegram approval actions (ADR-0050)
 

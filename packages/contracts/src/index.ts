@@ -949,6 +949,7 @@ export const editTextInputSchema = z.discriminatedUnion('mode', [
       messages: z.array(z.string().trim().max(10_000)).max(40).default([]),
       mode: z.literal('collect'),
       newValue: z.string().trim().max(10_000).optional(),
+      projectId: z.string().min(1),
       targetKey: z.string().trim().min(1).max(160).optional(),
     })
     .strict(),
