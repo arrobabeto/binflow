@@ -115,6 +115,31 @@ const openMessage = (enrollmentId: string) => {
   messageEnrollmentId.value = enrollmentId;
   messageOpen.value = true;
 };
+
+const now = ref(new Date());
+let clockTimer: ReturnType<typeof setInterval> | undefined;
+
+const pad2 = (value: number): string => String(value).padStart(2, '0');
+
+const clockDate = computed(() => {
+  const d = now.value;
+  return `${pad2(d.getDate())}-${pad2(d.getMonth() + 1)}-${String(d.getFullYear()).slice(-2)}`;
+});
+
+const clockTime = computed(() => {
+  const d = now.value;
+  return `${pad2(d.getHours())}:${pad2(d.getMinutes())}:${pad2(d.getSeconds())}`;
+});
+
+onMounted(() => {
+  clockTimer = setInterval(() => {
+    now.value = new Date();
+  }, 1000);
+});
+
+onBeforeUnmount(() => {
+  if (clockTimer !== undefined) globalThis.clearInterval(clockTimer);
+});
 </script>
 
 <template>
@@ -129,7 +154,23 @@ const openMessage = (enrollmentId: string) => {
         </p>
       </template>
       <template #actions>
-        <UButton to="/clients/new">Add client</UButton>
+        <div class="flex flex-col items-end gap-2">
+          <div
+            class="inline-flex items-center gap-2 rounded-lg border border-[var(--binflow-border)] bg-[var(--binflow-elevated)] px-3 py-2 font-mono text-sm text-white shadow-sm"
+            role="status"
+            aria-live="polite"
+            :aria-label="`Local time ${clockDate} ${clockTime}`"
+          >
+            <UIcon
+              name="i-lucide-clock"
+              class="size-4 shrink-0 text-[var(--binflow-accent)]"
+            />
+            <span>{{ clockDate }}</span>
+            <span class="text-muted">·</span>
+            <span>{{ clockTime }}</span>
+          </div>
+          <UButton to="/clients/new">Add client</UButton>
+        </div>
       </template>
     </PageHeader>
 

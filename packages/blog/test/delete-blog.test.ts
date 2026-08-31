@@ -6,6 +6,7 @@ import {
   buildDeletionPaths,
   buildDeletionRoutes,
   parseSlugFromBlogUrl,
+  resolveDeleteBlogProductionOrigin,
   resolveDeleteTarget,
 } from '../src/delete-blog.js';
 import type { CatalogItem } from '../src/index.js';
@@ -171,5 +172,46 @@ describe('delete blog helpers', () => {
         targetTitle: 'Artículo inexistente',
       }),
     ).toThrow(/article/i);
+  });
+});
+
+describe('resolveDeleteBlogProductionOrigin', () => {
+  it('falls back to the Webbin pilot when origin is omitted', () => {
+    expect(resolveDeleteBlogProductionOrigin(null)).toBe(
+      'https://webbin.com.mx',
+    );
+    expect(resolveDeleteBlogProductionOrigin(manifest)).toBe(
+      'https://webbin.com.mx',
+    );
+  });
+
+  it('uses frozen manifest productionOrigin', () => {
+    expect(
+      resolveDeleteBlogProductionOrigin({
+        ...manifest,
+        deployment: {
+          previewMode: 'git_integration',
+          productionOrigin: 'https://www.bistrozurlinde.ch/',
+          projectId: 'prj',
+          protectionMode: 'vercel_auth',
+          provider: 'vercel',
+        },
+      }),
+    ).toBe('https://www.bistrozurlinde.ch');
+  });
+
+  it('requires productionOrigin for astro_orbitype', () => {
+    expect(() =>
+      resolveDeleteBlogProductionOrigin({
+        ...manifest,
+        profile: 'astro_orbitype',
+        deployment: {
+          previewMode: 'git_integration',
+          projectId: 'prj',
+          protectionMode: 'vercel_auth',
+          provider: 'vercel',
+        },
+      }),
+    ).toThrow(/productionOrigin/i);
   });
 });

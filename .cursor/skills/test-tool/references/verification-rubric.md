@@ -60,10 +60,21 @@ Check: plan confirm, URL confirm, preview, revision plan, cancel (where allowed)
 | Pass | Fail |
 |------|------|
 | Migrate before assignment | Tool assigned but definition missing |
-| Manifest rematerialized after path changes | Stale editablePaths after collection changes |
+| Manifest rematerialized after path / routePrefix / productionOrigin changes | Stale editablePaths or missing productionOrigin |
 | Conformance suite green | Catalog/policy/registry drift |
+| Single Telegram polling worker | Dual pollers / permanent send-only |
 
 **Refs:** [`post-ship-ops.md`](../../create-tool/references/post-ship-ops.md)
+
+### Stack / production origin (ADR-0048)
+
+| Pass | Fail |
+|------|------|
+| Telegram production button host == enrolled origin (or Webbin pilot for webbin) | webbin.com.mx on non-Webbin client; `*.vercel.app` as live |
+| Preview path matches stack contract (`/posts/...` vs `/articulos/...`) | Wrong profile route shape |
+| Orbitype CMS write uses documented schema | Invented columns / retry loops |
+
+**Refs:** stack contract under `create-tool/references/stacks/`, Orbitype manual
 
 ### Production verification (destructive)
 

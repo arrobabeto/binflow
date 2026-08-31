@@ -12,7 +12,7 @@ import {
 import {
   DeleteProjectExecutor,
   composeProjectUrl,
-  defaultDeleteProjectProductionOrigin,
+  resolveDeleteProjectProductionOrigin,
   type DeleteProjectExecutionResult,
 } from '@binflow/projects';
 import {
@@ -150,7 +150,9 @@ export class DeleteProjectWorkflowRuntime {
         >,
         manifest: context.manifest.document,
         onStage: recordExecutionStage,
-        productionOrigin: defaultDeleteProjectProductionOrigin(),
+        productionOrigin: resolveDeleteProjectProductionOrigin(
+          context.manifest.document,
+        ),
         requestId: context.request.id,
       });
     } catch (error) {
@@ -295,7 +297,7 @@ export class DeleteProjectWorkflowRuntime {
           [
             `Cliente: ${scope?.tenantKey ?? context.request.tenantId}`,
             `Acción: quiere borrar el proyecto «${result.resolvedTitle}»`,
-            `URL: ${composeProjectUrl(defaultDeleteProjectProductionOrigin(), context.manifest.document, result.resolvedSlug)}`,
+            `URL: ${composeProjectUrl(resolveDeleteProjectProductionOrigin(context.manifest.document), context.manifest.document, result.resolvedSlug)}`,
             `PR: ${result.publication.pullRequestUrl}`,
             `Request: ${context.request.id}`,
             `Dashboard: /requests/${context.request.id}`,

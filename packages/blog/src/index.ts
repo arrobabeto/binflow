@@ -4,6 +4,7 @@ import sharp from 'sharp';
 
 import {
   adaptedGeneratedBlogBundleSchema,
+  generatedBlogBundleSchema,
   revisionPlanValidatedSchema,
   type CreateBlogDraftInput,
   type GeneratedBlogBundle,
@@ -47,6 +48,49 @@ export type DeploymentEvidence = Readonly<{
   urls: Readonly<Record<string, string>>;
 }>;
 
+export type BlogPublicationStageIds = Readonly<{
+  createGithubDraft: string;
+  createOrbitypeDraft?: string;
+  mergeGithub: string;
+  publishOrbitype?: string;
+  waitPreview: string;
+}>;
+
+export const defaultBlogPublicationStages: BlogPublicationStageIds =
+  Object.freeze({
+    createGithubDraft: 'create_draft',
+    mergeGithub: 'merge_or_publish',
+    waitPreview: 'wait_preview',
+  });
+
+export const orbitypeBlogPublicationStages: BlogPublicationStageIds =
+  Object.freeze({
+    createGithubDraft: 'create_github_draft',
+    createOrbitypeDraft: 'create_orbitype_draft',
+    mergeGithub: 'merge_github',
+    publishOrbitype: 'publish_orbitype',
+    waitPreview: 'wait_preview',
+  });
+
+export type OrbitypeBlogDraftPort = Readonly<{
+  createDraft(
+    input: Readonly<{
+      body: string;
+      category?: string;
+      img?: string;
+      keywords?: readonly string[];
+      lead?: string;
+      locale: string;
+      requestVersionId: string;
+      slug: string;
+      title: string;
+    }>,
+  ): Promise<Readonly<{ draftId: string; locale: string; slug: string }>>;
+  publish?(
+    input: Readonly<{ draftId: string; requestVersionId: string }>,
+  ): Promise<Readonly<{ publishedId: string }>>;
+}>;
+
 export type BlogExecutionInput = Readonly<{
   customizationSection?: string;
   editorial?: Readonly<{
@@ -59,6 +103,8 @@ export type BlogExecutionInput = Readonly<{
   manifest: ProjectManifest;
   onStage?: (node: string) => Promise<void>;
   onTopicRefined?: (topic: string) => Promise<void>;
+  orbitype?: OrbitypeBlogDraftPort;
+  publicationStages?: BlogPublicationStageIds;
   requestId: string;
   requestVersionId: string;
 }>;
@@ -70,9 +116,49 @@ export type BlogExecutionResult = Readonly<{
   deployment: DeploymentEvidence;
   files: readonly BlogFile[];
   intent: string;
+  orbitypeDrafts?: readonly Readonly<{
+    draftId: string;
+    locale: string;
+    slug: string;
+    titleSlug: string;
+  }>[];
   publication: DraftPublication;
   similarity: SimilarityDecision;
 }>;
+
+const createOrbitypeDraftsFromBundle = async (
+  input: Readonly<{
+    bundle: GeneratedBlogBundle;
+    orbitype: OrbitypeBlogDraftPort;
+    manifest: ProjectManifest;
+    requestVersionId: string;
+  }>,
+): Promise<
+  NonNullable<BlogExecutionResult['orbitypeDrafts']>
+> => {
+  const drafts: Array<
+    NonNullable<BlogExecutionResult['orbitypeDrafts']>[number]
+  > = [];
+  for (const locale of input.manifest.contentLocales) {
+    const article = locale === 'en' ? input.bundle.en : input.bundle.es;
+    const created = await input.orbitype.createDraft({
+      body: article.body,
+      category: input.bundle.category,
+      img: `/images/blog/${input.bundle.slug}.avif`,
+      keywords: article.keywords ?? [],
+      lead: article.descripcion,
+      locale,
+      requestVersionId: input.requestVersionId,
+      slug: input.bundle.slug,
+      title: article.titulo,
+    });
+    drafts.push({
+      ...created,
+      titleSlug: orbitypePostTitleSlug(article.titulo),
+    });
+  }
+  return drafts;
+};
 
 export type EmbeddedCatalogItem = CatalogItem &
   Readonly<{
@@ -111,6 +197,8 @@ export interface BlogGenerationPort {
         prohibitedClaims?: readonly string[];
         researchPolicy?: string;
       }>;
+      /** Frozen manifest locale contract (conversation ≠ content). */
+      localeContract?: BlogContentLocaleContract;
       request: CreateBlogDraftInput;
     }>,
   ): Promise<GeneratedBlogBundle>;
@@ -133,6 +221,317 @@ export interface BlogGenerationPort {
     input: Readonly<{ context: string; locale?: string }>,
   ): Promise<string>;
 }
+
+/** Locale fields from the frozen project manifest used at generate time. */
+export type BlogContentLocaleContract = Readonly<{
+  contentLocales: readonly string[];
+  conversationLocale?: string;
+  defaultContentLocale: string;
+  translationPolicy: string;
+}>;
+
+/**
+ * System-prompt instructions so generate follows content locales, not the
+ * Telegram conversation locale (ADR-0011 / ADR-0046). Hard constraint: never
+ * emit publishable prose in a language outside enrolled contentLocales.
+ */
+export const buildBlogGenerateLocaleInstructions = (
+  contract: BlogContentLocaleContract,
+): string => {
+  const contentLocales = [...contract.contentLocales];
+  const monolingual =
+    contract.translationPolicy === 'none' && contentLocales.length === 1;
+  const primary = contract.defaultContentLocale || contentLocales[0] || 'es';
+  const conversation = contract.conversationLocale ?? '(unspecified)';
+  const allowed = contentLocales.join(', ');
+  const hard =
+    `HARD CONSTRAINT: enrolled contentLocales=[${allowed}]. ` +
+    `Publishable article prose must be only in those locales. ` +
+    `Never write the primary article in conversationLocale=${conversation} unless that locale is also listed in contentLocales. ` +
+    `Violating this fails the request.`;
+  if (monolingual) {
+    const languageName =
+      primary === 'de'
+        ? 'German'
+        : primary === 'en'
+          ? 'English'
+          : primary === 'es'
+            ? 'Spanish'
+            : primary;
+    return [
+      hard,
+      `Locale contract: conversationLocale=${conversation}; contentLocales=[${allowed}]; defaultContentLocale=${primary}; translationPolicy=none.`,
+      `Write the full publishable article in ${languageName} in the schema "es" fields (titulo, body, seoTitulo, …). Those field names are schema carriers — the prose language must be ${languageName}.`,
+      `Fill the schema "en" object with a short English synopsis whose titulo/seoTitulo/headings differ from the primary article (internal schema only; not published).`,
+      `Do not write Spanish (or any non-${primary}) body/title for the primary article.`,
+    ].join(' ');
+  }
+  return [
+    hard,
+    `Locale contract: conversationLocale=${conversation}; contentLocales=[${allowed}]; defaultContentLocale=${primary}; translationPolicy=${contract.translationPolicy}.`,
+    `Write the source article in the default content locale in the schema "es" fields and an idiomatic English adaptation in "en" (not a copy of the source titles/headings).`,
+    `Conversation locale only affects chat UX — it must not replace required content locales.`,
+  ].join(' ');
+};
+
+export const isMonolingualContentContract = (
+  contract: BlogContentLocaleContract,
+): boolean =>
+  contract.translationPolicy === 'none' && contract.contentLocales.length === 1;
+
+/** Parse model output: skip English≠Spanish check for monolingual manifests. */
+export const parseGeneratedBlogBundleForLocaleContract = (
+  value: unknown,
+  contract: BlogContentLocaleContract | undefined,
+): GeneratedBlogBundle => {
+  if (contract !== undefined && isMonolingualContentContract(contract))
+    return generatedBlogBundleSchema.parse(value);
+  return adaptedGeneratedBlogBundleSchema.parse(value);
+};
+
+export const localeContractFromManifest = (
+  manifest: ProjectManifest,
+): BlogContentLocaleContract => ({
+  contentLocales: manifest.contentLocales,
+  conversationLocale: manifest.conversationLocale,
+  defaultContentLocale: manifest.defaultContentLocale,
+  translationPolicy: manifest.translationPolicy,
+});
+
+const LANGUAGE_MARKERS = {
+  de: [
+    'und',
+    'für',
+    'mit',
+    'der',
+    'die',
+    'das',
+    'den',
+    'dem',
+    'nicht',
+    'auch',
+    'über',
+    'oder',
+    'wir',
+    'sie',
+    'eine',
+    'einen',
+    'einem',
+    'auf',
+    'aus',
+    'bei',
+    'nach',
+    'zum',
+    'zur',
+    'ist',
+    'sind',
+    'wird',
+    'werden',
+    'haben',
+    'herzlich',
+    'willkommen',
+    'speisekarte',
+    'restaurant',
+    'öffnungszeiten',
+    'heute',
+    'unsere',
+    'unser',
+  ],
+  en: [
+    'the',
+    'and',
+    'with',
+    'for',
+    'that',
+    'this',
+    'from',
+    'your',
+    'about',
+    'into',
+    'are',
+    'is',
+    'was',
+    'were',
+    'have',
+    'has',
+    'will',
+    'can',
+    'article',
+    'welcome',
+  ],
+  es: [
+    'que',
+    'qué',
+    'cómo',
+    'también',
+    'más',
+    'está',
+    'están',
+    'para',
+    'con',
+    'una',
+    'unos',
+    'unas',
+    'los',
+    'las',
+    'del',
+    'por',
+    'como',
+    'sobre',
+    'gracias',
+    'artículo',
+    'nuestro',
+    'nuestra',
+    'hoy',
+    'este',
+    'esta',
+    'estos',
+    'estas',
+  ],
+} as const;
+
+const tokenizeProse = (value: string): readonly string[] =>
+  value
+    .normalize('NFKC')
+    .toLowerCase()
+    .split(/[^\p{L}\p{N}]+/u)
+    .filter((token) => token.length > 0);
+
+export const scoreProseLanguageMarkers = (
+  text: string,
+): Readonly<{ de: number; en: number; es: number }> => {
+  const tokens = tokenizeProse(text);
+  const counts = { de: 0, en: 0, es: 0 };
+  for (const token of tokens) {
+    if ((LANGUAGE_MARKERS.de as readonly string[]).includes(token))
+      counts.de += 1;
+    if ((LANGUAGE_MARKERS.en as readonly string[]).includes(token))
+      counts.en += 1;
+    if ((LANGUAGE_MARKERS.es as readonly string[]).includes(token))
+      counts.es += 1;
+  }
+  // Characteristic letters boost (not exclusive).
+  if (/[äöüß]/u.test(text)) counts.de += 3;
+  if (/[áéíóúñ¿¡]/iu.test(text)) counts.es += 3;
+  return counts;
+};
+
+export const detectDominantContentLocale = (
+  text: string,
+): 'de' | 'en' | 'es' | 'unknown' => {
+  const scores = scoreProseLanguageMarkers(text);
+  const ranked: Array<readonly ['de' | 'en' | 'es', number]> = [
+    ['de', scores.de],
+    ['en', scores.en],
+    ['es', scores.es],
+  ];
+  ranked.sort((left, right) => right[1] - left[1]);
+  const [best, bestScore] = ranked[0]!;
+  const secondScore = ranked[1]?.[1] ?? 0;
+  if (bestScore < 2) return 'unknown';
+  if (bestScore < secondScore + 2 && secondScore > 0) return 'unknown';
+  return best;
+};
+
+/**
+ * Fail closed when primary published prose is not in an enrolled content locale,
+ * or when monolingual projects emit the conversation language instead.
+ */
+export const assertGeneratedBundleMatchesContentLocales = (
+  bundle: GeneratedBlogBundle,
+  contract: BlogContentLocaleContract,
+): void => {
+  const allowed = new Set(contract.contentLocales);
+  if (allowed.size === 0)
+    throw new DomainError(
+      'validation_error',
+      'Manifest contentLocales must not be empty.',
+      { code: 'content_locales_required' },
+    );
+  const primary = contract.defaultContentLocale;
+  if (!allowed.has(primary))
+    throw new DomainError(
+      'validation_error',
+      'defaultContentLocale must be one of contentLocales.',
+      { code: 'default_content_locale_invalid' },
+    );
+
+  const primaryText = `${bundle.es.titulo}\n${bundle.es.descripcion}\n${bundle.es.body}`;
+  const detected = detectDominantContentLocale(primaryText);
+  if (detected !== 'unknown' && !allowed.has(detected))
+    throw new DomainError(
+      'provider_retryable',
+      `Generated primary article language (${detected}) is not in enrolled contentLocales (${[...allowed].join(', ')}).`,
+      {
+        code: 'content_locale_mismatch',
+        detected,
+        allowed: [...allowed].join(','),
+      },
+    );
+  if (
+    isMonolingualContentContract(contract) &&
+    detected !== 'unknown' &&
+    detected !== primary
+  )
+    throw new DomainError(
+      'provider_retryable',
+      `Monolingual project requires primary article in ${primary}; detected ${detected}.`,
+      { code: 'content_locale_mismatch', detected, expected: primary },
+    );
+  if (
+    isMonolingualContentContract(contract) &&
+    contract.conversationLocale !== undefined &&
+    contract.conversationLocale !== primary &&
+    detected === contract.conversationLocale
+  )
+    throw new DomainError(
+      'provider_retryable',
+      `Primary article must not use conversation locale ${contract.conversationLocale} when contentLocales are [${[...allowed].join(', ')}].`,
+      {
+        code: 'content_locale_conversation_bleed',
+        detected,
+        conversationLocale: contract.conversationLocale,
+      },
+    );
+  if (isMonolingualContentContract(contract) && detected === 'unknown') {
+    // Require positive evidence of the enrolled language for monolingual sites.
+    const scores = scoreProseLanguageMarkers(primaryText);
+    const primaryScore =
+      primary === 'de'
+        ? scores.de
+        : primary === 'en'
+          ? scores.en
+          : primary === 'es'
+            ? scores.es
+            : 0;
+    if (primaryScore < 3)
+      throw new DomainError(
+        'provider_retryable',
+        `Primary article lacks clear ${primary} language markers for enrolled contentLocales.`,
+        {
+          code: 'content_locale_unverified',
+          expected: primary,
+          scores: JSON.stringify(scores),
+        },
+      );
+  }
+  if (
+    !isMonolingualContentContract(contract) &&
+    allowed.has('en') &&
+    allowed.has('es')
+  ) {
+    const englishDetected = detectDominantContentLocale(
+      `${bundle.en.titulo}\n${bundle.en.descripcion}\n${bundle.en.body}`,
+    );
+    if (englishDetected === 'es')
+      throw new DomainError(
+        'provider_retryable',
+        'English article fields appear to be Spanish; enrolled content requires a distinct English adaptation.',
+        { code: 'content_locale_mismatch', detected: 'es', expected: 'en' },
+      );
+  }
+};
+
 
 export interface RepositoryPublicationPort {
   createDraft(
@@ -432,11 +831,16 @@ const matchesEditablePath = (
   patterns: readonly string[],
 ): boolean =>
   patterns.some((pattern) => {
+    // Expand **/ before single-star so `**` → `.*` is not corrupted by `*` → `[^/]*`,
+    // and so `dir/**/*.md` matches files directly under `dir/` as well as nested.
     const expression = new RegExp(
       `^${pattern
         .replaceAll(/[.+?^${}()|[\]\\]/gu, '\\$&')
-        .replaceAll('**', '.*')
-        .replaceAll('*', '[^/]*')}$`,
+        .replaceAll('**/', '\0GLOBSTAR_SLASH\0')
+        .replaceAll('**', '\0GLOBSTAR\0')
+        .replaceAll('*', '[^/]*')
+        .replaceAll('\0GLOBSTAR_SLASH\0', '(?:.*/)?')
+        .replaceAll('\0GLOBSTAR\0', '.*')}$`,
       'u',
     );
     return expression.test(path);
@@ -470,6 +874,43 @@ export const assertAvif = async (bytes: Uint8Array): Promise<void> => {
     );
 };
 
+/** Match Bistro `postTitleSlug` for `/posts/{id}/{slug}` preview URLs. */
+export const orbitypePostTitleSlug = (title: string): string =>
+  title
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/gu, '-')
+    .replace(/^-|-$/gu, '');
+
+export const blogPreviewRoutes = (
+  manifest: ProjectManifest,
+  slug: string,
+  options?: Readonly<{
+    orbitypeDrafts?: readonly Readonly<{
+      draftId: string;
+      titleSlug: string;
+    }>[];
+  }>,
+): readonly string[] => {
+  const useOrbitypeRoutes =
+    manifest.profile === 'astro_orbitype' ||
+    manifest.content.source === 'orbitype';
+  if (!useOrbitypeRoutes) {
+    return [`/es/articulos/${slug}`, `/articulos/${slug}`];
+  }
+  const drafts = options?.orbitypeDrafts;
+  if (drafts === undefined || drafts.length === 0)
+    throw new DomainError(
+      'validation_error',
+      'Orbitype preview routes require CMS draft ids.',
+      { code: 'orbitype_preview_routes_missing' },
+    );
+  return drafts.map((draft) =>
+    draft.titleSlug.length > 0
+      ? `/posts/${draft.draftId}/${draft.titleSlug}`
+      : `/posts/${draft.draftId}`,
+  );
+};
+
 export const renderWebbinArtifacts = async (
   input: Readonly<{
     bundle: GeneratedBlogBundle;
@@ -481,28 +922,56 @@ export const renderWebbinArtifacts = async (
   const bundle = adaptedGeneratedBlogBundleSchema.parse(input.bundle);
   const image = await toAvif(input.imageSource);
   await assertAvif(image);
-  const esPath = `src/content/articulos-es/${bundle.slug}.md`;
-  const enPath = `src/content/articulos/${bundle.slug}.md`;
-  const imagePath = `public/images/articles/${bundle.slug}.avif`;
-  const rawFiles = [
-    {
+  const useManifestPaths =
+    input.manifest.profile === 'astro_orbitype' ||
+    input.manifest.content.source === 'orbitype';
+  const localeArticles: ReadonlyArray<
+    Readonly<{ article: GeneratedBlogBundle['es']; locale: 'en' | 'es' | 'de' }>
+  > = useManifestPaths
+    ? input.manifest.contentLocales.map((locale) => ({
+        article: locale === 'en' ? bundle.en : bundle.es,
+        locale,
+      }))
+    : [
+        { article: bundle.es, locale: 'es' as const },
+        { article: bundle.en, locale: 'en' as const },
+      ];
+  const rawFiles: Array<{
+    bytes: Uint8Array;
+    mime: 'text/markdown' | 'image/avif';
+    path: string;
+  }> = [];
+  for (const entry of localeArticles) {
+    const collection = input.manifest.content.collections?.[entry.locale];
+    const directory =
+      collection?.directory ??
+      (entry.locale === 'es'
+        ? 'src/content/articulos-es'
+        : 'src/content/articulos');
+    rawFiles.push({
       bytes: new TextEncoder().encode(
-        renderArticle(bundle.es, bundle.slug, input.publicationDate),
+        renderArticle(entry.article, bundle.slug, input.publicationDate),
       ),
-      mime: 'text/markdown' as const,
-      path: esPath,
-    },
-    {
-      bytes: new TextEncoder().encode(
-        renderArticle(bundle.en, bundle.slug, input.publicationDate),
-      ),
-      mime: 'text/markdown' as const,
-      path: enPath,
-    },
-    { bytes: image, mime: 'image/avif' as const, path: imagePath },
-  ];
+      mime: 'text/markdown',
+      path: `${directory}/${bundle.slug}.md`,
+    });
+  }
+  const imageDirectory =
+    input.manifest.content.imageDirectory ??
+    (useManifestPaths ? undefined : 'public/images/articles');
+  if (imageDirectory === undefined || imageDirectory.length === 0)
+    throw new DomainError(
+      'validation_error',
+      'Manifest content.imageDirectory is required for this profile.',
+      { code: 'manifest_image_directory_missing' },
+    );
+  const imagePath = `${imageDirectory}/${bundle.slug}.avif`;
+  rawFiles.push({ bytes: image, mime: 'image/avif', path: imagePath });
+  const expectedFileCount = useManifestPaths
+    ? Math.max(2, input.manifest.contentLocales.length + 1)
+    : 3;
   if (
-    rawFiles.length !== 3 ||
+    rawFiles.length !== expectedFileCount ||
     rawFiles.some(
       (file) =>
         !matchesEditablePath(file.path, input.manifest.content.editablePaths),
@@ -560,6 +1029,8 @@ export type SurgicalRevisionInput = Readonly<{
   requestId: string;
   requestVersionId: string;
   onStage?: (node: string) => Promise<void>;
+  orbitype?: OrbitypeBlogDraftPort;
+  publicationStages?: BlogPublicationStageIds;
 }>;
 
 export class BlogExecutor {
@@ -608,7 +1079,8 @@ export class BlogExecutor {
     await input.onStage?.('category_decision');
     const category = decideCategory(requestInput.category, synchronized.items);
     await input.onStage?.('generate');
-    const generated = adaptedGeneratedBlogBundleSchema.parse(
+    const localeContract = localeContractFromManifest(input.manifest);
+    const generated = parseGeneratedBlogBundleForLocaleContract(
       await this.generation.generate({
         catalog: synchronized.items,
         category,
@@ -616,9 +1088,12 @@ export class BlogExecutor {
           ? {}
           : { customizationSection: input.customizationSection }),
         ...(input.editorial === undefined ? {} : { editorial: input.editorial }),
+        localeContract,
         request: requestInput,
       }),
+      localeContract,
     );
+    assertGeneratedBundleMatchesContentLocales(generated, localeContract);
     if (
       generated.category !== category.category ||
       generated.categoryKind !== category.kind ||
@@ -630,10 +1105,14 @@ export class BlogExecutor {
         'Generated category does not match the deterministic decision.',
       );
     const slug = slugifySpanish(generated.es.titulo);
-    const bundle = adaptedGeneratedBlogBundleSchema.parse({
-      ...generated,
-      slug,
-    });
+    const bundle = parseGeneratedBlogBundleForLocaleContract(
+      {
+        ...generated,
+        slug,
+      },
+      localeContract,
+    );
+    assertGeneratedBundleMatchesContentLocales(bundle, localeContract);
     await input.onStage?.('prepare_image');
     const image = await this.generation.generateImage(bundle.imagePrompt);
     const publicationDate =
@@ -645,7 +1124,10 @@ export class BlogExecutor {
       manifest: input.manifest,
       publicationDate,
     });
-    await input.onStage?.('create_draft');
+    await input.onStage?.(
+      (input.publicationStages ?? defaultBlogPublicationStages)
+        .createGithubDraft,
+    );
     const branch = input.manifest.repository.branchPattern
       .replace('{capability}', 'create-blog')
       .replace('{request-id}', input.requestId)
@@ -658,18 +1140,39 @@ export class BlogExecutor {
     });
     if (
       publication.headCommitSha.length < 7 ||
-      publication.files.length !== 3 ||
+      publication.files.length < 1 ||
       !files.every((file) => publication.files.includes(file.path))
     )
       throw new DomainError(
         'provider_final',
         'Repository draft evidence does not match the rendered artifacts.',
+        { code: 'github_draft_evidence_mismatch' },
       );
-    const routes = [
-      `/es/articulos/${bundle.slug}`,
-      `/articulos/${bundle.slug}`,
-    ];
-    await input.onStage?.('wait_preview');
+    const stages = input.publicationStages ?? defaultBlogPublicationStages;
+    let orbitypeDrafts: BlogExecutionResult['orbitypeDrafts'];
+    if (
+      stages.createOrbitypeDraft !== undefined &&
+      input.orbitype !== undefined
+    ) {
+      await input.onStage?.(stages.createOrbitypeDraft);
+      orbitypeDrafts = await createOrbitypeDraftsFromBundle({
+        bundle,
+        manifest: input.manifest,
+        orbitype: input.orbitype,
+        requestVersionId: input.requestVersionId,
+      });
+    }
+    const routes = blogPreviewRoutes(input.manifest, bundle.slug, {
+      ...(orbitypeDrafts === undefined
+        ? {}
+        : {
+            orbitypeDrafts: orbitypeDrafts.map((draft) => ({
+              draftId: draft.draftId,
+              titleSlug: draft.titleSlug,
+            })),
+          }),
+    });
+    await input.onStage?.(stages.waitPreview);
     const deployment = await this.deployments.waitForPreview({
       headCommitSha: publication.headCommitSha,
       routes,
@@ -682,6 +1185,7 @@ export class BlogExecutor {
       throw new DomainError(
         'policy_denied',
         'Preview is not bound to the exact pull request head.',
+        { code: 'preview_binding_mismatch' },
       );
     return {
       bundle,
@@ -704,6 +1208,7 @@ export class BlogExecutor {
       intent,
       publication,
       similarity,
+      ...(orbitypeDrafts === undefined ? {} : { orbitypeDrafts }),
     };
   }
 
@@ -715,6 +1220,7 @@ export class BlogExecutor {
       deployment: DeploymentEvidence;
       files: readonly BlogFile[];
       image: Uint8Array;
+      orbitypeDrafts?: BlogExecutionResult['orbitypeDrafts'];
       publication: DraftPublication;
     }>
   > {
@@ -778,7 +1284,8 @@ export class BlogExecutor {
       manifest: input.manifest,
       publicationDate: input.publicationDate,
     });
-    await input.onStage?.('create_draft');
+    const stages = input.publicationStages ?? defaultBlogPublicationStages;
+    await input.onStage?.(stages.createGithubDraft);
     const branch = input.manifest.repository.branchPattern
       .replace('{capability}', 'create-blog')
       .replace('{request-id}', input.requestId)
@@ -797,11 +1304,30 @@ export class BlogExecutor {
         'validation_error',
         'Revision did not change draft files; refusing to bind the previous preview head.',
       );
-    const routes = [
-      `/es/articulos/${bundle.slug}`,
-      `/articulos/${bundle.slug}`,
-    ];
-    await input.onStage?.('wait_preview');
+    let orbitypeDrafts: BlogExecutionResult['orbitypeDrafts'];
+    if (
+      stages.createOrbitypeDraft !== undefined &&
+      input.orbitype !== undefined
+    ) {
+      await input.onStage?.(stages.createOrbitypeDraft);
+      orbitypeDrafts = await createOrbitypeDraftsFromBundle({
+        bundle,
+        manifest: input.manifest,
+        orbitype: input.orbitype,
+        requestVersionId: input.requestVersionId,
+      });
+    }
+    const routes = blogPreviewRoutes(input.manifest, bundle.slug, {
+      ...(orbitypeDrafts === undefined
+        ? {}
+        : {
+            orbitypeDrafts: orbitypeDrafts.map((draft) => ({
+              draftId: draft.draftId,
+              titleSlug: draft.titleSlug,
+            })),
+          }),
+    });
+    await input.onStage?.(stages.waitPreview);
     const deployment = await this.deployments.waitForPreview({
       headCommitSha: publication.headCommitSha,
       routes,
@@ -815,7 +1341,14 @@ export class BlogExecutor {
         'policy_denied',
         'Preview is not bound to the exact pull request head.',
       );
-    return { bundle, deployment, files, image, publication };
+    return {
+      bundle,
+      deployment,
+      files,
+      image,
+      publication,
+      ...(orbitypeDrafts === undefined ? {} : { orbitypeDrafts }),
+    };
   }
 
   public async interpretRevisionPlan(
@@ -840,13 +1373,17 @@ export class BlogExecutor {
       publicationDate: string;
       manifest: ProjectManifest;
       requestId: string;
+      requestVersionId: string;
       onStage?: (node: string) => Promise<void>;
+      orbitype?: OrbitypeBlogDraftPort;
+      publicationStages?: BlogPublicationStageIds;
     }>,
   ): Promise<
     Readonly<{
       bundle: GeneratedBlogBundle;
       deployment: DeploymentEvidence;
       files: readonly BlogFile[];
+      orbitypeDrafts?: BlogExecutionResult['orbitypeDrafts'];
       publication: DraftPublication;
     }>
   > {
@@ -863,7 +1400,8 @@ export class BlogExecutor {
             category: input.priorBundle.category,
             kind: input.priorBundle.categoryKind,
           };
-    const generated = adaptedGeneratedBlogBundleSchema.parse(
+    const localeContract = localeContractFromManifest(input.manifest);
+    const generated = parseGeneratedBlogBundleForLocaleContract(
       await this.generation.generate({
         catalog: [],
         category,
@@ -872,19 +1410,26 @@ export class BlogExecutor {
           ? {}
           : { customizationSection: input.customizationSection }),
         ...(input.editorial === undefined ? {} : { editorial: input.editorial }),
+        localeContract,
       }),
+      localeContract,
     );
+    assertGeneratedBundleMatchesContentLocales(generated, localeContract);
     const slug = input.plan.preservesSlug
       ? input.priorBundle.slug
       : slugifySpanish(generated.es.titulo);
-    let bundle = adaptedGeneratedBlogBundleSchema.parse({
-      ...generated,
-      slug,
-      category: input.priorBundle.category,
-      categoryKind: input.priorBundle.categoryKind,
-      es: { ...generated.es, categoria: input.priorBundle.category },
-      en: { ...generated.en, categoria: input.priorBundle.category },
-    });
+    let bundle = parseGeneratedBlogBundleForLocaleContract(
+      {
+        ...generated,
+        slug,
+        category: input.priorBundle.category,
+        categoryKind: input.priorBundle.categoryKind,
+        es: { ...generated.es, categoria: input.priorBundle.category },
+        en: { ...generated.en, categoria: input.priorBundle.category },
+      },
+      localeContract,
+    );
+    assertGeneratedBundleMatchesContentLocales(bundle, localeContract);
     await input.onStage?.('prepare_image');
     const image = await this.generation.generateImage(bundle.imagePrompt);
     await input.onStage?.('render_artifacts');
@@ -894,7 +1439,8 @@ export class BlogExecutor {
       manifest: input.manifest,
       publicationDate: input.publicationDate,
     });
-    await input.onStage?.('create_draft');
+    const stages = input.publicationStages ?? defaultBlogPublicationStages;
+    await input.onStage?.(stages.createGithubDraft);
     const branch = input.manifest.repository.branchPattern
       .replace('{capability}', 'create-blog')
       .replace('{request-id}', input.requestId)
@@ -905,11 +1451,30 @@ export class BlogExecutor {
       requestId: input.requestId,
       slug: bundle.slug,
     });
-    const routes = [
-      `/es/articulos/${bundle.slug}`,
-      `/articulos/${bundle.slug}`,
-    ];
-    await input.onStage?.('wait_preview');
+    let orbitypeDrafts: BlogExecutionResult['orbitypeDrafts'];
+    if (
+      stages.createOrbitypeDraft !== undefined &&
+      input.orbitype !== undefined
+    ) {
+      await input.onStage?.(stages.createOrbitypeDraft);
+      orbitypeDrafts = await createOrbitypeDraftsFromBundle({
+        bundle,
+        manifest: input.manifest,
+        orbitype: input.orbitype,
+        requestVersionId: input.requestVersionId,
+      });
+    }
+    const routes = blogPreviewRoutes(input.manifest, bundle.slug, {
+      ...(orbitypeDrafts === undefined
+        ? {}
+        : {
+            orbitypeDrafts: orbitypeDrafts.map((draft) => ({
+              draftId: draft.draftId,
+              titleSlug: draft.titleSlug,
+            })),
+          }),
+    });
+    await input.onStage?.(stages.waitPreview);
     const deployment = await this.deployments.waitForPreview({
       headCommitSha: publication.headCommitSha,
       routes,
@@ -923,7 +1488,13 @@ export class BlogExecutor {
         'policy_denied',
         'Preview is not bound to the exact pull request head.',
       );
-    return { bundle, deployment, files, publication };
+    return {
+      bundle,
+      deployment,
+      files,
+      publication,
+      ...(orbitypeDrafts === undefined ? {} : { orbitypeDrafts }),
+    };
   }
 
   public async mergeApprovedPreview(

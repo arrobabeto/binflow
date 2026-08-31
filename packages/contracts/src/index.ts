@@ -4,6 +4,7 @@ export const supportedLocaleSchema = z.enum(['en', 'es', 'de']);
 export const translationPolicySchema = z.enum([
   'always_translate',
   'ask_each_action',
+  'none',
 ]);
 export const projectBudgetPolicySchema = z
   .object({
@@ -37,6 +38,13 @@ export const integrationKindSchema = z.enum([
   'telegram-client',
   'github-app',
   'vercel',
+  'orbitype-api',
+]);
+
+/** Profiles selectable for new enrollments (post-MVP includes astro_orbitype). */
+export const selectableEnrollmentProfileSchema = z.enum([
+  'astro_repo',
+  'astro_orbitype',
 ]);
 
 export const integrationStatusSchema = z.enum([
@@ -109,6 +117,11 @@ export const integrationCandidateInputSchema = z.discriminatedUnion('kind', [
       projectKey: integrationScopeKeySchema,
       tenantKey: integrationScopeKeySchema,
       webhookSecret: z.string().min(32).max(512),
+      defaultBranch: z.string().trim().min(1).max(200).optional(),
+      expectedRepository: z
+        .string()
+        .regex(/^[^/]+\/[^/]+$/)
+        .optional(),
     })
     .strict(),
   z
@@ -120,6 +133,21 @@ export const integrationCandidateInputSchema = z.discriminatedUnion('kind', [
       teamId: z.string().trim().min(1).max(120).optional(),
       tenantKey: integrationScopeKeySchema,
       token: z.string().min(20).max(512),
+      expectedProductionBranch: z.string().trim().min(1).max(200).optional(),
+      expectedRepository: z
+        .string()
+        .regex(/^[^/]+\/[^/]+$/)
+        .optional(),
+    })
+    .strict(),
+  z
+    .object({
+      alias: credentialAliasSchema,
+      apiKey: z.string().min(8).max(512),
+      baseUrl: z.string().url().max(500),
+      kind: z.literal('orbitype-api'),
+      projectKey: integrationScopeKeySchema,
+      tenantKey: integrationScopeKeySchema,
     })
     .strict(),
 ]);
@@ -247,6 +275,7 @@ export const credentialVerificationResponseSchema = z
   .object({
     credential: credentialSummarySchema,
     errorCategory: errorCategorySchema.optional(),
+    errorDetail: z.string().min(1).max(500).optional(),
     outcome: z.enum(['success', 'failed']),
   })
   .strict();
@@ -421,6 +450,7 @@ export const createEnrollmentInputSchema = z
   .object({
     projectDisplayName: z.string().min(1).max(120),
     projectKey: enrollmentKeySchema,
+    projectProfile: selectableEnrollmentProfileSchema.default('astro_repo'),
     tenantDisplayName: z.string().min(1).max(120),
     tenantKey: enrollmentKeySchema,
   })
@@ -496,6 +526,9 @@ export type EnrollmentConfiguration = z.infer<
   typeof enrollmentConfigurationSchema
 >;
 export type CreateEnrollmentInput = z.infer<typeof createEnrollmentInputSchema>;
+export type SelectableEnrollmentProfile = z.infer<
+  typeof selectableEnrollmentProfileSchema
+>;
 export type UpdateEnrollmentInput = z.infer<typeof updateEnrollmentInputSchema>;
 export type Enrollment = z.infer<typeof enrollmentSchema>;
 export type EnrollmentValidationAttempt = z.infer<
@@ -548,6 +581,10 @@ export const createBlogDraftInputSchema = z.discriminatedUnion('mode', [
     })
     .strict(),
 ]);
+
+/** Same input modes as create_blog_draft; locales come from the project manifest. */
+export const createBlogOrbitypeInputSchema = createBlogDraftInputSchema;
+export type CreateBlogOrbitypeInput = z.infer<typeof createBlogOrbitypeInputSchema>;
 
 export const projectTipoSchema = z.enum([
   'Sitio web',
@@ -960,7 +997,12 @@ export const projectManifestSchema = z
         frontmatterFields: z.array(z.string().min(1)).min(1),
         imageDirectory: z.string().min(1),
         portfolio: manifestPortfolioSchema.optional(),
-        source: z.literal('github'),
+        publicationTargets: z
+          .array(z.enum(['github', 'orbitype']))
+          .min(1)
+          .max(2)
+          .optional(),
+        source: z.enum(['github', 'orbitype']),
       })
       .strict(),
     contentLocales: z.array(supportedLocaleSchema).min(1).max(3),
@@ -969,6 +1011,11 @@ export const projectManifestSchema = z
     deployment: z
       .object({
         previewMode: z.enum(['git_integration', 'ci', 'api']),
+        /**
+         * Client-visible live site origin (HTTPS, no trailing slash).
+         * Frozen from enrollment `productionDomain` (ADR-0048).
+         */
+        productionOrigin: httpsUrlSchema.optional(),
         projectId: z.string().min(1),
         protectionMode: z.enum(['vercel_auth', 'share_link', 'public']),
         provider: z.literal('vercel'),
@@ -980,7 +1027,7 @@ export const projectManifestSchema = z
     globalProfileVersion: z.string().min(1),
     graphVersion: z.string().min(1),
     id: z.string().min(1),
-    profile: z.literal('astro_repo'),
+    profile: selectableEnrollmentProfileSchema,
     projectId: z.string().min(1),
     repository: z
       .object({
@@ -1004,7 +1051,7 @@ export const projectManifestSchema = z
 
 export const globalProfileSummarySchema = z
   .object({
-    id: z.literal('astro_repo'),
+    id: selectableEnrollmentProfileSchema,
     supportedLocales: z.array(supportedLocaleSchema),
     version: z.string().min(1),
   })
@@ -1072,6 +1119,7 @@ export const requestStateSchema = z.enum([
 
 export const capabilityIdSchema = z.enum([
   'create_blog_draft',
+  'create_blog_orbitype',
   'create_project_astro',
   'create_project_draft',
   'delete_blog_draft',

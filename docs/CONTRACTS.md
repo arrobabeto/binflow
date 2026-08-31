@@ -134,14 +134,16 @@ type ProjectProfile =
   'astro_repo' | 'astro_orbitype' | 'nuxt_orbitype' | 'wordpress_rest';
 
 type SupportedLocale = 'en' | 'es' | 'de';
-type TranslationPolicy = 'always_translate' | 'ask_each_action';
+type TranslationPolicy = 'always_translate' | 'ask_each_action' | 'none';
 type RiskClass = 'low' | 'medium' | 'high' | 'blocked';
 type ApprovalRole = 'client' | 'admin';
 type CapabilityAccess =
   'disabled' | 'client_publish' | 'admin_required' | 'admin_only';
 ```
 
-Only `astro_repo` is active in the first MVP. The other enum values reserve stable domain names and must not appear as selectable, validated profiles until their phase is complete.
+Only `astro_repo` was active in the first MVP. Post-MVP, `astro_orbitype` is an
+accepted selectable profile for enrollment (ADR-0045). `nuxt_orbitype` and
+`wordpress_rest` remain reserved names until their phases complete.
 
 ## Project manifest
 
@@ -172,6 +174,8 @@ type ProjectManifest = {
     teamId?: string;
     previewMode: 'git_integration' | 'ci' | 'api';
     protectionMode: 'vercel_auth' | 'share_link' | 'public';
+    /** Client-visible live origin (ADR-0048); from enrollment productionDomain. */
+    productionOrigin?: string;
   };
   content: {
     source: 'github' | 'orbitype' | 'wordpress';
@@ -199,7 +203,12 @@ type ProjectBudgetPolicy = {
 Validation rules:
 
 - `contentLocales` must be supported by Binflow and the global profile manifest.
+  The platform catalog is exactly `en`, `es` and `de` (ADR-0011 / ADR-0046).
+  An enrollment may enable one, two or three of those locales.
 - `requiredContentLocales` must be a subset of `contentLocales`.
+- When `contentLocales` has length 1, `translationPolicy` must be `none`.
+  When length is greater than 1, policy is `always_translate` or
+  `ask_each_action`.
 - Project policy may narrow but never expand the global profile contract.
 - Active manifest versions are immutable; editing creates a draft version and revalidation.
 - Runs retain the manifest version with which they started.
@@ -211,8 +220,8 @@ Validation rules:
   the next project-local integer version while superseding only the previous
   non-active version.
 - Webbin accepts exactly `es` and `en`, with `es` as default/slug locale and
-  `always_translate`; `de` and `ask_each_action` are rejected by the pilot
-  overlay rather than silently ignored.
+  `always_translate`; `de`, monolingual configs and `none` / `ask_each_action`
+  are rejected by the pilot overlay rather than silently ignored.
 - The generated English article must adapt `titulo`, `seoTitulo`, `descripcion`,
   `imagenAlt`, keywords, FAQ questions and Markdown headings. Identical Spanish
   strings in the English locale are invalid.
@@ -278,6 +287,12 @@ type CapabilityCatalogItem = {
   riskClass: 'medium';
 };
 ```
+
+The immutable registry includes **`create_blog_orbitype@1`** with executor
+`workflow.create_blog_orbitype@1`, profile `astro_orbitype`, medium risk, preview
+required, and `allowedProfiles: ['astro_orbitype']`. Publication uses separate
+GitHub and Orbitype writer nodes (ADR-0047). Input shape matches
+`createBlogDraftInputSchema` modes (`brief` | `draft`).
 
 The immutable registry includes **`create_project_astro@1`** with executor
 `workflow.create_project@1`, profile `astro_repo`, medium risk, preview
@@ -764,8 +779,9 @@ Credential ownership and payload split:
 | `openai`          | tenant                                                  | required Phase 0 model set/version                                                                                | API key                        |
 | `telegram-admin`  | platform                                                | expected bot username, role                                                                                       | bot token                      |
 | `telegram-client` | tenant                                                  | expected bot username, role                                                                                       | bot token                      |
-| `github-app`      | platform registration plus project installation binding | credential: App/client IDs; connection: fixed Webbin repository/branch and discovered installation/repository IDs | private key and webhook secret |
-| `vercel`          | project plus project connection                         | connection: project/team IDs and fixed Webbin GitHub repository/production branch                                 | access token                   |
+| `github-app`      | platform registration (keyed by GitHub `appId`) plus project installation binding | credential: App/client IDs; connection: expected repository/branch and discovered installation/repository IDs for that project | private key and webhook secret |
+| `vercel`          | project plus project connection                         | connection: project/team IDs and fixed GitHub repository/production branch                                        | access token                   |
+| `orbitype-api`    | project                                                 | optional non-secret base URL / project identifiers                                                                | API key                        |
 
 The project-scoped legacy GitHub shape preserved by migration `0002` is revoked audit history only and is never eligible for resolution or verification.
 

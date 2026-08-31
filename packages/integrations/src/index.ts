@@ -75,6 +75,14 @@ const evidenceSchemas = {
       userId: z.string().min(1),
     })
     .strict(),
+  'orbitype-api': z
+    .object({
+      authenticated: z.literal(true),
+      baseUrlHost: z.string().min(1),
+      externalResourceId: z.string().min(1),
+      readOnlyProbe: z.literal('select_1'),
+    })
+    .strict(),
 } as const satisfies Record<IntegrationKind, z.ZodType>;
 
 const parseEvidence = (
@@ -138,6 +146,7 @@ export type CredentialVerificationResult = Readonly<{
   checkedAt: string;
   credentialId: string;
   errorCategory?: ErrorCategory;
+  errorDetail?: string;
   evidence?: VerificationEvidence;
   kind: IntegrationKind;
   outcome: 'success' | 'failed';
@@ -246,6 +255,7 @@ export class CredentialVerificationService {
         checkedAt: checkedAt.toISOString(),
         credentialId,
         errorCategory: error.category,
+        errorDetail: error.message.slice(0, 500),
         kind: credential.kind,
         outcome: 'failed',
       };
@@ -270,6 +280,7 @@ export class CredentialVerificationService {
         checkedAt: checkedAt.toISOString(),
         credentialId,
         errorCategory: error.category,
+        errorDetail: error.message.slice(0, 500),
         kind: credential.kind,
         outcome: 'failed',
       };

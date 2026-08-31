@@ -1,5 +1,10 @@
 # Client onboarding
 
+Operator step-by-step for dashboard enrollment lives in
+[ENROLLMENT.md](ENROLLMENT.md) (active stacks vs first client on a newly
+shipped stack). This document owns the product lifecycle and validation
+model.
+
 ## Model
 
 Onboarding is administrator-managed and resumable. The first MVP relationship is:
@@ -40,14 +45,21 @@ Until the Phase 1 dashboard wizard is available, the Phase 0 interactive CLI may
 
 ### 2. Technical profile
 
-- `astro_repo` is the only first-MVP option.
+- First MVP: `astro_repo` only.
+- Post-MVP (ADR-0045): `astro_orbitype` is also selectable for new enrollments.
+  Activation requires the usual GitHub, Vercel, OpenAI and Telegram client
+  checks **plus** a verified Orbitype API-key credential. Capability bindings
+  may be empty at activation; tools are assigned later.
 - Production domain and optional preview domain expectations. For Webbin the
   client-visible live origin is `https://webbin.com.mx`.
 
 ### 3. Content and locale contract
 
 - Content/default/required/slug locales constrained by the global manifest.
-- Translation policy.
+- Platform catalog is always English, Spanish and German (ADR-0046). Each
+  enrollment selects a non-empty subset; monolingual projects are allowed.
+- Translation policy: `always_translate` or `ask_each_action` when two or more
+  content locales are enabled; `none` when exactly one is enabled.
 - Request/day, model-call/request, token/request and estimated USD-cent
   request/day budgets.
 - Editorial voice, audience, prohibited claims and research policy.
@@ -131,7 +143,9 @@ evidence must match the manifest and binding snapshot before activation.
 
 - Create the client user.
 - Generate one-time 24-hour deep link.
-- Wait for correct bot/user pairing.
+- Ensure the local worker has discovered the active client bot credential
+  (automatic within one heartbeat after verification; no manual restart).
+- Wait for correct bot/user pairing on that client bot.
 - Deliver the localized pairing confirmation and activate when configuration,
   credentials, manifest, capability catalog, pairing and Telegram delivery
   evidence remain current.

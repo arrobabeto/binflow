@@ -107,12 +107,38 @@ Compare asks to stack `customization-template.md`: customization should improve 
 
 ---
 
+## F — Stack overlays (from stack contract)
+
+Apply when `stack` is set. Prefixes: `STK`.
+
+### `astro-repo` (Webbin)
+
+| ID | Given | When | Then |
+|----|-------|------|------|
+| STK-AR-01 | Publish complete | Open production Telegram button | Host is webbin.com.mx (pilot) |
+| STK-AR-02 | Preview ready | Open preview CTA | Routes under `/articulos` or `/proyectos` as applicable |
+
+### `astro-orbitype`
+
+| ID | Given | When | Then |
+|----|-------|------|------|
+| STK-AO-01 | Publish complete | Open production Telegram button | Host == enrollment `productionDomain` (not webbin.com.mx, not `*.vercel.app`) |
+| STK-AO-02 | Preview ready | Open preview CTA | Path `/posts/{id}/{titleSlug}` |
+| STK-AO-03 | Orbitype draft node | CMS write | Real schema columns; no invent-column retry storm |
+| STK-AO-04 | Preview deploy | Vercel build | Preview has required `PUBLIC_*` env |
+| STK-AO-05 | Two projects, same GitHub PR # | Persist PR row | No unique collision; not stuck `PREVIEW_DEPLOYING` |
+| STK-AO-06 | Live worker | Bot `/status` | Polling (not send-only); single worker |
+
+Include STK-AO-* in `standard`/`deep` for Orbitype tools; smoke at least STK-AO-01 + STK-AO-02 when `local-live`.
+
+---
+
 ## E — Depth filter
 
 | Depth | Include |
 |-------|---------|
-| `smoke` | COM-01, COM-02, COM-05, COM-08 + 1 mutation overlay (e.g. DEL-02 or CRE-01) |
-| `standard` | All of A + full B for tool's mutationClass + D if customized + POL rows for class |
+| `smoke` | COM-01, COM-02, COM-05, COM-08 + 1 mutation overlay (e.g. DEL-02 or CRE-01) + stack smoke (STK-*-01) |
+| `standard` | All of A + full B for tool's mutationClass + D if customized + POL rows for class + F for stack |
 | `deep` | standard + `docs/TESTING.md` § Failure and recovery + cross-locale (EN/DE) + concurrent duplicate approval |
 
 ---
@@ -126,5 +152,6 @@ Compare asks to stack `customization-template.md`: customization should improve 
 | POL-04, POL-05 | `capability-conformance.test.ts` |
 | CRE-* | `packages/workflows/test/workflow.test.ts`, `blog.test.ts` |
 | PRJ-* | `packages/projects/test/projects.test.ts` |
+| STK-AO-* | `packages/vercel`, `packages/orbitype`, `packages/manifests`, blog preview route tests |
 
 Mark **gap** when scenario has no test mapping.

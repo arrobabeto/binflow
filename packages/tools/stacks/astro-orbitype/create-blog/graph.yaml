@@ -1,0 +1,76 @@
+edges:
+  - from: catalog_sync
+    to: interpret_brief
+  - from: interpret_brief
+    to: similarity
+  - from: similarity
+    to: category_decision
+    when: similarity.is_not_high_overlap
+  - from: category_decision
+    to: generate
+  - from: generate
+    to: prepare_image
+  - from: prepare_image
+    to: render_artifacts
+  - from: render_artifacts
+    to: create_github_draft
+  - from: create_github_draft
+    to: create_orbitype_draft
+  - from: create_orbitype_draft
+    to: wait_preview
+  - from: wait_preview
+    to: awaiting_client_approval
+  - from: awaiting_client_approval
+    to: interpret_revision
+    when: review.is_revision
+  - from: interpret_revision
+    to: awaiting_revision_plan_confirmation
+  - from: awaiting_revision_plan_confirmation
+    to: apply_revision
+    when: revision_plan.is_confirmed_surgical
+  - from: awaiting_revision_plan_confirmation
+    to: generate
+    when: revision_plan.is_confirmed_full
+  - from: awaiting_revision_plan_confirmation
+    to: interpret_revision
+    when: revision_plan.is_adjusted
+  - from: awaiting_revision_plan_confirmation
+    to: awaiting_client_approval
+    when: revision_plan.is_cancelled
+  - from: apply_revision
+    to: render_artifacts
+  - from: awaiting_client_approval
+    to: awaiting_admin_approval
+    when: category.is_new
+  - from: awaiting_client_approval
+    to: merge_github
+    when: category.is_existing_or_normalized
+  - from: awaiting_admin_approval
+    to: merge_github
+  - from: merge_github
+    to: publish_orbitype
+  - from: publish_orbitype
+    to: verify_production
+  - from: verify_production
+    to: completed
+nodes:
+  - id: catalog_sync
+  - id: interpret_brief
+  - id: similarity
+  - id: category_decision
+  - id: generate
+  - id: prepare_image
+  - id: render_artifacts
+  - id: create_github_draft
+  - id: create_orbitype_draft
+  - id: wait_preview
+  - id: awaiting_client_approval
+  - id: awaiting_admin_approval
+  - id: merge_github
+  - id: publish_orbitype
+  - id: verify_production
+  - id: completed
+  - id: interpret_revision
+  - id: awaiting_revision_plan_confirmation
+  - id: apply_revision
+version: stacks/astro-orbitype/create-blog@1

@@ -83,11 +83,15 @@ pattern.
 |---|---|
 | Primary button | Solid primary blue, white label |
 | Secondary / ghost | Dark surface, light border |
-| Back navigation | Soft neutral button with leading `arrow-left` icon (“Back to …”); never plain ghost text that reads as a label |
+| Back navigation | Soft neutral button with leading `arrow-left` icon (“Back to …”), `text-[15px]`; never plain ghost text that reads as a label. Detail breadcrumbs stay short (section only) so the page `h1` is the single title |
+| Clock chip | Home only: button-shaped mono chip (`dd-mm-yy · HH:mm:ss`, local TZ) above primary page actions |
 | Destructive | Error soft / outline (Revoke, Cancel request) |
 | Badge | Soft pill; map enrollment/request states to success/warning/error/primary/neutral. Request inbox: `COMPLETED`/publish path → success; `CANCELLED`/failed → error; awaiting/revision → warning; in-progress → primary |
 | Request inbox card | Left: client (accent color), title, mono capability. Right column: status badge above **Open request**. Card: dark surface + **left border accent by state** (green / blue / amber / grey / rose), not full-card approval fills |
 | Metric card | Label, large value, detail, optional Open link |
+| Analytics KPI | Same surface language; soon state shows title + “Available soon” without fake values |
+| Analytics donut | Dark card + SVG ring + legend; Tool Usage/Failures from request batches; Models from tool-graph agent nodes |
+| Analytics soon panel | Bordered surface with section title and Available soon body (cost charts, alerts, efficiency) |
 | Attention banner | Full-width surface with warning CTA text |
 | Client / list row | Surface card, status badge, mono project key, primary/secondary actions |
 | Modal | Dim overlay; title; Sending-to inset; textarea; Cancel + primary Queue |
@@ -109,6 +113,7 @@ pattern.
 | customizations | `/customizations` |
 | integrations | `/integrations` |
 | operations | `/operations` |
+| analytics-dashboard | `/analytics` |
 | two-factor-auth | `/two-factor` |
 | message-modal | `SendClientMessageModal` |
 | _(no frame)_ | `/login`, `/security` — auth DS |
@@ -120,3 +125,4 @@ pattern.
 - Reintroduce top-bar primary navigation.
 - Add a light theme toggle without a superseding ADR.
 - Paste Figma placeholder capabilities or fake request topics into production UI.
+- Fill Analytics cost/latency panels with invented spend figures before usage API.

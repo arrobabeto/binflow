@@ -101,20 +101,14 @@ const canMessageClient = computed(
 
 <template>
   <main class="mx-auto max-w-5xl px-6 py-8 lg:px-8">
-    <PageHeader
-      :crumbs="[
-        'Requests',
-        detail?.topic ?? (loading ? 'Loading…' : 'Request'),
-      ]"
-    >
+    <PageHeader :crumbs="['Requests']">
       <template #title>
         <UButton
           to="/requests"
           color="neutral"
           variant="soft"
-          size="sm"
           icon="i-lucide-arrow-left"
-          class="mb-3"
+          class="mb-3 mt-2.5 text-[15px]"
           >Back to requests</UButton
         >
         <div class="flex flex-wrap items-start gap-3">

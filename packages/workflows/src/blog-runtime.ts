@@ -4,7 +4,15 @@ import { and, eq } from 'drizzle-orm';
 import { v7 as uuidv7 } from 'uuid';
 
 import type { ArtifactStore } from '@binflow/artifacts';
-import type { BlogExecutor, BlogExecutionResult } from '@binflow/blog';
+import type {
+  BlogExecutor,
+  BlogExecutionResult,
+  BlogPublicationStageIds,
+  OrbitypeBlogDraftPort,
+} from '@binflow/blog';
+import {
+  defaultBlogPublicationStages,
+} from '@binflow/blog';
 import {
   adaptedGeneratedBlogBundleSchema,
   createBlogDraftInputSchema,
@@ -29,6 +37,59 @@ const digest = (value: string): string =>
 const newActionToken = (): string => randomBytes(32).toString('base64url');
 const APPROVAL_TTL_MS = 24 * 60 * 60 * 1_000;
 
+const upsertProjectPullRequest = async (
+  database: ScopedDatabase,
+  input: Readonly<{
+    baseSha: string;
+    headSha: string;
+    now: Date;
+    projectId: string;
+    providerId: string;
+    repoChangeId: string;
+    requestVersionId: string;
+    tenantId: string;
+    url: string;
+  }>,
+): Promise<void> => {
+  const [existingPull] = await database
+    .select()
+    .from(schema.pullRequests)
+    .where(
+      and(
+        eq(schema.pullRequests.projectId, input.projectId),
+        eq(schema.pullRequests.providerId, input.providerId),
+      ),
+    )
+    .limit(1);
+  if (existingPull === undefined) {
+    await database.insert(schema.pullRequests).values({
+      baseSha: input.baseSha,
+      headSha: input.headSha,
+      id: uuidv7(),
+      projectId: input.projectId,
+      providerId: input.providerId,
+      repoChangeId: input.repoChangeId,
+      requestVersionId: input.requestVersionId,
+      state: 'open',
+      tenantId: input.tenantId,
+      url: input.url,
+    });
+    return;
+  }
+  await database
+    .update(schema.pullRequests)
+    .set({
+      baseSha: input.baseSha,
+      headSha: input.headSha,
+      repoChangeId: input.repoChangeId,
+      requestVersionId: input.requestVersionId,
+      state: 'open',
+      updatedAt: input.now,
+      url: input.url,
+    })
+    .where(eq(schema.pullRequests.id, existingPull.id));
+};
+
 const stageRequestState = (node: string): string => {
   switch (node) {
     case 'catalog_sync':
@@ -43,6 +104,8 @@ const stageRequestState = (node: string): string => {
     case 'render_artifacts':
       return 'APPLYING_CHANGE';
     case 'create_draft':
+    case 'create_github_draft':
+    case 'create_orbitype_draft':
     case 'wait_preview':
       return 'PREVIEW_DEPLOYING';
     case 'awaiting_revision_plan_confirmation':
@@ -50,6 +113,8 @@ const stageRequestState = (node: string): string => {
     case 'awaiting_client_approval':
       return 'AWAITING_CLIENT_APPROVAL';
     case 'merge_or_publish':
+    case 'merge_github':
+    case 'publish_orbitype':
       return 'MERGING_OR_PUBLISHING';
     case 'verify_production':
       return 'VERIFYING_PRODUCTION';
@@ -74,13 +139,28 @@ export type RevisionPlanActions = Readonly<{
   confirm: string;
 }>;
 
+export type BlogWorkflowRuntimeOptions = Readonly<{
+  orbitype?: OrbitypeBlogDraftPort &
+    Readonly<{
+      publish(
+        input: Readonly<{ draftId: string; requestVersionId: string }>,
+      ): Promise<Readonly<{ publishedId: string }>>;
+    }>;
+  publicationStages?: BlogPublicationStageIds;
+}>;
+
 export class BlogWorkflowRuntime {
   public constructor(
     private readonly database: Database,
     private readonly artifacts: ArtifactStore,
     private readonly executor: BlogExecutor,
     private readonly clock: Clock = systemClock,
+    private readonly options: BlogWorkflowRuntimeOptions = {},
   ) {}
+
+  private get publicationStages(): BlogPublicationStageIds {
+    return this.options.publicationStages ?? defaultBlogPublicationStages;
+  }
 
   public async execute(raw: WorkflowResumeSignal): Promise<
     Readonly<{
@@ -184,6 +264,10 @@ export class BlogWorkflowRuntime {
         input: createBlogDraftInputSchema.parse(context.version.interpretedInput),
         manifest: context.manifest.document,
         onStage: recordExecutionStage,
+        ...(this.options.orbitype === undefined
+          ? {}
+          : { orbitype: this.options.orbitype }),
+        publicationStages: this.publicationStages,
         onTopicRefined: async (topic) => {
           await withSystemTenantScope(
             this.database,
@@ -391,15 +475,14 @@ export class BlogWorkflowRuntime {
           requestVersionId: context.version.id,
           tenantId: context.request.tenantId,
         });
-        await database.insert(schema.pullRequests).values({
+        await upsertProjectPullRequest(database, {
           baseSha: result.publication.baseCommitSha,
           headSha: result.publication.headCommitSha,
-          id: uuidv7(),
+          now,
           projectId: context.request.projectId,
           providerId: result.publication.pullRequestId,
           repoChangeId,
           requestVersionId: context.version.id,
-          state: 'open',
           tenantId: context.request.tenantId,
           url: result.publication.pullRequestUrl,
         });
@@ -447,6 +530,9 @@ export class BlogWorkflowRuntime {
               previewUrls: result.deployment.urls,
               pullRequestUrl: result.publication.pullRequestUrl,
               slug: result.bundle.slug,
+              ...(result.orbitypeDrafts === undefined
+                ? {}
+                : { orbitypeDrafts: result.orbitypeDrafts }),
             },
             updatedAt: now,
             version: context.request.version + 2,
@@ -790,6 +876,7 @@ export class BlogWorkflowRuntime {
       bundle: GeneratedBlogBundle;
       deployment: BlogExecutionResult['deployment'];
       files: BlogExecutionResult['files'];
+      orbitypeDrafts?: BlogExecutionResult['orbitypeDrafts'];
       publication: BlogExecutionResult['publication'];
     }>;
     try {
@@ -813,7 +900,12 @@ export class BlogWorkflowRuntime {
           publicationDate,
           manifest: context.manifest.document,
           requestId: context.request.id,
+          requestVersionId: context.version.id,
           onStage: recordExecutionStage,
+          publicationStages: this.publicationStages,
+          ...(this.options.orbitype === undefined
+            ? {}
+            : { orbitype: this.options.orbitype }),
           ...(customizationSection === undefined
             ? {}
             : { customizationSection }),
@@ -828,6 +920,10 @@ export class BlogWorkflowRuntime {
           requestId: context.request.id,
           requestVersionId: context.version.id,
           onStage: recordExecutionStage,
+          publicationStages: this.publicationStages,
+          ...(this.options.orbitype === undefined
+            ? {}
+            : { orbitype: this.options.orbitype }),
           ...(typeof context.request.terminalResult === 'object' &&
           context.request.terminalResult !== null &&
           typeof (context.request.terminalResult as { headCommitSha?: unknown })
@@ -921,43 +1017,17 @@ export class BlogWorkflowRuntime {
           requestVersionId: context.version.id,
           tenantId: context.request.tenantId,
         });
-        const [existingPull] = await database
-          .select()
-          .from(schema.pullRequests)
-          .where(
-            eq(
-              schema.pullRequests.providerId,
-              outcome.publication.pullRequestId,
-            ),
-          )
-          .limit(1);
-        if (existingPull === undefined) {
-          await database.insert(schema.pullRequests).values({
-            baseSha: outcome.publication.baseCommitSha,
-            headSha: outcome.publication.headCommitSha,
-            id: uuidv7(),
-            projectId: context.request.projectId,
-            providerId: outcome.publication.pullRequestId,
-            repoChangeId,
-            requestVersionId: context.version.id,
-            state: 'open',
-            tenantId: context.request.tenantId,
-            url: outcome.publication.pullRequestUrl,
-          });
-        } else {
-          await database
-            .update(schema.pullRequests)
-            .set({
-              baseSha: outcome.publication.baseCommitSha,
-              headSha: outcome.publication.headCommitSha,
-              repoChangeId,
-              requestVersionId: context.version.id,
-              state: 'open',
-              updatedAt: now,
-              url: outcome.publication.pullRequestUrl,
-            })
-            .where(eq(schema.pullRequests.id, existingPull.id));
-        }
+        await upsertProjectPullRequest(database, {
+          baseSha: outcome.publication.baseCommitSha,
+          headSha: outcome.publication.headCommitSha,
+          now,
+          projectId: context.request.projectId,
+          providerId: outcome.publication.pullRequestId,
+          repoChangeId,
+          requestVersionId: context.version.id,
+          tenantId: context.request.tenantId,
+          url: outcome.publication.pullRequestUrl,
+        });
         const [existingDeployment] = await database
           .select()
           .from(schema.deployments)
@@ -1036,6 +1106,9 @@ export class BlogWorkflowRuntime {
               previewUrls: outcome.deployment.urls,
               pullRequestUrl: outcome.publication.pullRequestUrl,
               slug: outcome.bundle.slug,
+              ...(outcome.orbitypeDrafts === undefined
+                ? {}
+                : { orbitypeDrafts: outcome.orbitypeDrafts }),
             },
             updatedAt: now,
             version: (freshRequest?.version ?? context.request.version) + 1,
@@ -1198,9 +1271,14 @@ export class BlogWorkflowRuntime {
             .where(eq(schema.graphRuns.requestVersionId, context.version.id))
             .limit(1);
           if (run !== undefined)
-            await this.recordStage(database, run.id, 'merge_or_publish', {
-              requestState: 'MERGING_OR_PUBLISHING',
-            });
+            await this.recordStage(
+              database,
+              run.id,
+              this.publicationStages.mergeGithub,
+              {
+                requestState: 'MERGING_OR_PUBLISHING',
+              },
+            );
         },
       );
       const merged = await this.executor.mergeApprovedPreview({
@@ -1210,6 +1288,38 @@ export class BlogWorkflowRuntime {
         previewSha: context.deployment.commitSha,
         pullRequestId: context.pull.providerId,
       });
+      if (
+        this.publicationStages.publishOrbitype !== undefined &&
+        this.options.orbitype !== undefined
+      ) {
+        await withSystemTenantScope(
+          this.database,
+          { operation: 'blog.publish.orbitype_stage', tenantId: signal.tenantId },
+          async (database) => {
+            const [run] = await database
+              .select()
+              .from(schema.graphRuns)
+              .where(eq(schema.graphRuns.requestVersionId, context.version.id))
+              .limit(1);
+            if (run !== undefined)
+              await this.recordStage(
+                database,
+                run.id,
+                this.publicationStages.publishOrbitype!,
+                { requestState: 'MERGING_OR_PUBLISHING' },
+              );
+          },
+        );
+        const terminal = context.request.terminalResult as
+          | Readonly<{ orbitypeDrafts?: readonly { draftId: string }[] }>
+          | null;
+        for (const draft of terminal?.orbitypeDrafts ?? []) {
+          await this.options.orbitype.publish({
+            draftId: draft.draftId,
+            requestVersionId: context.version.id,
+          });
+        }
+      }
       await withSystemTenantScope(
         this.database,
         { operation: 'blog.publish.record_merge', tenantId: signal.tenantId },
@@ -1668,6 +1778,21 @@ export class BlogWorkflowRuntime {
             `Request ${request.id} failed at ${failedNode}: ${errorMessage}. Open /requests/${request.id} in the dashboard.`,
             nextVersion,
           );
+          await database.insert(schema.outboxEvents).values({
+            aggregateId: request.id,
+            aggregateType: 'request',
+            eventType: 'client.notification_requested',
+            eventVersion: nextVersion,
+            id: uuidv7(),
+            jobKey: `client.notification:request.failed_final:${request.id}:${String(nextVersion)}`,
+            payload: {
+              message: `Request ${request.id} failed: ${errorMessage}. You can start again with a new command.`,
+              notificationType: 'request.failed_final',
+              requestId: request.id,
+            },
+            projectId: request.projectId,
+            tenantId: request.tenantId,
+          });
         }
       },
     );

@@ -6,15 +6,19 @@ import {
   adminOperationReferenceSchema,
   apiErrorResponseSchema,
   clientMessageTargetSchema,
+  createEnrollmentInputSchema,
   cursorQuerySchema,
   encodeRequestListCursor,
   decodeRequestListCursor,
   englishBlogBundleCopiesSpanish,
   idempotencyKeySchema,
+  integrationCandidateInputSchema,
   projectBudgetPolicySchema,
   requestListQuerySchema,
   requestStateSchema,
   revisionPlanValidatedSchema,
+  supportedLocaleSchema,
+  translationPolicySchema,
   workflowResumeSignalSchema,
 } from '../src/index.js';
 
@@ -375,5 +379,40 @@ describe('control-plane contracts', () => {
       notificationType: 'admin.direct_message',
       queued: true,
     });
+  });
+
+  it('accepts astro_orbitype enrollment and orbitype-api candidates', () => {
+    expect(
+      createEnrollmentInputSchema.parse({
+        projectDisplayName: 'Demo',
+        projectKey: 'demo',
+        tenantDisplayName: 'Demo',
+        tenantKey: 'demo',
+      }),
+    ).toMatchObject({ projectProfile: 'astro_repo' });
+    expect(
+      createEnrollmentInputSchema.parse({
+        projectDisplayName: 'Demo',
+        projectKey: 'demo',
+        projectProfile: 'astro_orbitype',
+        tenantDisplayName: 'Demo',
+        tenantKey: 'demo',
+      }).projectProfile,
+    ).toBe('astro_orbitype');
+    expect(
+      integrationCandidateInputSchema.parse({
+        alias: 'Orbitype demo',
+        apiKey: 'test-key-value',
+        baseUrl: 'https://core.orbitype.com/api/sql/v1',
+        kind: 'orbitype-api',
+        projectKey: 'demo',
+        tenantKey: 'demo',
+      }),
+    ).toMatchObject({ kind: 'orbitype-api' });
+  });
+
+  it('accepts monolingual translation policy none', () => {
+    expect(translationPolicySchema.parse('none')).toBe('none');
+    expect(supportedLocaleSchema.parse('de')).toBe('de');
   });
 });

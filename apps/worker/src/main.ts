@@ -11,15 +11,18 @@ import { v7 as uuidv7 } from 'uuid';
 import { workflowResumeSignalSchema } from '@binflow/contracts';
 import { createOpenAIBlogGenerationPort, createOpenAIProjectGenerationPort } from '@binflow/ai';
 import { S3ArtifactStore } from '@binflow/artifacts';
-import { BlogExecutor, DeleteBlogExecutor } from '@binflow/blog';
+import { BlogExecutor, DeleteBlogExecutor, orbitypeBlogPublicationStages } from '@binflow/blog';
+import { createOrbitypeBlogPublicationPort } from '@binflow/orbitype';
 import { DeleteProjectExecutor, ProjectExecutor, type RepositoryPublicationPort as ProjectRepositoryPort } from '@binflow/projects';
 import {
   createDatabase,
   getCredentialForVerification,
   recordProcessedEvent,
+  resolveActiveProjectGithubAppBinding,
   schema,
   withPlatformSystemScope,
   withSystemTenantScope,
+  type ScopedDatabase,
 } from '@binflow/db';
 import {
   createGitHubContentCatalogPort,
@@ -30,6 +33,8 @@ import {
   createTelegramRuntime,
   registerAdminTelegramHandlers,
   registerClientTelegramHandlers,
+  selectSendOnlyTelegramBotsToPromote,
+  selectUnstartedTelegramBots,
   TelegramPollingLock,
   renderDeleteAdminPendingNotice,
   renderDeletePublicationCompleteNotice,
@@ -116,6 +121,28 @@ const databaseUrl = await readConfiguredValue(
 );
 const { db: database, pool } = createDatabase(databaseUrl);
 
+const loadProjectGithubApp = async (
+  scoped: ScopedDatabase,
+  projectId: string,
+) => {
+  const binding = await resolveActiveProjectGithubAppBinding(scoped, projectId);
+  if (binding === undefined)
+    throw new DomainError(
+      'credential_unavailable',
+      'Active GitHub App binding is unavailable for this project.',
+    );
+  const github = await getCredentialForVerification(
+    scoped,
+    binding.credentialId,
+  );
+  if (github === undefined)
+    throw new DomainError(
+      'credential_unavailable',
+      'GitHub App credential material is unavailable.',
+    );
+  return { binding, github };
+};
+
 const loadDeleteBlogCatalog: DeleteBlogCatalogLoader = async ({
   database: scoped,
   manifest,
@@ -124,47 +151,12 @@ const loadDeleteBlogCatalog: DeleteBlogCatalogLoader = async ({
 }) => {
   const masterKey = await loadRuntimeMasterKeyFile(defaultMasterKeyPath());
   try {
-    const [githubRow] = await scoped
-      .select({
-        evidence: schema.providerCredentials.verificationEvidence,
-        id: schema.providerCredentials.id,
-      })
-      .from(schema.providerCredentials)
-      .where(
-        and(
-          eq(schema.providerCredentials.kind, 'github-app'),
-          eq(schema.providerCredentials.status, 'active'),
-        ),
-      )
-      .limit(1);
-    if (githubRow === undefined)
-      throw new DomainError(
-        'credential_unavailable',
-        'GitHub catalog credential is unavailable.',
-      );
-    const github = await getCredentialForVerification(scoped, githubRow.id);
-    if (github === undefined)
-      throw new DomainError(
-        'credential_unavailable',
-        'GitHub catalog credential material is unavailable.',
-      );
-    const githubEvidence = githubRow.evidence as {
-      installationId?: unknown;
-      repositoryId?: unknown;
-    } | null;
-    if (
-      typeof githubEvidence?.installationId !== 'string' ||
-      typeof githubEvidence?.repositoryId !== 'string'
-    )
-      throw new DomainError(
-        'credential_unavailable',
-        'Verified GitHub installation evidence is unavailable.',
-      );
+    const { binding, github } = await loadProjectGithubApp(scoped, projectId);
     const catalogPort = createCapabilityCatalogPort('delete_blog', {
       credential: github,
-      installationId: githubEvidence.installationId,
+      installationId: binding.installationId,
       masterKey,
-      repositoryId: githubEvidence.repositoryId,
+      repositoryId: binding.repositoryId,
     });
     const synchronized = await catalogPort.sync({ manifest });
     await persistDeleteBlogCatalogSync(scoped, {
@@ -188,47 +180,12 @@ const loadDeleteProjectCatalog: DeleteProjectCatalogLoader = async ({
 }) => {
   const masterKey = await loadRuntimeMasterKeyFile(defaultMasterKeyPath());
   try {
-    const [githubRow] = await scoped
-      .select({
-        evidence: schema.providerCredentials.verificationEvidence,
-        id: schema.providerCredentials.id,
-      })
-      .from(schema.providerCredentials)
-      .where(
-        and(
-          eq(schema.providerCredentials.kind, 'github-app'),
-          eq(schema.providerCredentials.status, 'active'),
-        ),
-      )
-      .limit(1);
-    if (githubRow === undefined)
-      throw new DomainError(
-        'credential_unavailable',
-        'GitHub catalog credential is unavailable.',
-      );
-    const github = await getCredentialForVerification(scoped, githubRow.id);
-    if (github === undefined)
-      throw new DomainError(
-        'credential_unavailable',
-        'GitHub catalog credential material is unavailable.',
-      );
-    const githubEvidence = githubRow.evidence as {
-      installationId?: unknown;
-      repositoryId?: unknown;
-    } | null;
-    if (
-      typeof githubEvidence?.installationId !== 'string' ||
-      typeof githubEvidence?.repositoryId !== 'string'
-    )
-      throw new DomainError(
-        'credential_unavailable',
-        'Verified GitHub installation evidence is unavailable.',
-      );
+    const { binding, github } = await loadProjectGithubApp(scoped, projectId);
     const catalogPort = createCapabilityCatalogPort('delete_project', {
       credential: github,
-      installationId: githubEvidence.installationId,
+      installationId: binding.installationId,
       masterKey,
-      repositoryId: githubEvidence.repositoryId,
+      repositoryId: binding.repositoryId,
     });
     const synchronized = await catalogPort.sync({ manifest });
     await persistDeleteProjectCatalogSync(scoped, {
@@ -251,8 +208,11 @@ const workflowService = new WorkflowService(
   loadDeleteProjectCatalog,
 );
 const connection = new Redis(redisUrl, { maxRetriesPerRequest: null });
+// BullMQ Worker blocks on `connection`; keep polling-lock commands on a
+// dedicated Redis client so renew/acquire cannot stall behind BRPOP.
+const telegramLockRedis = new Redis(redisUrl, { maxRetriesPerRequest: null });
 const telegramPollingLock = new TelegramPollingLock(
-  connection,
+  telegramLockRedis,
   `${process.pid}@${hostname()}`,
   15_000,
 );
@@ -304,9 +264,48 @@ const loadExecutionContext = async (
         .limit(1);
       if (budget === undefined)
         throw new Error('Frozen project budget policy is unavailable.');
+      const [versionRow] = await scoped
+        .select({
+          document: schema.projectManifestVersions.document,
+        })
+        .from(schema.requestVersions)
+        .innerJoin(
+          schema.projectManifestVersions,
+          eq(
+            schema.projectManifestVersions.id,
+            schema.requestVersions.manifestVersionId,
+          ),
+        )
+        .where(eq(schema.requestVersions.id, signal.requestVersionId))
+        .limit(1);
+      const manifestDocument = versionRow?.document as
+        | { deployment?: { productionOrigin?: string } }
+        | undefined;
+      let productionOrigin =
+        typeof manifestDocument?.deployment?.productionOrigin === 'string'
+          ? manifestDocument.deployment.productionOrigin
+          : undefined;
+      if (productionOrigin === undefined) {
+        const [enrollment] = await scoped
+          .select({ configuration: schema.clientEnrollments.configuration })
+          .from(schema.clientEnrollments)
+          .where(
+            and(
+              eq(schema.clientEnrollments.projectId, request.projectId),
+              eq(schema.clientEnrollments.tenantId, signal.tenantId),
+              eq(schema.clientEnrollments.state, 'active'),
+            ),
+          )
+          .orderBy(desc(schema.clientEnrollments.createdAt))
+          .limit(1);
+        const domain = (
+          enrollment?.configuration as { productionDomain?: string } | null
+        )?.productionDomain;
+        if (typeof domain === 'string' && domain.length > 0)
+          productionOrigin = domain;
+      }
       const rows = await scoped
         .select({
-          evidence: schema.providerCredentials.verificationEvidence,
           id: schema.providerCredentials.id,
           kind: schema.providerCredentials.kind,
           projectId: schema.providerCredentials.projectId,
@@ -317,8 +316,8 @@ const loadExecutionContext = async (
           and(
             inArray(schema.providerCredentials.kind, [
               'openai',
-              'github-app',
               'vercel',
+              'orbitype-api',
             ]),
             eq(schema.providerCredentials.status, 'active'),
           ),
@@ -326,23 +325,43 @@ const loadExecutionContext = async (
       const openaiRow = rows.find(
         (row) => row.kind === 'openai' && row.tenantId === signal.tenantId,
       );
-      const githubRow = rows.find((row) => row.kind === 'github-app');
       const vercelRow = rows.find(
         (row) => row.kind === 'vercel' && row.projectId === request.projectId,
       );
+      const orbitypeRow = rows.find(
+        (row) =>
+          row.kind === 'orbitype-api' && row.projectId === request.projectId,
+      );
+      const githubBinding = await resolveActiveProjectGithubAppBinding(
+        scoped,
+        request.projectId,
+      );
       if (
         openaiRow === undefined ||
-        githubRow === undefined ||
+        githubBinding === undefined ||
         vercelRow === undefined
       )
         throw new Error('Active execution credentials are incomplete.');
-      const [openai, github, vercel] = await Promise.all([
+      if (
+        request.capabilityId === 'create_blog_orbitype' &&
+        orbitypeRow === undefined
+      )
+        throw new Error('Orbitype credential is required for this capability.');
+      const [openai, github, vercel, orbitype] = await Promise.all([
         getCredentialForVerification(scoped, openaiRow.id),
-        getCredentialForVerification(scoped, githubRow.id),
+        getCredentialForVerification(scoped, githubBinding.credentialId),
         getCredentialForVerification(scoped, vercelRow.id),
+        orbitypeRow === undefined
+          ? Promise.resolve(undefined)
+          : getCredentialForVerification(scoped, orbitypeRow.id),
       ]);
       if (openai === undefined || github === undefined || vercel === undefined)
         throw new Error('Execution credential material is unavailable.');
+      if (
+        request.capabilityId === 'create_blog_orbitype' &&
+        orbitype === undefined
+      )
+        throw new Error('Orbitype credential material is unavailable.');
       if (
         openai.tenantId !== signal.tenantId ||
         vercel.projectId !== request.projectId
@@ -350,25 +369,16 @@ const loadExecutionContext = async (
         throw new Error(
           'Execution credentials do not match the request scope.',
         );
-      const githubEvidence = githubRow.evidence as {
-        installationId?: unknown;
-        repositoryId?: unknown;
-      } | null;
-      if (
-        typeof githubEvidence?.installationId !== 'string' ||
-        typeof githubEvidence.repositoryId !== 'string'
-      )
-        throw new Error(
-          'Verified GitHub installation evidence is unavailable.',
-        );
       return {
+        budget,
         capabilityId: request.capabilityId,
         github,
-        installationId: githubEvidence.installationId,
+        installationId: githubBinding.installationId,
         openai,
-        budget,
+        orbitype,
+        productionOrigin,
         projectId: request.projectId,
-        repositoryId: githubEvidence.repositoryId,
+        repositoryId: githubBinding.repositoryId,
         vercel,
       };
     },
@@ -556,6 +566,7 @@ const processWorkflowJob = async (name: string, data: unknown) => {
     const deployments = createVercelDeploymentPort({
       credential: context.vercel,
       masterKey,
+      productionOrigin: context.productionOrigin,
     });
     const runtime =
       capabilityRuntime.kind === 'project'
@@ -590,10 +601,8 @@ const processWorkflowJob = async (name: string, data: unknown) => {
                 artifactStore,
                 new DeleteBlogExecutor(catalog, repository, deployments),
               )
-            : new BlogWorkflowRuntime(
-                database,
-                artifactStore,
-                new BlogExecutor(
+            : (() => {
+                const blogExecutor = new BlogExecutor(
                   catalog,
                   createOpenAIBlogGenerationPort({
                     capabilityId: context.capabilityId,
@@ -603,8 +612,61 @@ const processWorkflowJob = async (name: string, data: unknown) => {
                   }),
                   repository,
                   deployments,
-                ),
-              );
+                );
+                if (
+                  context.capabilityId !== 'create_blog_orbitype' ||
+                  context.orbitype === undefined
+                ) {
+                  return new BlogWorkflowRuntime(
+                    database,
+                    artifactStore,
+                    blogExecutor,
+                  );
+                }
+                const configuration = context.orbitype.configuration as {
+                  baseUrl?: unknown;
+                  postsTable?: unknown;
+                };
+                if (typeof configuration.baseUrl !== 'string')
+                  throw new DomainError(
+                    'validation_error',
+                    'Orbitype base URL is missing.',
+                  );
+                const plaintext = decryptSecret(
+                  context.orbitype.envelope,
+                  masterKey,
+                  context.orbitype.secretContext,
+                );
+                try {
+                  const secret = JSON.parse(plaintext.toString('utf8')) as {
+                    apiKey?: unknown;
+                  };
+                  if (typeof secret.apiKey !== 'string')
+                    throw new DomainError(
+                      'validation_error',
+                      'Orbitype API key is missing.',
+                    );
+                  const orbitype = createOrbitypeBlogPublicationPort({
+                    apiKey: secret.apiKey,
+                    baseUrl: configuration.baseUrl,
+                    ...(typeof configuration.postsTable === 'string'
+                      ? { postsTable: configuration.postsTable }
+                      : {}),
+                  });
+                  return new BlogWorkflowRuntime(
+                    database,
+                    artifactStore,
+                    blogExecutor,
+                    systemClock,
+                    {
+                      orbitype,
+                      publicationStages: orbitypeBlogPublicationStages,
+                    },
+                  );
+                } finally {
+                  plaintext.fill(0);
+                }
+              })();
     const notificationTarget = await loadClientNotificationTarget(
       signal.requestId,
     );
@@ -837,6 +899,21 @@ const promoteFailedWorkflowJob = async (
           projectId: request.projectId,
           tenantId: request.tenantId,
         });
+        await scoped.insert(schema.outboxEvents).values({
+          aggregateId: request.id,
+          aggregateType: 'request',
+          eventType: 'client.notification_requested',
+          eventVersion: nextVersion,
+          id: uuidv7(),
+          jobKey: `client.notification:request.failed_final:${request.id}:${String(nextVersion)}`,
+          payload: {
+            message: `Request ${request.id} failed: ${error.message}. You can start again with a new command.`,
+            notificationType: 'request.failed_final',
+            requestId: request.id,
+          },
+          projectId: request.projectId,
+          tenantId: request.tenantId,
+        });
       }
     },
   );
@@ -885,7 +962,7 @@ const recoverStaleWorkflowExecutions = async (): Promise<void> => {
             eventType: 'workflow.resume_requested',
             eventVersion: row.version + 1,
             id: uuidv7(),
-            jobKey: `workflow.resume:${version.id}:execute:recover-queued:${String(row.version)}`,
+            jobKey: `workflow.resume:${version.id}:execute:recover-queued`,
             payload: {
               reason: 'execute',
               requestId: row.id,
@@ -967,7 +1044,7 @@ const recoverStaleWorkflowExecutions = async (): Promise<void> => {
             eventType: 'workflow.resume_requested',
             eventVersion: nextVersion + 1,
             id: uuidv7(),
-            jobKey: `workflow.resume:${version.id}:execute:recover-generating:${String(nextVersion)}`,
+            jobKey: `workflow.resume:${version.id}:execute:recover-generating`,
             payload: {
               reason: 'execute',
               requestId: row.id,
@@ -1424,6 +1501,9 @@ const dispatchClientNotifications = async (): Promise<void> => {
 
 const heartbeat = async (): Promise<void> => {
   await telegramPollingLock.renewHeld();
+  await reconcileTelegramRuntimes().catch((error: unknown) =>
+    logger.error({ error }, 'Telegram runtime reconcile failed'),
+  );
   await withPlatformSystemScope(
     database,
     'worker.heartbeat',
@@ -1455,17 +1535,116 @@ const heartbeat = async (): Promise<void> => {
 };
 
 const telegramRuntimes: TelegramRuntime[] = [];
-const startTelegram = async (): Promise<void> => {
+const sendOnlyTelegramBotIds = new Set<string>();
+let telegramReconcileInFlight = false;
+
+const startedTelegramBotIds = (): Set<string> =>
+  new Set([...clientTelegramRuntimes.keys(), ...adminTelegramRuntimes.keys()]);
+
+const unmountTelegramRuntime = async (botId: string): Promise<void> => {
+  const runtime =
+    clientTelegramRuntimes.get(botId) ?? adminTelegramRuntimes.get(botId);
+  if (runtime === undefined) return;
+  await runtime.chat.shutdown().catch((error: unknown) =>
+    logger.warn({ botId, error }, 'Telegram runtime shutdown failed'),
+  );
+  clientTelegramRuntimes.delete(botId);
+  adminTelegramRuntimes.delete(botId);
+  sendOnlyTelegramBotIds.delete(botId);
+  const index = telegramRuntimes.indexOf(runtime);
+  if (index >= 0) telegramRuntimes.splice(index, 1);
+};
+
+const startTelegramRuntime = async (input: Readonly<{
+  botId: string;
+  botToken: string;
+  kind: 'telegram-admin' | 'telegram-client';
+  pollingEnabled?: boolean;
+  scopeKey: string;
+  userName: string;
+}>): Promise<void> => {
+  if (startedTelegramBotIds().has(input.botId)) return;
+  const pollingEnabled =
+    input.pollingEnabled ??
+    (await telegramPollingLock.tryAcquire(input.botId));
+  try {
+    const runtime = await createTelegramRuntime({
+      botToken: input.botToken,
+      ingress: pollingEnabled ? 'polling' : 'send-only',
+      redisUrl,
+      role: input.kind === 'telegram-admin' ? 'admin' : 'client',
+      scopeKey: input.scopeKey,
+      userName: input.userName,
+    });
+    if (input.kind === 'telegram-client') {
+      if (pollingEnabled) {
+        registerClientTelegramHandlers(runtime, {
+          botId: input.botId,
+          handler: workflowService,
+          persistInboundImage: async ({ bytes, mime }) => {
+            const extension =
+              mime === 'image/png'
+                ? 'png'
+                : mime === 'image/webp'
+                  ? 'webp'
+                  : 'jpg';
+            const key = `inbound/telegram/${uuidv7()}.${extension}`;
+            const sha256 = createHash('sha256')
+              .update(Buffer.from(bytes))
+              .digest('hex');
+            await artifactStore.put({ bytes, key, mime, sha256 });
+            return key;
+          },
+        });
+      }
+      clientTelegramRuntimes.set(input.botId, runtime);
+    } else {
+      if (pollingEnabled) {
+        registerAdminTelegramHandlers(runtime, {
+          botId: input.botId,
+          handler: (update) =>
+            workflowService.handleAdminTelegramUpdate(update),
+        });
+      }
+      adminTelegramRuntimes.set(input.botId, runtime);
+    }
+    await runtime.chat.initialize();
+    telegramRuntimes.push(runtime);
+    if (pollingEnabled) sendOnlyTelegramBotIds.delete(input.botId);
+    else sendOnlyTelegramBotIds.add(input.botId);
+    logger.info(
+      {
+        botId: input.botId,
+        ingress: pollingEnabled ? 'polling' : 'send-only',
+        role: input.kind,
+      },
+      pollingEnabled
+        ? 'Telegram polling runtime started'
+        : 'Telegram runtime started in send-only mode because another worker holds the polling lock',
+    );
+  } catch (error) {
+    if (pollingEnabled) await telegramPollingLock.release(input.botId);
+    throw error;
+  }
+};
+
+const reconcileTelegramRuntimes = async (): Promise<void> => {
+  if (telegramReconcileInFlight) return;
+  telegramReconcileInFlight = true;
   const masterKey = await loadRuntimeMasterKeyFile(
     process.env.BINFLOW_KEK_FILE ?? defaultMasterKeyPath(),
   );
   try {
     const credentials = await withPlatformSystemScope(
       database,
-      'telegram.runtime_start',
+      'telegram.runtime_reconcile',
       async (scoped) => {
         const rows = await scoped
-          .select({ id: schema.providerCredentials.id })
+          .select({
+            botId: schema.providerCredentials.externalResourceId,
+            id: schema.providerCredentials.id,
+            kind: schema.providerCredentials.kind,
+          })
           .from(schema.providerCredentials)
           .where(
             and(
@@ -1476,12 +1655,55 @@ const startTelegram = async (): Promise<void> => {
               eq(schema.providerCredentials.status, 'active'),
             ),
           );
+        const candidates = rows.flatMap((row) => {
+          if (
+            row.botId === null ||
+            (row.kind !== 'telegram-admin' && row.kind !== 'telegram-client')
+          )
+            return [];
+          return [
+            {
+              botId: row.botId,
+              id: row.id,
+              kind: row.kind as 'telegram-admin' | 'telegram-client',
+            },
+          ];
+        });
+        const candidateViews = candidates.map((row) => ({
+          botId: row.botId,
+          kind: row.kind,
+        }));
+        const missing = selectUnstartedTelegramBots(
+          startedTelegramBotIds(),
+          candidateViews,
+        );
+        const promote = selectSendOnlyTelegramBotsToPromote(
+          sendOnlyTelegramBotIds,
+          candidateViews,
+        );
+        const wantedIds = new Set([
+          ...missing.map((row) => row.botId),
+          ...promote.map((row) => row.botId),
+        ]);
+        const toLoad = candidates.filter((row) => wantedIds.has(row.botId));
         return Promise.all(
-          rows.map((row) => getCredentialForVerification(scoped, row.id)),
+          toLoad.map(async (row) => {
+            const credential = await getCredentialForVerification(
+              scoped,
+              row.id,
+            );
+            return {
+              botId: row.botId,
+              credential,
+              kind: row.kind,
+              promote: promote.some((item) => item.botId === row.botId),
+            };
+          }),
         );
       },
     );
-    for (const credential of credentials) {
+    for (const entry of credentials) {
+      const { botId, credential, kind, promote } = entry;
       if (
         credential === undefined ||
         (credential.kind !== 'telegram-admin' &&
@@ -1503,74 +1725,35 @@ const startTelegram = async (): Promise<void> => {
           typeof username !== 'string'
         )
           throw new Error('Telegram runtime credential is malformed.');
-        const botId = await withPlatformSystemScope(
-          database,
-          'telegram.resolve_bot_identity',
-          async (scoped) => {
-            const [row] = await scoped
-              .select({
-                botId: schema.providerCredentials.externalResourceId,
-              })
-              .from(schema.providerCredentials)
-              .where(eq(schema.providerCredentials.id, credential.id))
-              .limit(1);
-            return row?.botId;
-          },
-        );
-        if (botId === null || botId === undefined)
-          throw new Error('Telegram verified bot ID is missing.');
-        const pollingEnabled = await telegramPollingLock.tryAcquire(botId);
-        const runtime = await createTelegramRuntime({
+        if (promote) {
+          if (!(await telegramPollingLock.tryAcquire(botId))) continue;
+          await unmountTelegramRuntime(botId);
+          await startTelegramRuntime({
+            botId,
+            botToken: payload.botToken,
+            kind,
+            pollingEnabled: true,
+            scopeKey: credential.tenantId ?? 'platform',
+            userName: username,
+          });
+          logger.info(
+            { botId, kind },
+            'Telegram runtime promoted from send-only to polling',
+          );
+          continue;
+        }
+        if (startedTelegramBotIds().has(botId)) continue;
+        await startTelegramRuntime({
+          botId,
           botToken: payload.botToken,
-          ingress: pollingEnabled ? 'polling' : 'send-only',
-          redisUrl,
-          role: credential.kind === 'telegram-admin' ? 'admin' : 'client',
+          kind,
           scopeKey: credential.tenantId ?? 'platform',
           userName: username,
         });
-        if (credential.kind === 'telegram-client') {
-          if (pollingEnabled) {
-            registerClientTelegramHandlers(runtime, {
-              botId,
-              handler: workflowService,
-              persistInboundImage: async ({ bytes, mime }) => {
-                const extension =
-                  mime === 'image/png'
-                    ? 'png'
-                    : mime === 'image/webp'
-                      ? 'webp'
-                      : 'jpg';
-                const key = `inbound/telegram/${uuidv7()}.${extension}`;
-                const sha256 = createHash('sha256')
-                  .update(Buffer.from(bytes))
-                  .digest('hex');
-                await artifactStore.put({ bytes, key, mime, sha256 });
-                return key;
-              },
-            });
-          }
-          clientTelegramRuntimes.set(botId, runtime);
-        } else {
-          if (pollingEnabled) {
-            registerAdminTelegramHandlers(runtime, {
-              botId,
-              handler: (update) =>
-                workflowService.handleAdminTelegramUpdate(update),
-            });
-          }
-          adminTelegramRuntimes.set(botId, runtime);
-        }
-        await runtime.chat.initialize();
-        telegramRuntimes.push(runtime);
-        logger.info(
-          {
-            botId,
-            ingress: pollingEnabled ? 'polling' : 'send-only',
-            role: credential.kind,
-          },
-          pollingEnabled
-            ? 'Telegram polling runtime started'
-            : 'Telegram runtime started in send-only mode because another worker holds the polling lock',
+      } catch (error) {
+        logger.error(
+          { botId, error, kind },
+          'Failed to start Telegram runtime for credential',
         );
       } finally {
         plaintext.fill(0);
@@ -1578,10 +1761,11 @@ const startTelegram = async (): Promise<void> => {
     }
   } finally {
     masterKey.fill(0);
+    telegramReconcileInFlight = false;
   }
 };
 
-await startTelegram();
+await reconcileTelegramRuntimes();
 const worker = new Worker(
   'binflow-workflows',
   async (job) => {
@@ -1650,6 +1834,7 @@ const close = async (): Promise<void> => {
   await worker.close();
   await queue.close();
   await connection.quit();
+  await telegramLockRedis.quit();
   await pool.end();
 };
 

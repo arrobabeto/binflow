@@ -10,6 +10,7 @@ import {
   buildDeletionPaths,
   buildDeletionRoutes,
   parseSlugFromProjectUrl,
+  resolveDeleteProjectProductionOrigin,
   resolveDeleteTarget,
   type CatalogItem,
 } from '../src/delete-project.js';
@@ -101,5 +102,50 @@ describe('delete project helpers', () => {
           'https://webbin.com.mx/es/proyectos/proyecto-eliminado',
       }),
     ).toThrow(/project/i);
+  });
+});
+
+describe('resolveDeleteProjectProductionOrigin', () => {
+  it('falls back to the Webbin pilot when origin is omitted', async () => {
+    const manifest = await loadManifest();
+    expect(resolveDeleteProjectProductionOrigin(null)).toBe(
+      'https://webbin.com.mx',
+    );
+    expect(resolveDeleteProjectProductionOrigin(manifest)).toBe(
+      'https://webbin.com.mx',
+    );
+  });
+
+  it('uses frozen manifest productionOrigin', async () => {
+    const manifest = await loadManifest();
+    expect(
+      resolveDeleteProjectProductionOrigin({
+        ...manifest,
+        deployment: {
+          ...manifest.deployment,
+          previewMode: manifest.deployment?.previewMode ?? 'git_integration',
+          productionOrigin: 'https://www.example-client.com/',
+          projectId: manifest.deployment?.projectId ?? 'prj',
+          protectionMode: manifest.deployment?.protectionMode ?? 'vercel_auth',
+          provider: 'vercel',
+        },
+      }),
+    ).toBe('https://www.example-client.com');
+  });
+
+  it('requires productionOrigin for astro_orbitype', async () => {
+    const manifest = await loadManifest();
+    expect(() =>
+      resolveDeleteProjectProductionOrigin({
+        ...manifest,
+        profile: 'astro_orbitype',
+        deployment: {
+          previewMode: 'git_integration',
+          projectId: 'prj',
+          protectionMode: 'vercel_auth',
+          provider: 'vercel',
+        },
+      }),
+    ).toThrow(/productionOrigin/i);
   });
 });

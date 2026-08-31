@@ -5,10 +5,11 @@ Complete before generating scenarios. Record answers in the **Tool profile** tab
 ## Catalog and graph
 
 - [ ] `toolId`, `executorId`, `mutationClass`, `requiresPreview`
+- [ ] **Stack** from `tool.yaml`; load `create-tool/references/stacks/<stack>.md`
 - [ ] `packages/tools/stacks/<stack>/<tool>/tool.yaml` version
 - [ ] `graph.yaml` node ids in execution order; labels match semantics
 - [ ] Interrupt nodes (`awaiting_*`) and who approves (client vs admin)
-- [ ] Effect nodes and external permissions (GitHub, Vercel, OpenAI)
+- [ ] Effect nodes and external permissions (GitHub, Vercel, OpenAI, Orbitype)
 
 ## Policies and contracts
 
@@ -36,8 +37,18 @@ Complete before generating scenarios. Record answers in the **Tool profile** tab
 
 - [ ] `content.collections` / `content.portfolio` paths
 - [ ] `editablePaths` covers deletion scope (content paths; redirects deferred per ADR-0041)
+- [ ] `routePrefix` / preview route shape matches stack contract
+- [ ] `deployment.productionOrigin` present (Orbitype required; Webbin may fall back to pilot)
 - [ ] `repository.branchPattern`, `productionBranch`
 - [ ] Profile gate: project `profile` in tool `allowedProfiles`
+
+## Stack-specific (from stack contract)
+
+- [ ] Required credentials verified (Orbitype API when `astro-orbitype`)
+- [ ] Preview Vercel `PUBLIC_*` env on Preview + Production (Astro stacks)
+- [ ] Dual-write / CMS schema notes if Orbitype
+- [ ] `pull_requests` uniqueness understood as per-project provider id
+- [ ] Rematerialize done if paths/origin/routePrefix recently changed
 
 ## Customization (`auditMode=customized`)
 
@@ -58,6 +69,7 @@ Complete before generating scenarios. Record answers in the **Tool profile** tab
 | Field | Value |
 |-------|-------|
 | toolId | |
+| stack | |
 | mutationClass | |
 | requiresPreview | |
 | approval | client / admin / both |
@@ -68,4 +80,5 @@ Complete before generating scenarios. Record answers in the **Tool profile** tab
 | interrupt nodes | |
 | typed errors | |
 | manifest deps | |
+| productionOrigin | |
 | custom fields | |

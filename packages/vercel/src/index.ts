@@ -132,7 +132,7 @@ export const createVercelCredentialVerifier = (
       );
     }
     if (
-      configuration.expectedRepository !== webbinPilotBinding.repository ||
+      configuration.expectedRepository === webbinPilotBinding.repository &&
       configuration.expectedProductionBranch !==
         webbinPilotBinding.productionBranch
     ) {
@@ -207,28 +207,68 @@ export const createVercelCredentialVerifier = (
         project.link?.org === undefined || project.link.repo === undefined
           ? undefined
           : `${project.link.org}/${project.link.repo}`;
+      const mismatches: string[] = [];
+      if (project.id !== configuration.projectId) {
+        mismatches.push('projectId');
+      }
       if (
-        project.id !== configuration.projectId ||
-        (configuration.teamId !== undefined &&
-          project.accountId !== configuration.teamId) ||
-        (configuration.teamId === undefined &&
-          project.accountId !== user.user.id) ||
-        project.link?.type !== 'github' ||
+        configuration.teamId !== undefined &&
+        project.accountId !== configuration.teamId
+      ) {
+        mismatches.push('teamId (project.accountId must equal Team ID)');
+      }
+      if (
+        configuration.teamId === undefined &&
+        project.accountId !== user.user.id
+      ) {
+        mismatches.push(
+          'teamId (project belongs to a team — paste Team ID, or token is from another account)',
+        );
+      }
+      if (project.link?.type !== 'github') {
+        mismatches.push('git provider (must be GitHub-linked)');
+      }
+      if (
         repository?.toLowerCase() !==
-          configuration.expectedRepository.toLowerCase() ||
-        project.link.productionBranch !== configuration.expectedProductionBranch
+        configuration.expectedRepository.toLowerCase()
+      ) {
+        mismatches.push(
+          `expectedRepository (Vercel has ${repository ?? 'none'}, form has ${configuration.expectedRepository})`,
+        );
+      }
+      if (
+        project.link?.productionBranch !==
+        configuration.expectedProductionBranch
+      ) {
+        mismatches.push(
+          `productionBranch (Vercel has ${project.link?.productionBranch ?? 'none'}, form has ${configuration.expectedProductionBranch})`,
+        );
+      }
+      if (mismatches.length > 0) {
+        throw new DomainError(
+          'policy_denied',
+          `Vercel project state does not match the binding: ${mismatches.join('; ')}.`,
+          { code: 'vercel_binding_mismatch' },
+        );
+      }
+      const link = project.link;
+      if (
+        link === null ||
+        link.type !== 'github' ||
+        repository === undefined
       ) {
         throw new DomainError(
           'policy_denied',
-          'Vercel project state does not match the Webbin contract.',
+          'Vercel project is missing a GitHub production link.',
+          { code: 'vercel_binding_mismatch' },
         );
       }
 
       return {
         accountId: project.accountId,
         externalResourceId: project.id,
-        gitProvider: project.link.type,
-        productionBranch: project.link.productionBranch,
+        gitProvider: link.type,
+        productionBranch: link.productionBranch,
         projectId: project.id,
         projectName: project.name,
         repository,
@@ -363,6 +403,8 @@ export const createVercelDeploymentPort = (
     fetch?: typeof globalThis.fetch;
     masterKey: Buffer;
     pollIntervalMs?: number;
+    /** Client-visible live origin; defaults to Webbin pilot when omitted. */
+    productionOrigin?: string;
     timeoutMs?: number;
   }>,
 ): DeploymentPort => {
@@ -383,8 +425,11 @@ export const createVercelDeploymentPort = (
     new Promise<void>((resolve) => setTimeout(resolve, milliseconds));
   const pollIntervalMs = input.pollIntervalMs ?? 5_000;
   const absenceTimeoutMs = input.timeoutMs ?? 10 * 60 * 1_000;
+  const clientProductionOrigin = selectClientProductionOrigin(
+    input.productionOrigin ?? webbinPilotBinding.productionOrigin,
+  );
 
-  const resolveProductionOrigin = (): string => selectClientProductionOrigin();
+  const resolveProductionOrigin = (): string => clientProductionOrigin;
 
   const fetchRouteAbsenceStatus = async (url: string): Promise<number> => {
     const response = await fetch(url, {

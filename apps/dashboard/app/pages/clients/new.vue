@@ -1,14 +1,41 @@
 <script setup lang="ts">
 import type { Enrollment } from '@binflow/contracts';
 
+const profileOptions = [
+  { label: 'Astro + GitHub repo (astro_repo)', value: 'astro_repo' },
+  { label: 'Astro + Orbitype CMS (astro_orbitype)', value: 'astro_orbitype' },
+];
+
 const form = reactive({
   projectDisplayName: 'Webbin',
   projectKey: 'webbin',
+  projectProfile: 'astro_repo' as 'astro_repo' | 'astro_orbitype',
   tenantDisplayName: 'Webbin',
   tenantKey: 'webbin',
 });
 const errorMessage = ref('');
 const saving = ref(false);
+
+watch(
+  () => form.projectProfile,
+  (profile) => {
+    if (profile === 'astro_orbitype') {
+      if (form.tenantKey === 'webbin') {
+        form.tenantDisplayName = '';
+        form.tenantKey = '';
+        form.projectDisplayName = '';
+        form.projectKey = '';
+      }
+      return;
+    }
+    if (form.tenantKey === '') {
+      form.tenantDisplayName = 'Webbin';
+      form.tenantKey = 'webbin';
+      form.projectDisplayName = 'Webbin';
+      form.projectKey = 'webbin';
+    }
+  },
+);
 
 const submit = async () => {
   saving.value = true;
@@ -48,12 +75,20 @@ const submit = async () => {
           Add client
         </h1>
         <p class="mt-2 text-muted">
-          This adopts a matching Phase 0 draft scope when one already exists.
+          Choose the technical profile, then adopt matching draft scope when one
+          already exists.
         </p>
       </template>
     </PageHeader>
     <UCard class="binflow-surface !ring-0">
       <form class="grid gap-5" @submit.prevent="submit">
+        <UFormField label="Project profile"
+          ><USelect
+            v-model="form.projectProfile"
+            :items="profileOptions"
+            value-key="value"
+            class="w-full"
+        /></UFormField>
         <UFormField label="Client display name"
           ><UInput v-model="form.tenantDisplayName" class="w-full" required
         /></UFormField>

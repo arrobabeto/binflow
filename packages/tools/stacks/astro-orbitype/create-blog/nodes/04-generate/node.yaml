@@ -1,0 +1,8 @@
+kind: agent
+label: Generate article for manifest locales
+nodeKind: content.generate_blog@1
+acceptsClientCustomization: true
+effort: medium
+model: gpt-5.6-terra
+rulesRef: shared/rules/editorial-content@1
+workload: text

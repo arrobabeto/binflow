@@ -157,6 +157,8 @@ Admin rejection returns the request to revision so the client can select an exis
 - Translation is internal and receives finalized source content plus locale-specific project rules.
 - `always_translate` generates every required content locale.
 - `ask_each_action` interrupts during planning to select target locales, while still enforcing manifest-required locales.
+- `none` skips translation entirely; valid only for monolingual manifests
+  (exactly one content locale).
 - The node adapts idiom, examples, SEO metadata, alt text, FAQ, titles,
   subtitles and Markdown headings without changing claims.
 - The English collection (`src/content/articulos/`) must not copy Spanish
@@ -175,7 +177,8 @@ Admin rejection returns the request to revision so the client can select an exis
   `create_draft` / `wait_preview`, then to `AWAITING_CLIENT_APPROVAL` when the
   preview is bound and persisted.
 - Surgical apply reuses the same GitHub PR: persistence updates the existing
-  `pull_requests` row (provider id is unique) rather than inserting a second row.
+  `pull_requests` row for that **project** + provider id rather than inserting a
+  second row. Provider ids are unique per project (not globally across tenants).
 - Branch URL may be used during iteration; approval binds to immutable commit deployment.
 - Preview records deployment ID, head SHA and localized routes.
 - A revision begins when the client taps **Request changes** (`REVISION_REQUESTED`).

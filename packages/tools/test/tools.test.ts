@@ -14,18 +14,37 @@ import {
 describe('@binflow/tools catalog', () => {
   it('loads Astro tools with matching executor stages', async () => {
     const tools = await listTools();
-    expect(tools).toHaveLength(4);
+    expect(tools).toHaveLength(5);
     const blog = tools.find((tool) => tool.tool.id === 'create_blog_draft');
+    const blogOrbitype = tools.find(
+      (tool) => tool.tool.id === 'create_blog_orbitype',
+    );
     const project = tools.find((tool) => tool.tool.id === 'create_project_astro');
     const deleteBlog = tools.find((tool) => tool.tool.id === 'delete_blog_draft');
     const deleteProject = tools.find(
       (tool) => tool.tool.id === 'delete_project_astro',
     );
     expect(blog?.tool.profile).toBe('astro_repo');
+    expect(blogOrbitype?.tool.profile).toBe('astro_orbitype');
     expect(project?.tool.profile).toBe('astro_repo');
     expect(deleteBlog?.tool.profile).toBe('astro_repo');
     expect(deleteProject?.tool.profile).toBe('astro_repo');
     expect(blog?.graph.version).toBe('stacks/astro-repo/create-blog@1');
+    expect(blogOrbitype?.graph.version).toBe(
+      'stacks/astro-orbitype/create-blog@1',
+    );
+    expect(blogOrbitype?.nodes.some((node) => node.id === 'create_github_draft')).toBe(
+      true,
+    );
+    expect(
+      blogOrbitype?.nodes.some((node) => node.id === 'create_orbitype_draft'),
+    ).toBe(true);
+    expect(blogOrbitype?.nodes.some((node) => node.id === 'merge_github')).toBe(
+      true,
+    );
+    expect(blogOrbitype?.nodes.some((node) => node.id === 'publish_orbitype')).toBe(
+      true,
+    );
     expect(project?.graph.version).toBe('stacks/astro-repo/create-project@4');
     expect(deleteBlog?.graph.version).toBe('stacks/astro-repo/delete-blog@1');
     expect(deleteProject?.graph.version).toBe(

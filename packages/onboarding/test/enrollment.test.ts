@@ -435,7 +435,11 @@ describeDatabase('client enrollment lifecycle', () => {
     );
     expect(firstManifest.manifest).toMatchObject({
       contentLocales: ['es', 'en'],
-      enabledCapabilities: [
+      status: 'validated',
+      version: 1,
+    });
+    expect(firstManifest.manifest?.enabledCapabilities).toEqual(
+      expect.arrayContaining([
         {
           access: 'client_publish',
           capabilityId: 'create_blog_draft',
@@ -446,10 +450,8 @@ describeDatabase('client enrollment lifecycle', () => {
           capabilityId: 'create_project_astro',
           capabilityVersion: 1,
         },
-      ],
-      status: 'validated',
-      version: 1,
-    });
+      ]),
+    );
 
     const replayed = await service.validate(
       configured.id,
@@ -499,7 +501,9 @@ describeDatabase('client enrollment lifecycle', () => {
     ).toHaveLength(2);
     expect(
       await database.db.select().from(schema.projectCapabilityBindings),
-    ).toHaveLength(4);
+    ).toHaveLength(
+      (firstManifest.manifest?.enabledCapabilities.length ?? 0) * 2,
+    );
     await expect(
       database.db
         .update(schema.projectLocales)
@@ -517,5 +521,85 @@ describeDatabase('client enrollment lifecycle', () => {
           ),
         ),
     ).rejects.toThrow();
+  });
+
+  it('allows active profile edits and rematerializes production origin', async () => {
+    const created = await service.create(
+      {
+        projectDisplayName: 'Webbin',
+        projectKey: 'webbin',
+        tenantDisplayName: 'Webbin',
+        tenantKey: 'webbin',
+      },
+      context('create-active-profile-edit'),
+    );
+    await seedActiveCredentials(created);
+    const configured = await service.update(
+      created.id,
+      {
+        configuration: {
+          ...completeConfiguration,
+          productionDomain: 'https://webbin.mx',
+        },
+        currentStep: 8,
+      },
+      created.version,
+      context('configure-active-profile-edit'),
+    );
+    const validated = await service.validate(
+      configured.id,
+      configured.version,
+      context('validate-active-profile-edit'),
+    );
+    expect(validated.enrollment.state).toBe('ready_for_pairing');
+    await withPlatformOwnerScope(
+      database.db,
+      {
+        actorId: 'owner-1',
+        correlationId: 'activate-profile-edit',
+        reason: 'Activate enrollment for profile edit test',
+      },
+      async (scoped) => {
+        await scoped
+          .update(schema.clientEnrollments)
+          .set({ state: 'active' })
+          .where(eq(schema.clientEnrollments.id, created.id));
+        await scoped
+          .update(schema.projectManifestVersions)
+          .set({ status: 'active' })
+          .where(
+            eq(schema.projectManifestVersions.projectId, created.projectId),
+          );
+      },
+    );
+    const [activeRow] = await database.db
+      .select({ version: schema.clientEnrollments.version })
+      .from(schema.clientEnrollments)
+      .where(eq(schema.clientEnrollments.id, created.id));
+    const patched = await service.update(
+      created.id,
+      {
+        configuration: {
+          ...completeConfiguration,
+          productionDomain: 'https://webbin.com.mx',
+        },
+        currentStep: 8,
+      },
+      activeRow!.version,
+      context('patch-active-production-domain'),
+    );
+    expect(patched.state).toBe('active');
+    expect(patched.configuration.productionDomain).toBe(
+      'https://webbin.com.mx',
+    );
+    const manifest = await service.getManifest(
+      created.id,
+      'owner-1',
+      'read-active-profile-manifest',
+    );
+    expect(manifest.manifest).toMatchObject({
+      status: 'active',
+      deployment: { productionOrigin: 'https://webbin.com.mx' },
+    });
   });
 });

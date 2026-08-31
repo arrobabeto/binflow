@@ -16,6 +16,7 @@ Mark each layer before marking the tool done.
 | 10 | Ingress | `packages/workflows/src/capability-ingress.ts` + handlers | When Telegram-exposed |
 | 11 | Conformance | `packages/workflows/test/capability-conformance.test.ts` | Always (extend scenarios) |
 | 12 | Stack gate | Brief `allowedProfiles` = `tool.yaml` profile; assignment only when `projects.profile` ∈ allowed | Always |
+| 12b | Stack contract | Load `references/stacks/<stack>.md`; Orbitype → also `docs/guides/astro-orbitype-tool-implementation.md` | Always |
 
 ## Conditional
 

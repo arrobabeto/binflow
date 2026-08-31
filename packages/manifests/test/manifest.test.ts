@@ -18,6 +18,7 @@ const input = (): BuildManifestInput => ({
     translationPolicy: 'always_translate' as const,
   },
   id: 'manifest-1',
+  profile: 'astro_repo',
   projectId: 'project-1',
   projectKey: 'webbin',
   tenantKey: 'webbin',
@@ -85,6 +86,11 @@ describe('project manifest', () => {
         capabilityId: 'delete_blog_draft',
         capabilityVersion: 2,
       },
+      {
+        access: 'client_publish',
+        capabilityId: 'delete_project_astro',
+        capabilityVersion: 2,
+      },
     ]);
   });
 
@@ -134,5 +140,159 @@ describe('project manifest', () => {
         },
       }),
     ).toThrow(/Daily estimated cost/);
+  });
+
+  it('builds an empty-capability astro_orbitype enrollment stub', () => {
+    const manifest = buildProjectManifest({
+      ...input(),
+      configuration: {
+        ...input().configuration,
+        productionDomain: 'https://www.example.com/',
+      },
+      profile: 'astro_orbitype',
+      projectKey: 'demo',
+      tenantKey: 'demo',
+      verifiedBindings: {
+        github: {
+          defaultBranch: 'main',
+          installationId: '1',
+          repository: 'acme/demo-site',
+        },
+        vercel: {
+          productionBranch: 'main',
+          projectId: 'prj_demo',
+          repository: 'acme/demo-site',
+        },
+      },
+    });
+
+    expect(manifest.profile).toBe('astro_orbitype');
+    expect(manifest.content.source).toBe('orbitype');
+    expect(manifest.enabledCapabilities).toEqual([]);
+    expect(manifest.globalProfileVersion).toBe('astro_orbitype@1');
+    expect(manifest.deployment.productionOrigin).toBe(
+      'https://www.example.com',
+    );
+  });
+
+  it('requires productionDomain for astro_orbitype', () => {
+    expect(() =>
+      buildProjectManifest({
+        ...input(),
+        configuration: {
+          ...input().configuration,
+          productionDomain: undefined,
+        },
+        profile: 'astro_orbitype',
+        projectKey: 'demo',
+        tenantKey: 'demo',
+        verifiedBindings: {
+          github: {
+            defaultBranch: 'main',
+            installationId: '1',
+            repository: 'acme/demo-site',
+          },
+          vercel: {
+            productionBranch: 'main',
+            projectId: 'prj_demo',
+            repository: 'acme/demo-site',
+          },
+        },
+      }),
+    ).toThrow(/productionDomain/);
+  });
+
+  it('freezes enrolled productionDomain on astro_repo when set', () => {
+    const manifest = buildProjectManifest({
+      ...input(),
+      configuration: {
+        ...input().configuration,
+        productionDomain: 'https://webbin.com.mx/',
+      },
+    });
+    expect(manifest.deployment.productionOrigin).toBe('https://webbin.com.mx');
+  });
+
+  it('defaults astro_repo productionOrigin to the Webbin pilot', () => {
+    const manifest = buildProjectManifest(input());
+    expect(manifest.deployment.productionOrigin).toBe('https://webbin.com.mx');
+  });
+
+  it('accepts monolingual German for astro_orbitype', () => {
+    const manifest = buildProjectManifest({
+      ...input(),
+      configuration: {
+        ...input().configuration,
+        clientConversationLocale: 'de',
+        contentLocales: ['de'],
+        defaultContentLocale: 'de',
+        productionDomain: 'https://www.example.com',
+        requiredLocales: ['de'],
+        slugLocale: 'de',
+        translationPolicy: 'none',
+      },
+      profile: 'astro_orbitype',
+      projectKey: 'demo',
+      tenantKey: 'demo',
+      verifiedBindings: {
+        github: {
+          defaultBranch: 'main',
+          installationId: '1',
+          repository: 'acme/demo-site',
+        },
+        vercel: {
+          productionBranch: 'main',
+          projectId: 'prj_demo',
+          repository: 'acme/demo-site',
+        },
+      },
+    });
+
+    expect(manifest.contentLocales).toEqual(['de']);
+    expect(manifest.translationPolicy).toBe('none');
+    expect(manifest.defaultContentLocale).toBe('de');
+    expect(manifest.content.collections.de?.directory).toBe(
+      'src/content/blog-de',
+    );
+    expect(manifest.content.collections.de?.routePrefix).toBe('/posts');
+    expect(manifest.content.editablePaths).toEqual([
+      'cms/collections/**',
+      'src/content/blog-en/*.md',
+      'src/content/blog-es/*.md',
+      'src/content/blog-de/*.md',
+      'public/images/blog/*.avif',
+      'public/images/blog/*.jpg',
+    ]);
+    expect(manifest.content.publicationTargets).toEqual([
+      'github',
+      'orbitype',
+    ]);
+  });
+
+  it('rejects multilingual none for astro_orbitype', () => {
+    expect(() =>
+      buildProjectManifest({
+        ...input(),
+        configuration: {
+          ...input().configuration,
+          translationPolicy: 'none',
+        },
+        profile: 'astro_orbitype',
+        projectKey: 'demo',
+        tenantKey: 'demo',
+        verifiedBindings: {
+          github: {
+            defaultBranch: 'main',
+            installationId: '1',
+            repository: 'acme/demo-site',
+          },
+          vercel: {
+            productionBranch: 'main',
+            projectId: 'prj_demo',
+            repository: 'acme/demo-site',
+          },
+        },
+      }),
+    ).toThrow(/translation policy none/);
   });
 });

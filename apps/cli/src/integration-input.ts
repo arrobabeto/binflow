@@ -90,6 +90,18 @@ export const promptIntegrationInput = async (
         teamId.trim() === '' ? { projectId } : { projectId, teamId };
       break;
     }
+    case 'orbitype-api': {
+      const apiKey = await secret('Orbitype API key');
+      const baseUrl = await input({
+        default: 'https://core.orbitype.com/api/sql/v1',
+        message: 'Orbitype SQL API base URL',
+        validate: required,
+      });
+      primarySecret = apiKey;
+      value = { apiKey };
+      configuration = { baseUrl };
+      break;
+    }
   }
 
   const alias = await input({

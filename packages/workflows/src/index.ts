@@ -43,7 +43,7 @@ import {
   type ScopedDatabase,
 } from '@binflow/db';
 import { DomainError, type Clock, systemClock } from '@binflow/domain';
-import { projectCapabilityCatalog, deleteBlogDraftDefinition, deleteProjectAstroDefinition } from '@binflow/policies';
+import { projectCapabilityCatalog, deleteBlogDraftDefinition, deleteProjectAstroDefinition, capabilityRegistry } from '@binflow/policies';
 import {
   buildCollectionQuestion,
   heuristicExtractProjectFacts,
@@ -109,7 +109,7 @@ export {
 } from './capability-runtimes.js';
 
 const ACTION_TTL_MS = 24 * 60 * 60 * 1000;
-const CLIENT_ACTIVATION_CHECKS = [
+const SHARED_CLIENT_ACTIVATION_CHECKS = [
   'configuration',
   'openai_credential',
   'telegram_admin_credential',
@@ -120,6 +120,17 @@ const CLIENT_ACTIVATION_CHECKS = [
   'capability_catalog',
   'client_pairing',
 ] as const;
+
+const clientActivationChecksForProfile = (
+  profile: string,
+): readonly string[] =>
+  profile === 'astro_orbitype'
+    ? [
+        ...SHARED_CLIENT_ACTIVATION_CHECKS.slice(0, 6),
+        'orbitype_api_credential',
+        ...SHARED_CLIENT_ACTIVATION_CHECKS.slice(6),
+      ]
+    : SHARED_CLIENT_ACTIVATION_CHECKS;
 const TERMINAL_STATES = [
   'COMPLETED',
   'FAILED_FINAL',
@@ -288,11 +299,11 @@ const copy = {
     tools:
       'Tools disponibles:\n/create_blog — crear un blog bilingüe\n/create_project — crear un proyecto de portafolio\n/delete_blog — borrar un artículo del blog\n/delete_project — borrar un proyecto de portafolio',
     deleteBlogGuidance:
-      'Para borrar un artículo, envía el título o la URL pública. Ejemplo: /delete_blog https://webbin.com.mx/es/articulos/mi-articulo',
+      'Para borrar un artículo, envía el título o la URL pública. Ejemplo: /delete_blog https://example.com/es/articulos/mi-articulo',
     deleteBlogNotEnabled:
       'La tool de borrado de blog no está asignada a este cliente.',
     deleteProjectGuidance:
-      'Para borrar un proyecto, envía el título o la URL pública. Ejemplo: /delete_project https://webbin.com.mx/es/proyectos/mi-proyecto',
+      'Para borrar un proyecto, envía el título o la URL pública. Ejemplo: /delete_project https://example.com/es/proyectos/mi-proyecto',
     deleteProjectNotEnabled:
       'La tool de borrado de proyectos no está asignada a este cliente.',
     deletePreviewPending:
@@ -513,6 +524,7 @@ export class WorkflowService {
         const [resolved] = await database
           .select({
             enrollment: schema.clientEnrollments,
+            projectProfile: schema.projects.profile,
             userId: schema.clientUsers.id,
           })
           .from(schema.channelMessages)
@@ -527,6 +539,10 @@ export class WorkflowService {
           .innerJoin(
             schema.clientEnrollments,
             eq(schema.clientEnrollments.id, schema.clientUsers.enrollmentId),
+          )
+          .innerJoin(
+            schema.projects,
+            eq(schema.projects.id, schema.clientEnrollments.projectId),
           )
           .where(
             and(
@@ -549,6 +565,9 @@ export class WorkflowService {
           );
         }
         const lastValidatedAt = resolved.enrollment.lastValidatedAt;
+        const requiredChecks = clientActivationChecksForProfile(
+          resolved.projectProfile,
+        );
 
         const attempts = await database
           .select({
@@ -564,12 +583,12 @@ export class WorkflowService {
                 resolved.enrollment.id,
               ),
               inArray(schema.enrollmentValidationAttempts.checkName, [
-                ...CLIENT_ACTIVATION_CHECKS,
+                ...requiredChecks,
               ]),
             ),
           )
           .orderBy(desc(schema.enrollmentValidationAttempts.checkedAt));
-        const missing = CLIENT_ACTIVATION_CHECKS.filter(
+        const missing = requiredChecks.filter(
           (checkName) =>
             attempts.find(
               (attempt) =>
@@ -1968,12 +1987,17 @@ export class WorkflowService {
       .limit(1);
     if (
       manifest === undefined ||
-      !(await this.hasCapability(database, identity.projectId))
+      (await this.resolveCreateBlogCapability(database, identity.projectId)) ===
+        undefined
     )
       throw new DomainError(
         'policy_denied',
         'Create blog is not enabled for this project.',
       );
+    const blogCapability = (await this.resolveCreateBlogCapability(
+      database,
+      identity.projectId,
+    ))!;
     const interpretedInput = createBlogDraftInputSchema.parse({
       mode: 'brief',
       projectId: identity.projectId,
@@ -1982,6 +2006,19 @@ export class WorkflowService {
     });
     const requestId = uuidv7();
     const requestVersionId = uuidv7();
+    const publicationNodes =
+      blogCapability.id === 'create_blog_orbitype'
+        ? ([
+            'create_github_draft',
+            'create_orbitype_draft',
+            'wait_preview',
+            'awaiting_client_approval',
+          ] as const)
+        : ([
+            'create_draft',
+            'wait_preview',
+            'awaiting_client_approval',
+          ] as const);
     const plan = {
       nodes: [
         'catalog_sync',
@@ -1991,15 +2028,13 @@ export class WorkflowService {
         'generate',
         'prepare_image',
         'render_artifacts',
-        'create_draft',
-        'wait_preview',
-        'awaiting_client_approval',
+        ...publicationNodes,
       ],
       topic,
       ...(context === undefined ? {} : { context }),
     };
     const requestRow = {
-      capabilityId: 'create_blog_draft',
+      capabilityId: blogCapability.id,
       conversationId: identity.conversationId,
       currentVersion: 1,
       id: requestId,
@@ -2016,7 +2051,7 @@ export class WorkflowService {
     };
     await database.insert(schema.requests).values(requestRow);
     await database.insert(schema.requestVersions).values({
-      capabilityVersion: 1,
+      capabilityVersion: blogCapability.version,
       id: requestVersionId,
       interpretedInput,
       manifestVersionId: manifest.id,
@@ -2051,7 +2086,7 @@ export class WorkflowService {
       database,
       requestIdentity,
       'client_tool_used',
-      `Client used create_blog_draft for request ${requestId}.`,
+      `Client used ${blogCapability.id} for request ${requestId}.`,
       1,
     );
     const localeCopy = copy[identity.locale];
@@ -3905,7 +3940,10 @@ export class WorkflowService {
       const categoryKind = (
         evidence.categoryKind as { categoryKind?: unknown } | null
       )?.categoryKind;
-      if (request.capabilityId === 'create_blog_draft') {
+      if (
+        request.capabilityId === 'create_blog_draft' ||
+        request.capabilityId === 'create_blog_orbitype'
+      ) {
         if (
           categoryKind !== 'existing' &&
           categoryKind !== 'likely_typo' &&
@@ -3932,7 +3970,9 @@ export class WorkflowService {
         tenantId: request.tenantId,
       });
       const needsAdmin =
-        request.capabilityId === 'create_blog_draft' && categoryKind === 'new';
+        (request.capabilityId === 'create_blog_draft' ||
+          request.capabilityId === 'create_blog_orbitype') &&
+        categoryKind === 'new';
       await database
         .update(schema.requests)
         .set({
@@ -4060,7 +4100,10 @@ export class WorkflowService {
       sql`select pg_advisory_xact_lock(hashtext(${`request:${request.id}`}))`,
     );
     const current = await this.currentRequestVersion(database, request);
-    if (request.capabilityId !== 'create_blog_draft')
+    if (
+      request.capabilityId !== 'create_blog_draft' &&
+      request.capabilityId !== 'create_blog_orbitype'
+    )
       throw new DomainError(
         'conflict_error',
         'Revisions are not supported for this capability.',
@@ -4634,6 +4677,22 @@ export class WorkflowService {
         displayName: item.displayName,
         id: item.id,
       }));
+  }
+
+  private async resolveCreateBlogCapability(
+    database: ScopedDatabase,
+    projectId: string,
+  ): Promise<Readonly<{ id: string; version: number }> | undefined> {
+    const enabled = await this.listEnabledCapabilities(database, projectId);
+    const pick =
+      enabled.find((item) => item.id === 'create_blog_orbitype') ??
+      enabled.find((item) => item.id === 'create_blog_draft');
+    if (pick === undefined) return undefined;
+    const definition = capabilityRegistry.find(
+      (candidate) => candidate.id === pick.id,
+    );
+    if (definition === undefined) return undefined;
+    return { id: definition.id, version: definition.version };
   }
 
   private async hasCapability(

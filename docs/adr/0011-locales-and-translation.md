@@ -4,6 +4,7 @@
 - Date: 2026-08-10
 - Supersedes: None
 - Superseded by: None
+- Extended by: [ADR-0046](0046-selectable-monolingual-locales.md)
 
 ## Context
 
@@ -23,7 +24,9 @@ The dashboard is English. Client conversations support English, Spanish and Germ
   Copying the Spanish strings into the English collection is a validation
   failure, not a successful translation. The shared slug remains
   Spanish-derived.
-- German remains available but unvalidated until a compatible real pilot is accepted.
+- German remains available in the platform catalog. Non-Webbin enrollments may
+  enable German alone or with other locales (see ADR-0046). Webbin still rejects
+  German until its pilot contract changes.
 
 ## Alternatives considered
 

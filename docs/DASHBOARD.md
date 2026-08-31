@@ -12,7 +12,7 @@ The first-MVP dashboard UI is English.
 Sidebar
   Main: Home · Clients · Requests
   Tools: Catalog · Customizations
-  System: Integrations · Operations
+  System: Integrations · Operations · Analytics
   (footer) email · Sign out
 ```
 
@@ -23,17 +23,18 @@ Zones:
 - **Main:** Home, Clients, Requests — daily operations.
 - **Tools:** Catalog (`/tools`) and Customizations — capability and voice
   configuration (direct sidebar links, not a dropdown).
-- **System:** Integrations and Operations — platform readiness (direct links).
-  Login, two-factor, and Security use the auth layout without the shell.
-  Security is not listed in the System menu; it remains reachable for mandatory
-  TOTP enrollment and session management when the auth flow requires it.
+- **System:** Integrations, Operations, and Analytics — platform readiness and
+  metrics (direct links). Login, two-factor, and Security use the auth layout
+  without the shell. Security is not listed in the System menu; it remains
+  reachable for mandatory TOTP enrollment and session management when the auth
+  flow requires it.
 
 Approvals are not a separate top-level page; pending admin approvals surface on
 Home and in the top section of Requests.
 
-Documented but not yet built as pages: Projects, Content catalog, Usage, Audit,
-and a dedicated Settings hub (Integrations / Operations cover the MVP platform
-settings surfaces).
+Documented but not yet built as pages: Projects, Content catalog, Usage API
+aggregation, Audit, and a dedicated Settings hub (Integrations / Operations /
+Analytics cover the MVP platform settings and metrics surfaces).
 
 ## Tools
 
@@ -109,6 +110,8 @@ collection only.
 
 Home is the operations cockpit (`/`). It displays:
 
+- **Local clock** next to **Add client**: date `dd-mm-yy` and 24-hour time in a
+  button-shaped read-only chip (operator local timezone).
 - **Status strip**
   - System health from `GET /api/v1/health` plus `GET /api/v1/readiness`
     (Healthy when API is `ok` and readiness is `ready`).
@@ -135,6 +138,28 @@ Full day/month AI cost and exhaustive request totals remain specified for a
 future Usage surface (`GET /api/v1/usage`); Home does not invent those totals
 until that API is wired into the UI.
 
+## Analytics
+
+Analytics (`/analytics`) is the control-plane metrics surface (Figma
+`analytics-dashboard`). Layout matches the design system dark shell. Panels
+that lack a durable API show **Available soon** and never paste Figma mock
+dollars, vendors, or tool names.
+
+| Panel | Status | Source |
+|---|---|---|
+| Total API Spend | Soon | Future `GET /api/v1/usage` |
+| Total Requests | Live (approx) | Recent request list batches |
+| Avg Cost/Request | Soon | Usage |
+| Avg Latency | Soon | Usage / model_calls |
+| Tool Usage / Failures donuts | Live (approx) | `capabilityId` + state from request batches; labels from tools catalog |
+| Tool usage table | Hybrid | Live counts/rates from batches; Avg Execution Time soon |
+| API Cost Over Time | Soon | Usage time-series |
+| Requests by Model | Live | Agent-node `model` fields across tool graphs |
+| Cost by Client | Hybrid | Live client + enrollment state; budget/spend soon |
+| Recent Cost Alerts | Soon | Budget alerts |
+| Model Efficiency Index | Soon | Pricing scores |
+| Date range control | Live for request-derived panels | Filters loaded request batches by `createdAt`: Last 24 hours (rolling), Last 7 / 30 days (UTC calendar), or All time. Does not invent usage spend series |
+
 ## Clients and projects
 
 Client list supports create, resume configuration, validate, activate, suspend and archive. Client detail includes:
@@ -153,15 +178,28 @@ Client list supports create, resume configuration, validate, activate, suspend a
 - Usage and requests scoped to the client.
 - While client pairing is pending, the detail refreshes on foreground return
   and at a bounded interval. Successful bot-response delivery changes the badge
-  to `active` without requiring manual browser refresh.
+  to `active` without requiring manual browser refresh. Enrollment
+  save/validate/pairing-link mutations use optimistic concurrency (`If-Match`
+  on enrollment version). A `409` from a stale version (for example after
+  validate advanced the revision) triggers one automatic refresh and retry so
+  the operator is not stuck on conflict.
 
-Only `astro_repo` is selectable in the first MVP. Future profile names must not be shown as operational choices until their acceptance criteria pass.
+Only `astro_repo` was selectable in the first MVP. Post-MVP, `astro_orbitype`
+is also selectable for enrollment (ADR-0045). Other future profile names must
+not be shown as operational choices until their acceptance criteria pass.
 
-The enrollment form edits a draft configuration. `Validate` materializes or
-reuses the project manifest and shows its redacted effective contract. Webbin
-offers English and Spanish content only, requires both, uses Spanish as source
-and slug locale, and fixes translation to `always_translate`; globally
-supported German and `ask_each_action` remain unavailable for this pilot.
+The enrollment form edits client configuration for draft and live enrollments.
+Pre-activation saves move the enrollment back to `configuring` so operators
+re-validate. Saves on `active` / `pairing_pending` / `revalidation_required`
+keep that state and rematerialize a new immutable active (or matching) manifest
+revision when the frozen contract changes — including production URL
+(`productionDomain` → `deployment.productionOrigin`, ADR-0048), locales,
+editorial fields and budgets. `Validate` materializes or reuses the project
+manifest and shows its redacted effective contract. Locale fields offer
+English, Spanish and German; operators may enable one or more (ADR-0046).
+Monolingual projects use translation policy `none`. Webbin remains an overlay:
+English and Spanish content only, both required, Spanish as source and slug
+locale, translation fixed to `always_translate`.
 The same view shows the effective code-owned capability catalog. Operators
 toggle which registry tools are bound to the client after validation; each save
 creates a new immutable manifest revision (`PUT

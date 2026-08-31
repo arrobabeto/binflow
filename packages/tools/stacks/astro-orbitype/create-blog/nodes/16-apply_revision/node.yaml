@@ -1,0 +1,8 @@
+kind: agent
+label: Apply confirmed revision plan
+nodeKind: content.apply_revision@1
+acceptsClientCustomization: true
+effort: medium
+model: gpt-5.6-terra
+rulesRef: shared/rules/editorial-content@1
+workload: text

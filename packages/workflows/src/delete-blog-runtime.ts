@@ -12,7 +12,7 @@ import {
 import {
   DeleteBlogExecutor,
   composeBlogArticleUrl,
-  defaultDeleteBlogProductionOrigin,
+  resolveDeleteBlogProductionOrigin,
   type DeleteBlogExecutionResult,
 } from '@binflow/blog';
 import {
@@ -150,7 +150,9 @@ export class DeleteBlogWorkflowRuntime {
         >,
         manifest: context.manifest.document,
         onStage: recordExecutionStage,
-        productionOrigin: defaultDeleteBlogProductionOrigin(),
+        productionOrigin: resolveDeleteBlogProductionOrigin(
+          context.manifest.document,
+        ),
         requestId: context.request.id,
       });
     } catch (error) {
@@ -295,7 +297,7 @@ export class DeleteBlogWorkflowRuntime {
           [
             `Cliente: ${scope?.tenantKey ?? context.request.tenantId}`,
             `Acción: quiere borrar el artículo «${result.resolvedTitle}»`,
-            `URL: ${composeBlogArticleUrl(defaultDeleteBlogProductionOrigin(), context.manifest.document, result.resolvedSlug)}`,
+            `URL: ${composeBlogArticleUrl(resolveDeleteBlogProductionOrigin(context.manifest.document), context.manifest.document, result.resolvedSlug)}`,
             `PR: ${result.publication.pullRequestUrl}`,
             `Request: ${context.request.id}`,
             `Dashboard: /requests/${context.request.id}`,

@@ -34,7 +34,7 @@ Never passed to the model:
 
 The blog executor treats model output as untrusted data. Strict schemas,
 renderer rules, editable-path checks and exact file-count checks run before
-GitHub. Models never receive GitHub, Vercel, Telegram, S3 or database
+GitHub. Models never receive GitHub, Vercel, Telegram, Orbitype, S3 or database
 credentials, generated Markdown is never executed by the worker, and approval
 plus the live-execution switch are enforced outside the model. Logs and audit
 store artifact digests and redacted metadata, never bodies, image bytes or
@@ -50,6 +50,7 @@ provider secrets.
 | LLM proposes forbidden operation | Tool registry allowlist and deterministic policy rejection                                                          |
 | Cross-tenant disclosure          | RLS, scoped repositories, tenant artifact prefixes, isolation tests                                                 |
 | Secret leakage                   | Envelope encryption, redaction, no secrets in queue/checkpoint/log/model contexts                                   |
+| Orbitype API key misuse          | Project-scoped credential, read-only enrollment verify, no CMS mutation at onboard, never LLM-visible (ADR-0045)   |
 | Local KEK disclosure             | Generate outside repository, regular-file and `0600` validation, no key output or database copy                     |
 | Excess GitHub App authority      | Single-repository installation, per-operation token downscoping, separate admin authorization and permission audits |
 | Approval of stale content        | Bind approval to request version, SHA and deployment/version                                                        |

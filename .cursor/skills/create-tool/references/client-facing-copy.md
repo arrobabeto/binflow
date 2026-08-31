@@ -21,14 +21,20 @@ notices must read like product copy — not debug logs.
 
 ### Plan confirm (good vs bad)
 
-**Good (delete blog, ES):**
+**Good (delete blog, ES)** — URL uses the **client’s** public origin from the
+frozen manifest / enrollment (Webbin example shown; Orbitype would use that
+client’s domain and route prefix):
 
 ```text
 Plan: borrar el artículo **Mi Artículo**.
-URL: https://webbin.com.mx/es/articulos/mi-articulo
+URL: https://example.com/es/articulos/mi-articulo
 ```
 
 Buttons: `Borrar artículo` | `Cancelar` — never `Crear borrador`.
+
+**Never** bake `https://webbin.com.mx` into shared workflow guidance strings.
+Success / plan URLs are composed from `deployment.productionOrigin` (or evidence
+`productionUrls`). Neutral examples use `https://example.com/...`.
 
 **Bad:**
 

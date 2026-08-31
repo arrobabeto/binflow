@@ -497,11 +497,16 @@ const matchesEditablePath = (
   patterns: readonly string[],
 ): boolean =>
   patterns.some((pattern) => {
+    // Expand **/ before single-star so `**` → `.*` is not corrupted by `*` → `[^/]*`,
+    // and so `dir/**/*.md` matches files directly under `dir/` as well as nested.
     const expression = new RegExp(
       `^${pattern
         .replaceAll(/[.+?^${}()|[\]\\]/gu, '\\$&')
-        .replaceAll('**', '.*')
-        .replaceAll('*', '[^/]*')}$`,
+        .replaceAll('**/', '\0GLOBSTAR_SLASH\0')
+        .replaceAll('**', '\0GLOBSTAR\0')
+        .replaceAll('*', '[^/]*')
+        .replaceAll('\0GLOBSTAR_SLASH\0', '(?:.*/)?')
+        .replaceAll('\0GLOBSTAR\0', '.*')}$`,
       'u',
     );
     return expression.test(path);

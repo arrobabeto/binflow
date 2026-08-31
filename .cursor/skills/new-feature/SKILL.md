@@ -2,12 +2,11 @@
 name: new-feature
 description: >-
   Documentation-first governance gate for Binflow platform or product features
-  (new stack/profile, integration, dashboard, workflow kernel, security, ops).
-  Classifies the feature, maps impact on canonical docs/ADRs/tools/ports, STOP
-  for explicit approval when rules change, writes specs/ADRs/changelog, then
-  hands off to create-tool or an implementation plan. Use for /new-feature,
-  "nueva feature", "habilitar stack", or any non-trivial feature before code.
-  Does not implement executors, migrations, or scaffold tools.
+  (integration, dashboard, workflow kernel, security, ops; stack/profile asks
+  should prefer new-stack). Classifies the feature, maps impact on canonical
+  docs/ADRs/tools/ports, STOP for explicit approval when rules change, writes
+  specs/ADRs/changelog, then hands off. Use for /new-feature or non-trivial
+  features before code. Does not implement executors, migrations, or scaffolds.
 ---
 
 # New Feature (governance gate)
@@ -21,15 +20,18 @@ approval, writes or updates canonical documentation, then hands off. It does
 
 ## When to use
 
-- User asks `/new-feature`, “nueva feature”, “habilitar un stack”, new profile,
-  new integration, dashboard surface, ops/deploy change, or trust-boundary work.
+- User asks `/new-feature`, “nueva feature”, new integration, dashboard surface,
+  ops/deploy change, or trust-boundary work.
 - Before [`create-tool`](../create-tool/SKILL.md) when the ask is broader than
-  “one new capability” (e.g. new stack, then tools).
+  “one new capability” and is **not** primarily a new stack/profile (for stacks,
+  prefer [`new-stack`](../new-stack/SKILL.md)).
 - When an implementation request would silently contradict an accepted ADR.
 
 ## When NOT to use
 
 - Pure typo / docs-only cleanup with no behavior change → edit docs directly.
+- “Habilitar stack” / new project profile → prefer
+  [`new-stack`](../new-stack/SKILL.md).
 - “Create capability X on an existing stack” with no rule changes → prefer
   [`create-tool`](../create-tool/SKILL.md) (still run a short Phase 2 impact if
   unsure).
@@ -143,23 +145,28 @@ Still **no product code**.
 | Primary type | Next step |
 |--------------|-----------|
 | `capability` | Invoke [`create-tool`](../create-tool/SKILL.md) with specs/ADR aligned |
-| `stack_profile` | Implementation plan only: stack path, profile enum, enrollment, `allowedProfiles`, first tool via create-tool later |
+| `stack_profile` | Invoke [`new-stack`](../new-stack/SKILL.md) for stack-specialized prep (impact, spec/ADR, readiness handoff). **No** product code here or in new-stack. |
 | `integration` / `dashboard` / `workflow_kernel` / `security_trust` / `ops_deploy` | Ordered documentation-first task list for Agent mode |
 | `docs_only` | Done after Phase 4 |
 
 Tell the user explicitly: governance complete; implementation is a **separate**
-request (Agent mode / create-tool).
+request (Agent mode / create-tool / new-stack readiness handoff).
 
 ---
 
 ## Worked example: enable a new stack
 
-See [`references/impact-matrix.md`](references/impact-matrix.md) § Stack profile
-walkthrough (ADR-0030, SCOPE, ONBOARDING, `allowedProfiles`, ADR-0042).
+Prefer [`new-stack`](../new-stack/SKILL.md) as the entry point. If you are
+already in this skill and the type is `stack_profile`, hand off to new-stack
+after a short classification confirmation (skip duplicating Phase 0–4 here).
 
-Expected outcome: Impact Report + approval if MVP/SCOPE expands +
-`docs/specs/<stack>-profile.md` + ADR + CHANGELOG + handoff plan — **no**
-`packages/tools/stacks/` code from this skill.
+See also [`references/impact-matrix.md`](references/impact-matrix.md) § Stack
+profile walkthrough and
+[`../new-stack/references/impact-matrix.md`](../new-stack/references/impact-matrix.md).
+
+Expected outcome from **new-stack**: Impact Report + approval if needed +
+`docs/specs/<stack>-….md` + ADR + CHANGELOG + readiness handoff — **no**
+`packages/tools/stacks/` code and **no** product implementation.
 
 ## References
 

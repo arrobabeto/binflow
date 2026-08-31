@@ -188,8 +188,8 @@ export const createGitHubCredentialVerifier = (
       );
     }
     if (
-      connectionConfiguration.expectedRepository !==
-        webbinPilotBinding.repository ||
+      connectionConfiguration.expectedRepository ===
+        webbinPilotBinding.repository &&
       connectionConfiguration.defaultBranch !==
         webbinPilotBinding.productionBranch
     ) {
@@ -533,14 +533,10 @@ export const createGitHubRepositoryPublicationPort = (
   const connection = connectionConfigurationSchema.parse(
     input.credential.connection?.configuration,
   );
-  if (
-    connection.expectedRepository !== webbinPilotBinding.repository ||
-    connection.defaultBranch !== webbinPilotBinding.productionBranch
-  )
-    throw new DomainError(
-      'policy_denied',
-      'GitHub publication binding is outside Webbin.',
-    );
+  // Use the verified project connection binding (enrollment), not the Webbin
+  // pilot constants — astro_orbitype and other non-Webbin projects publish to
+  // their own repository/branch (ADR-0045 / ADR-0047).
+  const productionBranch = connection.defaultBranch;
   const [owner, repo] = splitRepository(connection.expectedRepository);
   const repositoryId = Number(input.repositoryId);
   const installationId = Number(input.installationId);
@@ -659,7 +655,7 @@ export const createGitHubRepositoryPublicationPort = (
     branch: string,
   ) => {
     const response = await requester('GET /repos/{owner}/{repo}/pulls', {
-      base: webbinPilotBinding.productionBranch,
+      base: productionBranch,
       head: `${owner}:${branch}`,
       headers: authorization(token),
       owner,
@@ -771,7 +767,7 @@ export const createGitHubRepositoryPublicationPort = (
           {
             headers: authorization(token),
             owner,
-            ref: `heads/${webbinPilotBinding.productionBranch}`,
+            ref: `heads/${productionBranch}`,
             repo,
           },
         );
@@ -862,7 +858,7 @@ export const createGitHubRepositoryPublicationPort = (
         const pullResponse = await requester(
           'POST /repos/{owner}/{repo}/pulls',
           {
-            base: webbinPilotBinding.productionBranch,
+            base: productionBranch,
             body: `Binflow request ${draft.requestId}. Preview and approval are required before merge.`,
             head: draft.branch,
             headers: authorization(token),

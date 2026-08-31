@@ -24,7 +24,7 @@ Complete after Phase 2 (and Phase 3 if required). Still **no product code**.
 | Threats / controls | `docs/SECURITY.md` |
 | Entities / retention | `docs/DATA-MODEL.md` |
 | Admin UI | `docs/DASHBOARD.md` |
-| Enrollment | `docs/ONBOARDING.md` |
+| Enrollment | `docs/ONBOARDING.md`, `docs/ENROLLMENT.md` (operator steps) |
 | Bots / notices | `docs/TELEGRAM.md` |
 | Providers | `docs/INTEGRATIONS.md` |
 | Tests | `docs/TESTING.md` |
@@ -47,10 +47,11 @@ Complete after Phase 2 (and Phase 3 if required). Still **no product code**.
 
 ## Stack profile extras
 
-When primary type is `stack_profile`:
+When primary type is `stack_profile` (prefer routing to `new-stack`):
 
 - [ ] Spec names stack directory and `projects.profile` value
 - [ ] ONBOARDING/SCOPE mention the profile if managed onboarding expands
+- [ ] `ENROLLMENT.md` still accurate for section B after the stack ships
 - [ ] Note that first tool uses create-tool + `allowedProfiles` migration
 - [ ] ADR-0042 note if shared ports will be reused
 

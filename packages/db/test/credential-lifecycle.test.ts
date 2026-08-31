@@ -1,6 +1,6 @@
 import { randomBytes } from 'node:crypto';
 
-import { eq, sql } from 'drizzle-orm';
+import { eq, inArray, sql } from 'drizzle-orm';
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 
 import { encryptSecret } from '@binflow/secrets';
@@ -11,11 +11,12 @@ import {
   ensureDraftScope,
   recordCredentialVerificationFailure,
   recordCredentialVerificationSuccess,
+  resolveActiveProjectGithubAppBinding,
   resolveScope,
   revokeCredential,
   storeCredentialVersion,
 } from '../src/repository.js';
-import { integrationConnections, providerCredentials } from '../src/schema.js';
+import { integrationConnections, projects, providerCredentials } from '../src/schema.js';
 
 const databaseUrl = process.env.BINFLOW_TEST_DATABASE_URL;
 if (
@@ -307,6 +308,114 @@ describeDatabase('credential lifecycle database invariants', () => {
     ).toEqual({
       'github-platform': 'superseded',
       'github-platform-v2': 'active',
+    });
+  });
+
+  it('keeps distinct GitHub App ids active at platform scope', async () => {
+    const webbin = await ensureDraftScope(database.db, {
+      projectKey: 'webbin',
+      tenantKey: 'webbin',
+    });
+    const bistro = await ensureDraftScope(database.db, {
+      projectKey: 'bistro',
+      tenantKey: 'bistro',
+    });
+    await database.db
+      .update(projects)
+      .set({ profile: 'astro_orbitype' })
+      .where(eq(projects.id, bistro.projectId));
+    const storeApp = async (input: {
+      appId: string;
+      credentialId: string;
+      repository: string;
+      scope: typeof webbin;
+    }) => {
+      const context = {
+        credentialId: input.credentialId,
+        keyVersion: 1,
+        provider: 'github-app',
+        tenantId: 'platform',
+      } as const;
+      const plaintext = Buffer.from(
+        JSON.stringify({
+          privateKey: `${input.credentialId}-key`,
+          webhookSecret: `${input.credentialId}-hook`,
+        }),
+      );
+      const envelope = encryptSecret(plaintext, masterKey, context);
+      plaintext.fill(0);
+      await storeCredentialVersion(database.db, {
+        alias: input.credentialId,
+        configuration: { appId: input.appId, clientId: `Iv1.${input.appId}` },
+        connection: {
+          configuration: {
+            defaultBranch: 'main',
+            expectedRepository: input.repository,
+          },
+          kind: 'github-app',
+          scope: input.scope,
+        },
+        credentialId: input.credentialId,
+        envelope,
+        kind: 'github-app',
+        maskedSuffix: 'n/a',
+        ownerScope: 'platform',
+        scope: {},
+      });
+      await recordCredentialVerificationSuccess(database.db, {
+        checkedAt: new Date('2026-08-11T00:00:00.000Z'),
+        credentialId: input.credentialId,
+        evidence: {
+          externalResourceId: input.credentialId,
+          installationId: input.credentialId,
+          repository: input.repository,
+          repositoryId: input.credentialId,
+        },
+      });
+    };
+    await storeApp({
+      appId: '4600109',
+      credentialId: 'github-webbin-app',
+      repository: 'arrobabeto/webbin',
+      scope: webbin,
+    });
+    await storeApp({
+      appId: '4768159',
+      credentialId: 'github-bistro-app',
+      repository: 'arrobabeto/Bistro-Zur-Linde',
+      scope: bistro,
+    });
+    const statuses = await database.db
+      .select({
+        id: providerCredentials.id,
+        status: providerCredentials.status,
+      })
+      .from(providerCredentials)
+      .where(
+        inArray(providerCredentials.id, [
+          'github-webbin-app',
+          'github-bistro-app',
+        ]),
+      );
+    expect(
+      Object.fromEntries(statuses.map((row) => [row.id, row.status])),
+    ).toEqual({
+      'github-bistro-app': 'active',
+      'github-webbin-app': 'active',
+    });
+    await expect(
+      resolveActiveProjectGithubAppBinding(database.db, webbin.projectId),
+    ).resolves.toMatchObject({
+      credentialId: 'github-webbin-app',
+      installationId: 'github-webbin-app',
+      repositoryId: 'github-webbin-app',
+    });
+    await expect(
+      resolveActiveProjectGithubAppBinding(database.db, bistro.projectId),
+    ).resolves.toMatchObject({
+      credentialId: 'github-bistro-app',
+      installationId: 'github-bistro-app',
+      repositoryId: 'github-bistro-app',
     });
   });
 

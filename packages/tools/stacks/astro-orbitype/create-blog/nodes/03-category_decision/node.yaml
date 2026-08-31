@@ -1,0 +1,4 @@
+kind: compute
+label: Category decision
+nodeKind: content.category_decision@1
+acceptsClientCustomization: false

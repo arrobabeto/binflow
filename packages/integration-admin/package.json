@@ -23,6 +23,7 @@
     "@binflow/github": "workspace:*",
     "@binflow/integrations": "workspace:*",
     "@binflow/messaging": "workspace:*",
+    "@binflow/orbitype": "workspace:*",
     "@binflow/secrets": "workspace:*",
     "@binflow/vercel": "workspace:*",
     "drizzle-orm": "0.45.2",

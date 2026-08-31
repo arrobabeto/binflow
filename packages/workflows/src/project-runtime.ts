@@ -386,18 +386,48 @@ export class ProjectWorkflowRuntime {
           requestVersionId: context.version.id,
           tenantId: context.request.tenantId,
         });
-        await database.insert(schema.pullRequests).values({
-          baseSha: result.publication.baseCommitSha,
-          headSha: result.publication.headCommitSha,
-          id: uuidv7(),
-          projectId: context.request.projectId,
-          providerId: result.publication.pullRequestId,
-          repoChangeId,
-          requestVersionId: context.version.id,
-          state: 'open',
-          tenantId: context.request.tenantId,
-          url: result.publication.pullRequestUrl,
-        });
+        {
+          const [existingPull] = await database
+            .select()
+            .from(schema.pullRequests)
+            .where(
+              and(
+                eq(schema.pullRequests.projectId, context.request.projectId),
+                eq(
+                  schema.pullRequests.providerId,
+                  result.publication.pullRequestId,
+                ),
+              ),
+            )
+            .limit(1);
+          if (existingPull === undefined) {
+            await database.insert(schema.pullRequests).values({
+              baseSha: result.publication.baseCommitSha,
+              headSha: result.publication.headCommitSha,
+              id: uuidv7(),
+              projectId: context.request.projectId,
+              providerId: result.publication.pullRequestId,
+              repoChangeId,
+              requestVersionId: context.version.id,
+              state: 'open',
+              tenantId: context.request.tenantId,
+              url: result.publication.pullRequestUrl,
+            });
+          } else {
+            await database
+              .update(schema.pullRequests)
+              .set({
+                baseSha: result.publication.baseCommitSha,
+                headSha: result.publication.headCommitSha,
+                repoChangeId,
+                requestVersionId: context.version.id,
+                state: 'open',
+                updatedAt: now,
+                url: result.publication.pullRequestUrl,
+              })
+              .where(eq(schema.pullRequests.id, existingPull.id));
+          }
+        }
         await database.insert(schema.deployments).values({
           commitSha: result.deployment.sha,
           environment: result.deployment.environment,
@@ -923,9 +953,12 @@ export class ProjectWorkflowRuntime {
           .select()
           .from(schema.pullRequests)
           .where(
-            eq(
-              schema.pullRequests.providerId,
-              outcome.publication.pullRequestId,
+            and(
+              eq(schema.pullRequests.projectId, context.request.projectId),
+              eq(
+                schema.pullRequests.providerId,
+                outcome.publication.pullRequestId,
+              ),
             ),
           )
           .limit(1);

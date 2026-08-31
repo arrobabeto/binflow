@@ -83,9 +83,20 @@ Every capability reuses the same policy, translation, version, preview, approval
 
 ## Phase 6 — Orbitype profiles
 
-- Validate auth, schemas, drafts, versions, webhooks and rollback.
-- Implement allowlisted MCP adapter with typed HTTP fallback.
-- Validate `astro_orbitype`, then `nuxt_orbitype`, against separate real or staging pilots.
+- **Enrollment slice (ADR-0045):** profile `astro_orbitype` / stack
+  `astro-orbitype`; dashboard enrollment with Orbitype API-key verification;
+  Telegram client pairing; zero tools required to activate. Spec:
+  [`docs/specs/astro-orbitype-enrollment.md`](specs/astro-orbitype-enrollment.md).
+- **Create blog dual-write (ADR-0047):** capability `create_blog_orbitype@1`
+  on stack `astro-orbitype`; GitHub draft + Orbitype CMS draft; Vercel preview;
+  independent writer nodes. Spec:
+  [`docs/specs/create-blog-orbitype.md`](specs/create-blog-orbitype.md).
+  Pilot: Bistro (manifest locales, typically monolingual `de`).
+- Validate auth, schemas, drafts, versions, webhooks and rollback for further
+  content tools.
+- Implement allowlisted MCP adapter with typed HTTP fallback where needed.
+- Validate additional `astro_orbitype` capabilities, then `nuxt_orbitype`,
+  against separate real or staging pilots.
 
 ## Phase 7 — WordPress profile
 

@@ -1,0 +1,10 @@
+kind: effect
+label: Sync content catalog
+nodeKind: content.catalog_sync@1
+acceptsClientCustomization: false
+parameters:
+  catalogScope: blog
+permissions:
+  - github:metadata:read
+  - github:contents:read
+  - orbitype:content:write

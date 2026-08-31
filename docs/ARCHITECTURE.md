@@ -194,3 +194,8 @@ Local and production Compose use the same versioned first-party images. Environm
 ## Extensibility
 
 New profiles implement existing domain ports and global manifest contracts. Adding a provider or CMS must not change capability authorization semantics. Generic provider tools remain private to adapters; LLM-visible tools stay capability-specific and schema-constrained.
+
+Post-MVP profile `astro_orbitype` (ADR-0045) enrolls with a project-scoped
+Orbitype API-key credential and may activate with zero tool bindings. Content
+tools for that stack are added later without widening shared port defaults
+(ADR-0042).

@@ -1,0 +1,7 @@
+kind: agent
+label: Interpret brief into topic
+nodeKind: content.propose_topic@1
+acceptsClientCustomization: false
+effort: low
+model: gpt-5.6-luna
+workload: text

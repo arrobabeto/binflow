@@ -27,7 +27,7 @@ truth for which canonical file owns each concern. Fill
 | Threats / controls | `docs/SECURITY.md` |
 | Entities / tenancy | `docs/DATA-MODEL.md` |
 | Admin UI | `docs/DASHBOARD.md` |
-| Enrollment / activation | `docs/ONBOARDING.md` |
+| Enrollment / activation | `docs/ONBOARDING.md`, `docs/ENROLLMENT.md` |
 | Bots / notifications | `docs/TELEGRAM.md` |
 | Providers | `docs/INTEGRATIONS.md` |
 | Tests / acceptance | `docs/TESTING.md` |

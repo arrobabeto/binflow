@@ -15,12 +15,17 @@ This directory is the canonical specification for Binflow. Documents describe cu
 9. [Admin dashboard](DASHBOARD.md)
 10. [Dashboard design system](DESIGN-SYSTEM.md)
 11. [Client onboarding](ONBOARDING.md)
-12. [Telegram experience](TELEGRAM.md)
-13. [Integrations](INTEGRATIONS.md)
-14. [Testing](TESTING.md)
-15. [Operations](OPERATIONS.md)
-16. [Development standards](DEVELOPMENT.md)
-17. [Roadmap](ROADMAP.md)
+12. [Client enrollment runbook](ENROLLMENT.md)
+13. [Telegram experience](TELEGRAM.md)
+14. [Integrations](INTEGRATIONS.md)
+15. [Testing](TESTING.md)
+16. [Operations](OPERATIONS.md)
+17. [Development standards](DEVELOPMENT.md)
+18. [Roadmap](ROADMAP.md)
+
+## Guides
+
+- [Astro Orbitype tool implementation](guides/astro-orbitype-tool-implementation.md) — stack contracts, ports, manifest freeze, ops gates, failure appendix for `astro_orbitype` capabilities
 
 ## Governance
 
@@ -46,6 +51,7 @@ This directory is the canonical specification for Binflow. Documents describe cu
 | Dashboard information architecture and behavior | `DASHBOARD.md`     |
 | Dashboard visual tokens and UI patterns         | `DESIGN-SYSTEM.md` |
 | Enrollment and activation                       | `ONBOARDING.md`    |
+| Operator enrollment step-by-step                | `ENROLLMENT.md`    |
 | Bot interaction and notifications               | `TELEGRAM.md`      |
 | External provider behavior                      | `INTEGRATIONS.md`  |
 | Quality and acceptance strategy                 | `TESTING.md`       |
