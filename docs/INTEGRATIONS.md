@@ -242,9 +242,13 @@ Enrollment requires a **project-scoped** Orbitype API-key credential:
   displaces a prior active version without a successful verify.
 - The LLM never receives the API key or a generic Orbitype SQL/MCP execute tool.
 
-Content mutations use allowlisted ports only. First tool: `create_blog_orbitype`
-(ADR-0047) — dual-write GitHub + CMS draft/publish. Further CMS tools remain
-later Phase 6 slices.
+Content mutations use allowlisted ports only. Tools on this profile:
+
+- `create_blog_orbitype` (ADR-0047) — dual-write GitHub + CMS draft/publish.
+- `update_menu` (ADR-0049) — versioned menu PDF on GitHub plus Orbitype page
+  section href patches; Telegram PDF ingress and menu CTA discovery.
+
+Further CMS tools remain later Phase 6 slices.
 
 ## Future WordPress
 

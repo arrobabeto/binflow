@@ -99,6 +99,7 @@ A normal message is evaluated only against enabled capabilities. The planner ret
 For the local MVP router:
 
 - **Blog:** messages mentioning *blog*, *article*, *artículo*, *Beitrag*, *post*, etc. start the project's assigned create-blog capability (`create_blog_draft` on `astro_repo`, `create_blog_orbitype` on `astro_orbitype`).
+- **Menu update (`astro_orbitype`):** messages mentioning *menú*, *carta*, *Speisekarte*, *update menu*, *upload menu*, etc. start `update_menu` when assigned.
 - **Portfolio project:** messages mentioning *proyecto*, *portafolio*, *portfolio*, *case study*, etc., or briefs with at least two structural cues (`Stack:`, `Rol:`, `Estado:`, `confidencial`, …), start `create_project_astro` when assigned — with or without the `/create_project` prefix.
 - **`/create_project <brief>`** always routes to the portfolio tool when it is enabled.
 - Portfolio collection (ADR-0035/0037): new project requests enter `NEEDS_INPUT`
@@ -138,6 +139,9 @@ The client confirms the brief, not a truncated title.
 ## Attachments
 
 - A supported document may become a source or draft input.
+- **`update_menu`:** during `NEEDS_INPUT`, a Telegram **PDF** (max 10 MB) persists
+  as `documentArtifactKey`; non-PDF or oversize files get a localized rejection
+  without storing bytes for model use.
 - During portfolio `NEEDS_INPUT`, a JPEG/PNG/WebP photo on a DM **or** slash
   command closes `type: image` content-schema fields (Webbin `heroScreenshot`)
   and becomes the featured AVIF cover. Empty captions must not poison open
@@ -182,6 +186,17 @@ Plan (delete blog — `delete_blog`):
 - `Delete post` / `Borrar artículo` / `Beitrag löschen` — confirms the
   deletion plan and queues `open_deletion_pr` (not a create-draft CTA)
 - URL confirm (title-only path): `Yes, this one` / `Sí, es este` / `Ja, dieser`
+
+Plan (`update_menu` — after PDF + button selection):
+
+- `Publicar menú` / `Menü veröffentlichen` / `Publish menu` — `confirm_plan`
+  queues execute (no preview deploy)
+- `Cancelar` / cancel action aborts the request
+
+Selection (`update_menu` — `select_ctas` step):
+
+- Toggle buttons per discovered menu CTA (`toggle_menu_cta`)
+- `Confirmar selección` / `Confirm selection` / `Auswahl bestätigen`
 - `Cancel`
 
 Plan (delete project — `delete_project`):

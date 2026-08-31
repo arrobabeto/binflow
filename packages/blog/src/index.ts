@@ -26,7 +26,7 @@ export type CatalogItem = Readonly<{
 
 export type BlogFile = Readonly<{
   bytes: Uint8Array;
-  mime: 'text/markdown' | 'image/avif' | 'text/plain';
+  mime: 'text/markdown' | 'image/avif' | 'text/plain' | 'application/pdf';
   path: string;
   sha256: string;
 }>;

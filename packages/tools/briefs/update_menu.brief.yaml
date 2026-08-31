@@ -1,0 +1,195 @@
+identity:
+  id: update_menu
+  version: 1
+  stack: astro-orbitype
+  toolDir: update-menu
+  graphVersionSuffix: '@1'
+  displayName: Update menu
+  command: /update_menu
+  description: >
+    Uploads a versioned menu PDF for astro_orbitype restaurant sites, discovers
+    menu-semantics CTAs across all Orbitype pages, lets the client choose which
+    buttons to update, and dual-writes the PDF to GitHub plus href patches to
+    Orbitype pages. Client approves once at plan confirm; no Vercel preview.
+  profile: astro_orbitype
+  executorId: workflow.update_menu@1
+  riskClass: medium
+  requiresPreview: false
+  mutationClass: update
+  approvalPolicyId: astro-orbitype-menu-update@1
+
+specTitle: Update menu (Astro + Orbitype) — capability specification
+
+migration:
+  inputSchemaId: update_menu.input@1
+  outputSchemaId: update_menu.output@1
+  allowedProfiles:
+    - astro_orbitype
+  requiredPermissions:
+    - github:metadata:read
+    - github:contents:write
+    - github:pull_requests:write
+    - github:checks:read
+    - github:statuses:read
+    - vercel:deployments:read
+    - orbitype:content:read
+    - orbitype:content:write
+  timeoutSeconds: 1800
+  retryPolicy:
+    maxAttempts: 3
+    retryableErrors:
+      - provider_retryable
+      - deployment_pending
+  budget:
+    maxEstimatedCostCents: 50
+    maxModelCalls: 1
+    maxTokens: 1000
+
+nodes:
+  - sortPrefix: '01'
+    id: sync_pages
+    kind: effect
+    nodeKind: menu.sync_pages@1
+    label: Sync Orbitype pages catalog
+    acceptsClientCustomization: false
+    parameters:
+      catalogScope: pages
+    permissions:
+      - orbitype:content:read
+  - sortPrefix: '02'
+    id: validate_menu_update
+    kind: compute
+    nodeKind: menu.validate_update@1
+    label: Validate PDF and selected CTAs
+    acceptsClientCustomization: false
+  - sortPrefix: '03'
+    id: render_menu_artifacts
+    kind: compute
+    nodeKind: menu.render_artifacts@1
+    label: Build PDF path and section patches
+    acceptsClientCustomization: false
+  - sortPrefix: '04'
+    id: open_menu_update_pr
+    kind: effect
+    nodeKind: menu.open_update_pr@1
+    label: Open menu update pull request
+    acceptsClientCustomization: false
+    permissions:
+      - github:contents:write
+      - github:pull_requests:write
+  - sortPrefix: '05'
+    id: apply_orbitype_draft
+    kind: effect
+    nodeKind: menu.apply_orbitype_draft@1
+    label: Apply Orbitype pages draft
+    acceptsClientCustomization: false
+    permissions:
+      - orbitype:content:write
+  - sortPrefix: '06'
+    id: merge_github
+    kind: effect
+    nodeKind: publication.merge_github@1
+    label: Merge GitHub PR
+    acceptsClientCustomization: false
+    permissions:
+      - github:pull_requests:write
+      - github:contents:write
+  - sortPrefix: '07'
+    id: publish_orbitype_pages
+    kind: effect
+    nodeKind: menu.publish_orbitype_pages@1
+    label: Publish Orbitype pages
+    acceptsClientCustomization: false
+    permissions:
+      - orbitype:content:write
+  - sortPrefix: '08'
+    id: verify_production
+    kind: effect
+    nodeKind: menu.verify_production@1
+    label: Verify PDF and button URLs
+    acceptsClientCustomization: false
+    permissions:
+      - vercel:deployments:read
+  - sortPrefix: '09'
+    id: completed
+    kind: compute
+    nodeKind: workflow.completed@1
+    label: Completed
+    acceptsClientCustomization: false
+
+edges:
+  - from: sync_pages
+    to: validate_menu_update
+  - from: validate_menu_update
+    to: render_menu_artifacts
+  - from: render_menu_artifacts
+    to: open_menu_update_pr
+  - from: open_menu_update_pr
+    to: apply_orbitype_draft
+  - from: apply_orbitype_draft
+    to: merge_github
+  - from: merge_github
+    to: publish_orbitype_pages
+  - from: publish_orbitype_pages
+    to: verify_production
+  - from: verify_production
+    to: completed
+
+contentSchemaFields: []
+
+customizableNodeIds: []
+
+layerAssignments:
+  - layer: code
+    behavior: >
+      PDF ingest (Telegram document, max 10 MB), versioned public path, menu CTA
+      discovery across all Orbitype pages, multi-select ingress, dual-write GitHub
+      PDF plus Orbitype sections patch, production verification. Plan confirm is
+      the sole client approval gate.
+  - layer: manifest
+    behavior: >
+      public/documents/*.pdf editablePaths, deployment.productionOrigin for public
+      PDF URL, contentLocales for label matching, publicationTargets github+orbitype.
+  - layer: customization
+    behavior: >
+      menuCtaKeywords in bistro-update-menu.md for DE menu button matching.
+      No paths, models, or approval overrides.
+
+typedErrors:
+  - code: pdf_missing
+    when: Execute starts without a persisted PDF artifact.
+  - code: attachment_mime_denied
+    when: Telegram attachment is not application/pdf.
+  - code: attachment_too_large
+    when: PDF exceeds 10 MB.
+  - code: menu_cta_not_found
+    when: No menu-semantics CTAs exist on any Orbitype page.
+  - code: menu_selection_empty
+    when: Client confirms button selection with zero CTAs chosen.
+  - code: menu_cta_stale
+    when: A selected CTA no longer exists when validate_menu_update runs.
+  - code: orbitype_pages_patch_failed
+    when: Orbitype rejects the pages sections patch (4xx).
+  - code: github_pr_failed
+    when: Menu update PR cannot be opened or updated.
+  - code: menu_pdf_not_accessible
+    when: Production PDF URL does not return HTTP 200.
+  - code: menu_button_href_mismatch
+    when: A selected button href does not match the published PDF URL.
+
+verification:
+  scenarios:
+    - Telegram PDF up to 10 MB accepted; 11 MB returns attachment_too_large.
+    - Bistro discovers menu-semantics CTAs on all pages; reservation CTAs unchanged.
+    - Multi-select updates only chosen ctaHref/ctaSecondaryHref fields.
+    - Plan confirm shows public PDF URL and button labels; no repo paths.
+    - Plan confirm is sole client gate; graph merges without wait_preview.
+    - Versioned filename public/documents/menu-{date}-{suffix}.pdf never overwrites.
+    - Orbitype 4xx maps to provider_final; 5xx may retry.
+    - verify_production checks PDF 200 and button hrefs on production origin.
+    - Dashboard assignment only for astro_orbitype profile.
+    - NL ingress de/es/en menu update phrases dispatch to update_menu.
+    - Plan confirm CTAs are Publicar menü / Menü veröffentlichen / Publish menu.
+  fixtures:
+    - packages/*/test/fixtures/bistro-astro-orbitype-manifest.json
+    - docs/customizations/bistro-update-menu.md

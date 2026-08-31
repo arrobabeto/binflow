@@ -335,6 +335,38 @@ See `docs/specs/delete-blog-draft.md` and ADR-0040 / ADR-0041. Input schema:
 `deleteBlogDraftInputSchema` (`collect` | `execute` modes). Policy:
 `webbin-blog-deletion@1`.
 
+## `update_menu`
+
+Telegram command: `/update_menu`.
+
+See `docs/specs/update-menu.md` and ADR-0049. Profile `astro_orbitype` only.
+Input schema: `updateMenuInputSchema` (`collect` | `execute` modes). Telegram
+ingress accepts `documentArtifactKey` (PDF, max 10 MB). Reply actions:
+`toggle_menu_cta`, `confirm_menu_selection`, then generic `confirm_plan` at plan
+confirm. `BlogFile.mime` includes `application/pdf` for versioned menu artifacts
+under `public/documents/*.pdf`.
+
+```ts
+type UpdateMenuInput =
+  | {
+      mode: 'collect';
+      projectId: string;
+      collectionStep: 'await_pdf' | 'select_ctas' | 'ready';
+      pdfArtifactKey?: string;
+      selectedCtaKeys: string[];
+      discoveredCtas: MenuCtaCandidate[];
+      /* … */
+    }
+  | {
+      mode: 'execute';
+      projectId: string;
+      pdfArtifactKey: string;
+      menuPdfPublicPath: string;
+      menuPdfPublicUrl: string;
+      selectedCtaKeys: string[];
+    };
+```
+
 ```ts
 type CreateProjectAstroInput =
   | {

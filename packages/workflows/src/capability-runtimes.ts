@@ -1,9 +1,14 @@
 import { capabilityRegistry } from '@binflow/policies';
 import { DomainError } from '@binflow/domain';
 
-export type CapabilityRuntimeKind = 'blog' | 'delete_blog' | 'delete_project' | 'project';
+export type CapabilityRuntimeKind =
+  | 'blog'
+  | 'delete_blog'
+  | 'delete_project'
+  | 'project'
+  | 'update_menu';
 
-export type CatalogContentScope = 'blog' | 'portfolio';
+export type CatalogContentScope = 'blog' | 'pages' | 'portfolio';
 
 export type ResolvedCapabilityRuntime = Readonly<{
   consumerPrefix: CapabilityRuntimeKind;
@@ -26,12 +31,25 @@ export const catalogScopeForRuntimeKind = (
     case 'project':
     case 'delete_project':
       return 'portfolio';
+    case 'update_menu':
+      return 'pages';
   }
 };
 
 export const catalogContentKindsForRuntimeKind = (
   kind: CapabilityRuntimeKind,
-): readonly CatalogContentScope[] => [catalogScopeForRuntimeKind(kind)];
+): readonly ('blog' | 'portfolio')[] => {
+  switch (kind) {
+    case 'blog':
+    case 'delete_blog':
+      return ['blog'];
+    case 'project':
+    case 'delete_project':
+      return ['portfolio'];
+    case 'update_menu':
+      return [];
+  }
+};
 
 const runtimeByExecutorId = Object.freeze({
   'workflow.create_blog@1': Object.freeze({
@@ -57,6 +75,11 @@ const runtimeByExecutorId = Object.freeze({
   'workflow.delete_project@1': Object.freeze({
     consumerPrefix: 'delete_project',
     kind: 'delete_project',
+    titleField: 'resolvedTitle',
+  }),
+  'workflow.update_menu@1': Object.freeze({
+    consumerPrefix: 'update_menu',
+    kind: 'update_menu',
     titleField: 'resolvedTitle',
   }),
 } as const satisfies Record<

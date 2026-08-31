@@ -422,3 +422,93 @@ RETURNING id`,
     },
   };
 };
+
+export type OrbitypePageSnapshot = Readonly<{
+  id: string;
+  sections: unknown;
+  slug: string;
+  title: unknown;
+}>;
+
+export type OrbitypeMenuPagesPort = Readonly<{
+  applySectionPatches(
+    input: Readonly<{
+      patches: ReadonlyArray<
+        Readonly<{ pageId: string; sections: unknown }>
+      >;
+    }>,
+  ): Promise<void>;
+  listPages(): Promise<readonly OrbitypePageSnapshot[]>;
+}>;
+
+export const createOrbitypeMenuPagesPort = (
+  options: Readonly<{
+    apiKey: string;
+    baseUrl: string;
+    fetch?: typeof globalThis.fetch;
+    pagesTable?: string;
+  }>,
+): OrbitypeMenuPagesPort => {
+  const fetch = options.fetch ?? globalThis.fetch;
+  const table = options.pagesTable ?? 'pages';
+  if (!/^[a-z][a-z0-9_]*$/u.test(table))
+    throw new DomainError(
+      'validation_error',
+      'Orbitype pages table name is invalid.',
+    );
+
+  return {
+    async listPages() {
+      const rows = await postSql({
+        apiKey: options.apiKey,
+        baseUrl: options.baseUrl,
+        bindings: {},
+        fetch,
+        operation: 'mutate',
+        sql: `SELECT id, slug, title, sections FROM ${table} ORDER BY slug ASC`,
+      });
+      if (!Array.isArray(rows))
+        throw new DomainError(
+          'provider_final',
+          'Orbitype pages query returned an unexpected shape.',
+          { code: 'orbitype_pages_patch_failed' },
+        );
+      return rows.flatMap((row) => {
+        if (row === null || typeof row !== 'object' || Array.isArray(row))
+          return [];
+        const record = row as Record<string, unknown>;
+        if (
+          typeof record.id !== 'string' ||
+          typeof record.slug !== 'string'
+        )
+          return [];
+        return [
+          {
+            id: record.id,
+            sections: record.sections,
+            slug: record.slug,
+            title: record.title,
+          },
+        ];
+      });
+    },
+    async applySectionPatches(input) {
+      for (const patch of input.patches) {
+        await postSql({
+          apiKey: options.apiKey,
+          baseUrl: options.baseUrl,
+          bindings: {
+            id: patch.pageId,
+            sections: JSON.stringify(patch.sections),
+          },
+          fetch,
+          operation: 'mutate',
+          sql: `UPDATE ${table}
+SET sections = CAST(:sections AS json), updated_at = NOW()
+WHERE id = :id
+RETURNING id`,
+        });
+      }
+    },
+  };
+};

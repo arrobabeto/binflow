@@ -1,0 +1,14 @@
+command: /update_menu
+description: Uploads a versioned menu PDF for astro_orbitype restaurant sites,
+  discovers menu-semantics CTAs across all Orbitype pages, lets the client
+  choose which buttons to update, and dual-writes the PDF to GitHub plus href
+  patches to Orbitype pages. Client approves once at plan confirm; no Vercel
+  preview.
+displayName: Update menu
+executorId: workflow.update_menu@1
+graphVersion: stacks/astro-orbitype/update-menu@1
+id: update_menu
+profile: astro_orbitype
+requiresPreview: false
+riskClass: medium
+version: 1

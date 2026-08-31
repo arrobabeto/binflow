@@ -1,0 +1,6 @@
+kind: effect
+label: Verify PDF and button URLs
+nodeKind: menu.verify_production@1
+acceptsClientCustomization: false
+permissions:
+  - vercel:deployments:read

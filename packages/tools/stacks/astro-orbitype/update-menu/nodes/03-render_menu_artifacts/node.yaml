@@ -1,0 +1,4 @@
+kind: compute
+label: Build PDF path and section patches
+nodeKind: menu.render_artifacts@1
+acceptsClientCustomization: false

@@ -14,11 +14,12 @@ import {
 describe('@binflow/tools catalog', () => {
   it('loads Astro tools with matching executor stages', async () => {
     const tools = await listTools();
-    expect(tools).toHaveLength(5);
+    expect(tools).toHaveLength(6);
     const blog = tools.find((tool) => tool.tool.id === 'create_blog_draft');
     const blogOrbitype = tools.find(
       (tool) => tool.tool.id === 'create_blog_orbitype',
     );
+    const updateMenu = tools.find((tool) => tool.tool.id === 'update_menu');
     const project = tools.find((tool) => tool.tool.id === 'create_project_astro');
     const deleteBlog = tools.find((tool) => tool.tool.id === 'delete_blog_draft');
     const deleteProject = tools.find(
@@ -26,12 +27,23 @@ describe('@binflow/tools catalog', () => {
     );
     expect(blog?.tool.profile).toBe('astro_repo');
     expect(blogOrbitype?.tool.profile).toBe('astro_orbitype');
+    expect(updateMenu?.tool.profile).toBe('astro_orbitype');
     expect(project?.tool.profile).toBe('astro_repo');
     expect(deleteBlog?.tool.profile).toBe('astro_repo');
     expect(deleteProject?.tool.profile).toBe('astro_repo');
     expect(blog?.graph.version).toBe('stacks/astro-repo/create-blog@1');
     expect(blogOrbitype?.graph.version).toBe(
       'stacks/astro-orbitype/create-blog@1',
+    );
+    expect(updateMenu?.graph.version).toBe(
+      'stacks/astro-orbitype/update-menu@1',
+    );
+    expect(updateMenu?.tool.requiresPreview).toBe(false);
+    expect(
+      updateMenu?.nodes.some((node) => node.id === 'verify_production'),
+    ).toBe(true);
+    expect(updateMenu?.nodes.some((node) => node.id === 'wait_preview')).toBe(
+      false,
     );
     expect(blogOrbitype?.nodes.some((node) => node.id === 'create_github_draft')).toBe(
       true,

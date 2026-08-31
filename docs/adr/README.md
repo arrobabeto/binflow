@@ -54,5 +54,6 @@ ADRs preserve why durable decisions exist. Accepted ADRs are binding until a lat
 | [0046](0046-selectable-monolingual-locales.md)                       | Selectable en/es/de locales including monolingual              | Accepted |
 | [0047](0047-create-blog-orbitype-dual-write.md)                      | Create blog Orbitype dual-write (GitHub + CMS)                 | Accepted |
 | [0048](0048-enrolled-client-production-origin.md)                    | Enrolled client production origin (extends ADR-0029)           | Accepted |
+| [0049](0049-update-menu-orbitype.md)                                 | Update menu PDF for Astro+Orbitype restaurant sites            | Proposed |
 
 Use [0000-template.md](0000-template.md) for new decisions.

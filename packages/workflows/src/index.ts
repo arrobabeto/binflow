@@ -47,6 +47,7 @@ import { projectCapabilityCatalog, deleteBlogDraftDefinition, deleteProjectAstro
 import {
   buildCollectionQuestion,
   heuristicExtractProjectFacts,
+  loadCustomizationSection,
   loadProjectContentSchema,
   mergeExtractedProjectFacts,
   scoreOpenProjectContracts,
@@ -85,11 +86,20 @@ import {
   capabilityIngressRoutes,
   collectionCapabilityIds,
 } from './capability-ingress.js';
+import { parseMenuCtaKeywordSection } from './update-menu-ingress.js';
+import {
+  continueUpdateMenuCollection,
+  consumeUpdateMenuSelection,
+  consumeUpdateMenuToggle,
+  createUpdateMenuRequest,
+  type UpdateMenuPagesLoader,
+} from './update-menu-collection.js';
 
 export * from './blog-runtime.js';
 export * from './delete-blog-catalog.js';
 export * from './delete-blog-runtime.js';
 export * from './delete-project-runtime.js';
+export * from './menu-runtime.js';
 export * from './project-runtime.js';
 export { graphVersionForCapability } from './capability-graph.js';
 export {
@@ -97,7 +107,9 @@ export {
   collectionCapabilityIds,
   deleteProjectNaturalLanguage,
   matchesNaturalProject,
+  updateMenuNaturalLanguage,
 } from './capability-ingress.js';
+export type { UpdateMenuPagesLoader } from './update-menu-collection.js';
 export {
   catalogContentKindsForRuntimeKind,
   catalogScopeForRuntimeKind,
@@ -428,6 +440,7 @@ export class WorkflowService {
     private readonly clock: Clock = systemClock,
     private readonly deleteBlogCatalogLoader?: DeleteBlogCatalogLoader,
     private readonly deleteProjectCatalogLoader?: DeleteProjectCatalogLoader,
+    private readonly updateMenuPagesLoader?: UpdateMenuPagesLoader,
   ) {}
 
   public async handleTelegramUpdate(
@@ -465,7 +478,7 @@ export class WorkflowService {
           .values({
             botId: update.botId,
             contentDigest: digest(
-              `${update.text}:${update.imageArtifactKey ?? ''}`,
+              `${update.text}:${update.imageArtifactKey ?? ''}:${update.documentArtifactKey ?? ''}`,
             ),
             conversationId: identity.conversationId,
             direction: 'inbound',
@@ -505,6 +518,9 @@ export class WorkflowService {
           );
 
         return this.route(database, identity, update.text.trim(), {
+          ...(update.documentArtifactKey === undefined
+            ? {}
+            : { documentArtifactKey: update.documentArtifactKey }),
           ...(update.imageArtifactKey === undefined
             ? {}
             : { imageArtifactKey: update.imageArtifactKey }),
@@ -1704,10 +1720,14 @@ export class WorkflowService {
     database: ScopedDatabase,
     identity: ResolvedIdentity,
     text: string,
-    extras: Readonly<{ imageArtifactKey?: string }> = {},
+    extras: Readonly<{
+      documentArtifactKey?: string;
+      imageArtifactKey?: string;
+    }> = {},
   ): Promise<TelegramReply> {
     const localeCopy = copy[identity.locale];
     const imageArtifactKey = extras.imageArtifactKey;
+    const documentArtifactKey = extras.documentArtifactKey;
     if (/^\/help(?:@\w+)?$/u.test(text) || /^\/start(?:@\w+)?$/u.test(text))
       return this.reply(identity.locale, localeCopy.help, null);
     if (/^\/tools(?:@\w+)?$/u.test(text)) {
@@ -1778,10 +1798,35 @@ export class WorkflowService {
       latestCollecting?.state === 'NEEDS_INPUT' &&
       collectionCapabilityIds.has(latestCollecting.capabilityId) &&
       !text.startsWith('/') &&
-      (text.trim().length > 0 || imageArtifactKey !== undefined)
+      (text.trim().length > 0 ||
+        imageArtifactKey !== undefined ||
+        documentArtifactKey !== undefined)
     ) {
       if (text.trim().length > PROJECT_BRIEF_MAX)
         return this.reply(identity.locale, localeCopy.messageTooLong, null);
+      if (latestCollecting.capabilityId === 'update_menu')
+        return continueUpdateMenuCollection({
+          createAction: (db, request, requestVersionId, userId, action) =>
+            this.createAction(db, request, requestVersionId, userId, action),
+          database,
+          ...(documentArtifactKey === undefined ? {} : { documentArtifactKey }),
+          identity,
+          loadPages: (args) =>
+            this.loadUpdateMenuPages(
+              args.database,
+              args.manifest,
+              args.projectId,
+              args.tenantId,
+            ),
+          menuCtaKeywords: await this.loadUpdateMenuCtaKeywords(
+            identity.projectId,
+            identity.tenantId,
+          ),
+          reply: this.reply.bind(this),
+          request: latestCollecting,
+          text: text.trim(),
+          version: await this.currentRequestVersion(database, latestCollecting),
+        });
       if (latestCollecting.capabilityId === 'delete_blog_draft')
         return this.continueDeleteBlogCollection(
           database,
@@ -1817,6 +1862,9 @@ export class WorkflowService {
     const projectRoute = capabilityIngressRoutes.find(
       (route) => route.handlerKind === 'project',
     );
+    const updateMenuRoute = capabilityIngressRoutes.find(
+      (route) => route.handlerKind === 'update_menu',
+    );
     const deleteBlogCommand =
       deleteBlogRoute === undefined
         ? null
@@ -1833,6 +1881,10 @@ export class WorkflowService {
       projectRoute === undefined
         ? null
         : projectRoute.commandPattern.exec(text);
+    const updateMenuCommand =
+      updateMenuRoute === undefined
+        ? null
+        : updateMenuRoute.commandPattern.exec(text);
     const naturalDeleteBlog =
       deleteBlogRoute?.naturalLanguage?.(text) ?? false;
     const naturalDeleteProject =
@@ -1841,6 +1893,8 @@ export class WorkflowService {
       blogRoute?.naturalLanguage?.(text) ?? false;
     const naturalProject =
       projectRoute?.naturalLanguage?.(text) ?? false;
+    const naturalUpdateMenu =
+      updateMenuRoute?.naturalLanguage?.(text) ?? false;
     const deleteBlogEnabled =
       deleteBlogRoute === undefined
         ? false
@@ -1865,6 +1919,47 @@ export class WorkflowService {
             identity.projectId,
             projectRoute.capabilityId,
           );
+    const updateMenuEnabled =
+      updateMenuRoute === undefined
+        ? false
+        : await this.hasCapability(
+            database,
+            identity.projectId,
+            updateMenuRoute.capabilityId,
+          );
+
+    if (updateMenuCommand !== null) {
+      return createUpdateMenuRequest({
+        createAction: (db, request, requestVersionId, userId, action) =>
+          this.createAction(db, request, requestVersionId, userId, action),
+        database,
+        hasCapability: this.hasCapability.bind(this),
+        identity,
+        reply: this.reply.bind(this),
+      });
+    }
+
+    if (
+      updateMenuEnabled &&
+      naturalUpdateMenu &&
+      blogCommand === null &&
+      deleteBlogCommand === null &&
+      deleteProjectCommand === null &&
+      projectCommand === null &&
+      !naturalDeleteBlog &&
+      !naturalDeleteProject &&
+      !naturalBlog &&
+      !naturalProject
+    ) {
+      return createUpdateMenuRequest({
+        createAction: (db, request, requestVersionId, userId, action) =>
+          this.createAction(db, request, requestVersionId, userId, action),
+        database,
+        hasCapability: this.hasCapability.bind(this),
+        identity,
+        reply: this.reply.bind(this),
+      });
+    }
 
     if (deleteBlogCommand !== null) {
       const brief = (deleteBlogCommand[1] ?? '').trim();
@@ -2392,6 +2487,38 @@ export class WorkflowService {
     return catalogItemsFromRows(
       await this.loadCatalogItemsForProject(database, projectId),
     );
+  }
+
+  private async loadUpdateMenuPages(
+    database: ScopedDatabase,
+    manifest: (typeof schema.projectManifestVersions.$inferSelect)['document'],
+    projectId: string,
+    tenantId: string,
+  ) {
+    if (this.updateMenuPagesLoader === undefined)
+      throw new DomainError(
+        'internal_error',
+        'Update menu pages loader is unavailable.',
+      );
+    return this.updateMenuPagesLoader({
+      database,
+      manifest,
+      projectId,
+      tenantId,
+    });
+  }
+
+  private async loadUpdateMenuCtaKeywords(
+    projectId: string,
+    tenantId: string,
+  ): Promise<readonly string[]> {
+    const section = await loadCustomizationSection(this.database, {
+      capabilityId: 'update_menu',
+      nodeId: 'menu_cta_keywords',
+      projectId,
+      tenantId,
+    });
+    return parseMenuCtaKeywordSection(section);
   }
 
   private async loadCatalogItemsForProject(
@@ -3636,6 +3763,51 @@ export class WorkflowService {
       );
       return this.reply(identity.locale, localeCopy.cancelled, request.id);
     }
+    if (action.action.startsWith('toggle_menu_cta:')) {
+      if (request.capabilityId !== 'update_menu' || request.state !== 'NEEDS_INPUT')
+        throw new DomainError(
+          'conflict_error',
+          'Request is not waiting for menu button selection.',
+        );
+      return consumeUpdateMenuToggle({
+        createAction: (db, req, requestVersionId, userId, actionName) =>
+          this.createAction(db, req, requestVersionId, userId, actionName),
+        ctaKey: action.action.slice('toggle_menu_cta:'.length),
+        database,
+        identity,
+        reply: this.reply.bind(this),
+        request,
+        version: currentVersion,
+      });
+    }
+    if (action.action === 'confirm_menu_selection') {
+      if (request.capabilityId !== 'update_menu' || request.state !== 'NEEDS_INPUT')
+        throw new DomainError(
+          'conflict_error',
+          'Request is not waiting for menu button selection.',
+        );
+      const [manifestRow] = await database
+        .select({
+          document: schema.projectManifestVersions.document,
+          id: schema.projectManifestVersions.id,
+        })
+        .from(schema.projectManifestVersions)
+        .where(eq(schema.projectManifestVersions.id, currentVersion.manifestVersionId))
+        .limit(1);
+      if (manifestRow === undefined)
+        throw new DomainError('internal_error', 'Manifest is missing.');
+      return consumeUpdateMenuSelection({
+        createAction: (db, req, requestVersionId, userId, actionName) =>
+          this.createAction(db, req, requestVersionId, userId, actionName),
+        database,
+        identity,
+        manifest: manifestRow.document,
+        manifestVersionId: manifestRow.id,
+        reply: this.reply.bind(this),
+        request,
+        version: currentVersion,
+      });
+    }
     if (action.action === 'confirm_delete_target') {
       if (
         request.state !== 'NEEDS_INPUT' ||
@@ -4621,15 +4793,7 @@ export class WorkflowService {
     >,
     requestVersionId: string,
     userId: string,
-    action:
-      | 'confirm_plan'
-      | 'confirm_delete_target'
-      | 'approve_preview'
-      | 'request_revision'
-      | 'confirm_revision_plan'
-      | 'adjust_revision_plan'
-      | 'cancel_revision'
-      | 'cancel',
+    action: string,
   ): Promise<string> {
     const token = actionToken();
     await database.insert(schema.requestActions).values({

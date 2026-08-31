@@ -641,7 +641,10 @@ export const buildCollectionQuestion = (
   return `Could you share «${field.id}» for this project?`;
 };
 
-export const RESERVED_CUSTOMIZATION_SECTIONS = new Set(['content_schema']);
+export const RESERVED_CUSTOMIZATION_SECTIONS = new Set([
+  'content_schema',
+  'menu_cta_keywords',
+]);
 
 export const validateAndParseContentSchemaSection = (
   sectionBody: string | undefined,

@@ -5,6 +5,7 @@ import {
   createProjectAstroInputSchema,
   deleteBlogDraftInputSchema,
   deleteProjectAstroInputSchema,
+  updateMenuInputSchema,
   type CapabilityBinding,
   type CapabilityCatalogItem,
 } from '@binflow/contracts';
@@ -26,7 +27,8 @@ export type CapabilityDefinition = Readonly<{
     | typeof createBlogOrbitypeInputSchema
     | typeof createProjectAstroInputSchema
     | typeof deleteBlogDraftInputSchema
-    | typeof deleteProjectAstroInputSchema;
+    | typeof deleteProjectAstroInputSchema
+    | typeof updateMenuInputSchema;
   requiredPermissions: readonly string[];
   requiresPreview: boolean;
   retryPolicy: Readonly<{
@@ -204,6 +206,41 @@ export const deleteBlogDraftDefinition: CapabilityDefinition = Object.freeze({
   version: 2,
 });
 
+export const updateMenuDefinition: CapabilityDefinition = Object.freeze({
+  approvalPolicyId: 'astro-orbitype-menu-update@1',
+  budget: Object.freeze({
+    maxEstimatedCostCents: 50,
+    maxModelCalls: 1,
+    maxTokens: 1_000,
+  }),
+  command: '/update_menu',
+  displayName: 'Update menu',
+  executorId: 'workflow.update_menu@1',
+  id: 'update_menu',
+  inputSchema: updateMenuInputSchema,
+  requiredPermissions: Object.freeze([
+    'github:metadata:read',
+    'github:contents:write',
+    'github:pull_requests:write',
+    'github:checks:read',
+    'github:statuses:read',
+    'vercel:deployments:read',
+    'orbitype:content:read',
+    'orbitype:content:write',
+  ]),
+  requiresPreview: false,
+  retryPolicy: Object.freeze({
+    maxAttempts: 3,
+    retryableErrors: Object.freeze([
+      'provider_retryable',
+      'deployment_pending',
+    ]),
+  }),
+  riskClass: 'medium',
+  timeoutSeconds: 1_800,
+  version: 1,
+});
+
 /** @deprecated Use createProjectAstroDefinition */
 export const createProjectDraftDefinition = createProjectAstroDefinition;
 
@@ -213,6 +250,7 @@ export const capabilityRegistry = Object.freeze([
   createProjectAstroDefinition,
   deleteBlogDraftDefinition,
   deleteProjectAstroDefinition,
+  updateMenuDefinition,
 ] as const);
 
 export const webbinCapabilityBinding: CapabilityBinding = Object.freeze({

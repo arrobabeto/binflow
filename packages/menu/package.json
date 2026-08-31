@@ -1,0 +1,26 @@
+{
+  "name": "@binflow/menu",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    }
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "check": "tsc -p tsconfig.json --noEmit",
+    "lint": "eslint src --max-warnings=0",
+    "test": "vitest run test/update-menu.test.ts"
+  },
+  "dependencies": {
+    "@binflow/blog": "workspace:*",
+    "@binflow/contracts": "workspace:*",
+    "@binflow/domain": "workspace:*"
+  },
+  "devDependencies": {
+    "@types/node": "24.13.3"
+  }
+}

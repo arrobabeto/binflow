@@ -1,0 +1,8 @@
+kind: effect
+label: Sync Orbitype pages catalog
+nodeKind: menu.sync_pages@1
+acceptsClientCustomization: false
+parameters:
+  catalogScope: pages
+permissions:
+  - orbitype:content:read
