@@ -1,0 +1,4 @@
+kind: compute
+label: Validate locale, target, single field kind, and style inputs
+nodeKind: text.validate_style@1
+acceptsClientCustomization: false

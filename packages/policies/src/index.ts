@@ -7,6 +7,7 @@ import {
   deleteProjectAstroInputSchema,
   editImageInputSchema,
   editTextInputSchema,
+  editTextStyleInputSchema,
   updateMenuInputSchema,
   type CapabilityBinding,
   type CapabilityCatalogItem,
@@ -32,6 +33,7 @@ export type CapabilityDefinition = Readonly<{
     | typeof deleteProjectAstroInputSchema
     | typeof editImageInputSchema
     | typeof editTextInputSchema
+    | typeof editTextStyleInputSchema
     | typeof updateMenuInputSchema;
   requiredPermissions: readonly string[];
   requiresPreview: boolean;
@@ -245,6 +247,41 @@ export const editTextDefinition: CapabilityDefinition = Object.freeze({
   version: 1,
 });
 
+export const editTextStyleDefinition: CapabilityDefinition = Object.freeze({
+  approvalPolicyId: 'astro-orbitype-text-style-edit@1',
+  budget: Object.freeze({
+    maxEstimatedCostCents: 25,
+    maxModelCalls: 1,
+    maxTokens: 500,
+  }),
+  command: '/edit_text_style',
+  displayName: 'Edit text style',
+  executorId: 'workflow.edit_text_style@1',
+  id: 'edit_text_style',
+  inputSchema: editTextStyleInputSchema,
+  requiredPermissions: Object.freeze([
+    'github:metadata:read',
+    'github:contents:write',
+    'github:pull_requests:write',
+    'github:checks:read',
+    'github:statuses:read',
+    'vercel:deployments:read',
+    'orbitype:content:read',
+    'orbitype:content:write',
+  ]),
+  requiresPreview: true,
+  retryPolicy: Object.freeze({
+    maxAttempts: 3,
+    retryableErrors: Object.freeze([
+      'provider_retryable',
+      'deployment_pending',
+    ]),
+  }),
+  riskClass: 'medium',
+  timeoutSeconds: 1_800,
+  version: 1,
+});
+
 export const editImageDefinition: CapabilityDefinition = Object.freeze({
   approvalPolicyId: 'astro-orbitype-image-edit@1',
   budget: Object.freeze({
@@ -326,6 +363,7 @@ export const capabilityRegistry = Object.freeze([
   deleteProjectAstroDefinition,
   editImageDefinition,
   editTextDefinition,
+  editTextStyleDefinition,
   updateMenuDefinition,
 ] as const);
 

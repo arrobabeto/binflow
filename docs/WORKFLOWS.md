@@ -255,13 +255,37 @@ completed.
 
 - Collection: optional locale (multilingual) → target substring → disambiguation
   → confirm target → replacement text → plan confirm.
-- Literal old→new patch only (no LLM rewrite); denylist H1/CTA/nav/footer.
+- Literal whole-field old→new patch only (no LLM rewrite); denylist H1/CTA/nav/footer.
+  Substring search locates the field; replacement swaps the full field value.
 - **Preview writes Orbitype temporarily** so CMS-backed sites show the change;
   snapshot restored on client cancel / admin reject (`restore_orbitype_preview`).
 - Runtime kind `edit_text`; catalog scope `pages`.
 
 Automated tests: `packages/text/test/`,
 `packages/workflows/test/edit-text-ingress.test.ts`,
+`packages/workflows/test/capability-conformance.test.ts`.
+
+## Text style edit (`edit_text_style`, astro_orbitype)
+
+Graph: sync editable copy → validate style → render style patch → open text
+style PR → wait preview → apply Orbitype preview (snapshot + temp style patch)
+→ client approval → admin approval → merge → publish Orbitype pages → verify
+production → completed.
+
+- Collection: optional locale → target substring → disambiguation → confirm
+  target → style interview (menu: weight/size/color → one attribute → back;
+  Done after ≥1) → plan confirm. Target miss keeps request open with retry copy.
+- Surgical style: wrap `targetExcerpt` in `<span style="…" data-binflow-style="1">`
+  (weight/size/color); words outside the excerpt stay unchanged. Sites must
+  sanitize-allow that span and render editable fields as HTML.
+- Guardrails: one `fieldKind` per request; HEX ≤2 retries then cancel.
+- Isolated CTAs (`confirm_text_style_*`); does not share `edit_text` buttons.
+- **Preview writes Orbitype temporarily**; snapshot restored on cancel/reject
+  (`restore_orbitype_preview`).
+- Runtime kind `edit_text_style`; catalog scope `pages`.
+
+Automated tests: `packages/text/test/text-style.test.ts`,
+`packages/workflows/test/edit-text-style-ingress.test.ts`,
 `packages/workflows/test/capability-conformance.test.ts`.
 
 ## Image edit (`edit_image`, astro_orbitype)

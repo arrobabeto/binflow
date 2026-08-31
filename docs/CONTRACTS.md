@@ -404,6 +404,58 @@ type EditTextInput =
     };
 ```
 
+Execute replaces the entire resolved field value with `newValue` (substring
+search only locates the field). Surgical in-field edits are `edit_text_style`
+only.
+## `edit_text_style`
+
+Telegram command: `/edit_text_style`.
+
+See `docs/specs/edit-text-style.md` and ADR-0053. Profile `astro_orbitype` only.
+Input schema: `editTextStyleInputSchema` (`collect` | `execute` modes). Reply
+actions: `pick_text_style_locale`, `pick_text_style_target`,
+`confirm_text_style_target`, `pick_text_style_attr`, `pick_text_style_weight`,
+`pick_text_style_size`, `pick_text_style_color`, `done_text_style_attrs`,
+`confirm_text_style_plan`. Style attributes are interviewed one step at a time
+(menu → attribute options → menu; Done after ≥1). Missing target text returns a
+retry message without closing the request. Preview actions: `approve_preview`,
+`cancel` only (no revision). Style wraps `targetExcerpt` in
+`<span style="…" data-binflow-style="1">` (weight / size / color); text outside
+the excerpt is unchanged. Mixed `fieldKind` targets cancel the request. HEX color
+input allows at most two retries, then cancel.
+
+```ts
+type EditTextStyleInput =
+  | {
+      mode: 'collect';
+      projectId: string;
+      collectionStep:
+        | 'await_locale'
+        | 'await_target'
+        | 'disambiguate'
+        | 'confirm_target'
+        | 'await_style'
+        | 'await_style_weight'
+        | 'await_style_size'
+        | 'await_style_color'
+        | 'await_hex'
+        | 'ready';
+      contentLocale?: SupportedLocale;
+      targetKey?: string;
+      targetExcerpt?: string;
+      discoveredTargets: TextEditCandidate[];
+      /* … */
+    }
+  | {
+      mode: 'execute';
+      projectId: string;
+      contentLocale: SupportedLocale;
+      targetKey: string;
+      targetExcerpt: string;
+      style: TextStylePatch;
+    };
+```
+
 ## `edit_image`
 
 Telegram command: `/edit_image`.

@@ -1,0 +1,20 @@
+command: /edit_text_style
+description: "Lets astro_orbitype clients change size, weight, and/or color of
+  one allowlisted text field per request without rewriting copy. Reuses
+  edit_text targeting (substring, denylist, locale) with a hard guardrail that
+  all selected matches share one field kind (e.g. not subtitle + body). Style
+  choices are typed for non-technical users: weight Normal/Semibold/Bold, size
+  deltas +4/+8/+16/+32 px from current, color hex or 50% darker/lighter with up
+  to two hex retries then cancel. Preview applies a temporary Orbitype style
+  patch after Vercel is ready; cancel/reject restores the snapshot. Client
+  confirms target and plan, reviews preview (approve or cancel only), then admin
+  approves before production merge. Isolated from edit_text: own CTAs, messages,
+  executor, and style nodeKinds."
+displayName: Edit text style
+executorId: workflow.edit_text_style@1
+graphVersion: stacks/astro-orbitype/edit-text-style@1
+id: edit_text_style
+profile: astro_orbitype
+requiresPreview: true
+riskClass: medium
+version: 1

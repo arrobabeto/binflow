@@ -1,0 +1,6 @@
+kind: effect
+label: Publish Orbitype style pages
+nodeKind: text.publish_orbitype_style_pages@1
+acceptsClientCustomization: false
+permissions:
+  - orbitype:content:write

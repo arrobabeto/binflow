@@ -1,0 +1,7 @@
+kind: effect
+label: Open text style edit pull request
+nodeKind: text.open_style_edit_pr@1
+acceptsClientCustomization: false
+permissions:
+  - github:contents:write
+  - github:pull_requests:write

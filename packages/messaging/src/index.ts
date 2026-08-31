@@ -98,7 +98,9 @@ const actionButtonStyle = (
     action === 'approve_preview' ||
     action === 'confirm_revision_plan' ||
     action === 'confirm_image_plan' ||
-    action === 'confirm_text_plan'
+    action === 'confirm_text_plan' ||
+    action === 'confirm_text_style_plan' ||
+    action === 'done_text_style_attrs'
   )
     return 'primary';
   return 'default';
