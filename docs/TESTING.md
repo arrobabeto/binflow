@@ -271,7 +271,9 @@ stuck states, and customization asks. Pilot reference:
 - Case/whitespace normalization.
 - Likely typo confirmed by client.
 - New category creates preview but requires admin publication approval.
-- Admin rejection returns to revision without publishing.
+- Admin rejection **cancels** the request and notifies the client (ADR-0050);
+  it does not return to client revision.
+- Admin Telegram approve/reject buttons for `AWAITING_ADMIN_APPROVAL` (ADR-0050).
 
 ### Content
 

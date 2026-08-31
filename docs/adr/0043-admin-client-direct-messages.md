@@ -4,6 +4,7 @@
 - Date: 2026-08-29
 - Supersedes: None
 - Superseded by: None
+- Superseded in part by: [0050](0050-admin-telegram-approval-actions.md) (reject path)
 - Extends: [0027](0027-client-notification-outbox.md)
 
 ## Context
@@ -29,6 +30,8 @@ the client must see why a category was rejected when the owner chooses to say so
    - Enrollment-scoped: `POST /api/v1/admin/enrollments/:id/messages`
    - Request-scoped: `POST /api/v1/requests/:id/messages`, allowed **only** when
      the request’s `terminalResult.approvalStatus` is `admin_rejected`.
+     **Superseded for new rejects** by ADR-0050 (reject → `CANCELLED` with
+     automatic `request.cancelled`; no `admin_rejected` state).
 3. Approve, reject, and revise remain independent of messaging. Reject never
    requires or auto-sends a message. The Message control on request detail
    appears only after rejection.

@@ -5,6 +5,7 @@ export type CapabilityRuntimeKind =
   | 'blog'
   | 'delete_blog'
   | 'delete_project'
+  | 'edit_text'
   | 'project'
   | 'update_menu';
 
@@ -33,6 +34,8 @@ export const catalogScopeForRuntimeKind = (
       return 'portfolio';
     case 'update_menu':
       return 'pages';
+    case 'edit_text':
+      return 'pages';
   }
 };
 
@@ -47,6 +50,8 @@ export const catalogContentKindsForRuntimeKind = (
     case 'delete_project':
       return ['portfolio'];
     case 'update_menu':
+      return [];
+    case 'edit_text':
       return [];
   }
 };
@@ -80,6 +85,11 @@ const runtimeByExecutorId = Object.freeze({
   'workflow.update_menu@1': Object.freeze({
     consumerPrefix: 'update_menu',
     kind: 'update_menu',
+    titleField: 'resolvedTitle',
+  }),
+  'workflow.edit_text@1': Object.freeze({
+    consumerPrefix: 'edit_text',
+    kind: 'edit_text',
     titleField: 'resolvedTitle',
   }),
 } as const satisfies Record<

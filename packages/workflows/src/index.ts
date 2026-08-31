@@ -54,6 +54,11 @@ import {
   type ContentSchemaDocument,
 } from '@binflow/tools';
 
+import {
+  enqueueAdminApprovalRequired,
+  parseAdminAction,
+  ADMIN_PLATFORM_USER_ID,
+} from './admin-approval-notification.js';
 import { graphVersionForCapability } from './capability-graph.js';
 import {
   type DeleteBlogCatalogLoader,
@@ -94,6 +99,15 @@ import {
   createUpdateMenuRequest,
   type UpdateMenuPagesLoader,
 } from './update-menu-collection.js';
+import {
+  continueEditTextCollection,
+  consumeEditTextLocalePick,
+  consumeEditTextPlanConfirm,
+  consumeEditTextTargetConfirm,
+  consumeEditTextTargetPick,
+  createEditTextRequest,
+  type EditTextPagesLoader,
+} from './edit-text-collection.js';
 
 export * from './blog-runtime.js';
 export * from './delete-blog-catalog.js';
@@ -101,14 +115,17 @@ export * from './delete-blog-runtime.js';
 export * from './delete-project-runtime.js';
 export * from './menu-runtime.js';
 export * from './project-runtime.js';
+export * from './text-runtime.js';
 export { graphVersionForCapability } from './capability-graph.js';
 export {
   capabilityIngressRoutes,
   collectionCapabilityIds,
   deleteProjectNaturalLanguage,
+  editTextNaturalLanguage,
   matchesNaturalProject,
   updateMenuNaturalLanguage,
 } from './capability-ingress.js';
+export type { EditTextPagesLoader } from './edit-text-collection.js';
 export type { UpdateMenuPagesLoader } from './update-menu-collection.js';
 export {
   catalogContentKindsForRuntimeKind,
@@ -262,6 +279,9 @@ const copy = {
       'The delete project tool is not assigned to this client.',
     deletePreviewPending:
       'Deletion preview is ready. An admin must approve publication in the dashboard.',
+    adminApproved:
+      'Request approved. Publication was queued safely.',
+    adminRejected: 'Request rejected. The client was notified.',
     unknown: 'I could not match that to an available action. Use /help.',
     messageTooLong:
       'That message is too long (max 10,000 characters). Shorten the brief and send it again.',
@@ -1176,6 +1196,19 @@ export class WorkflowService {
             ),
           )
           .limit(1);
+        const actionMatch = /^\/action(?:@\w+)?\s+([A-Za-z0-9_-]{32,})$/u.exec(
+          update.text.trim(),
+        );
+        if (actionMatch !== null) {
+          if (target === undefined)
+            return this.reply('en', copy.en.accessDenied, null);
+          return this.consumeAdminAction(
+            database,
+            update,
+            target.id,
+            actionMatch[1]!,
+          );
+        }
         return this.reply(
           'en',
           target === undefined
@@ -1827,6 +1860,24 @@ export class WorkflowService {
           text: text.trim(),
           version: await this.currentRequestVersion(database, latestCollecting),
         });
+      if (latestCollecting.capabilityId === 'edit_text')
+        return continueEditTextCollection({
+          createAction: (db, request, requestVersionId, userId, action) =>
+            this.createAction(db, request, requestVersionId, userId, action),
+          database,
+          identity,
+          loadPages: (args) =>
+            this.loadEditTextPages(
+              args.database,
+              args.manifest,
+              args.projectId,
+              args.tenantId,
+            ),
+          reply: this.reply.bind(this),
+          request: latestCollecting,
+          text: text.trim(),
+          version: await this.currentRequestVersion(database, latestCollecting),
+        });
       if (latestCollecting.capabilityId === 'delete_blog_draft')
         return this.continueDeleteBlogCollection(
           database,
@@ -1865,6 +1916,9 @@ export class WorkflowService {
     const updateMenuRoute = capabilityIngressRoutes.find(
       (route) => route.handlerKind === 'update_menu',
     );
+    const editTextRoute = capabilityIngressRoutes.find(
+      (route) => route.handlerKind === 'edit_text',
+    );
     const deleteBlogCommand =
       deleteBlogRoute === undefined
         ? null
@@ -1885,6 +1939,10 @@ export class WorkflowService {
       updateMenuRoute === undefined
         ? null
         : updateMenuRoute.commandPattern.exec(text);
+    const editTextCommand =
+      editTextRoute === undefined
+        ? null
+        : editTextRoute.commandPattern.exec(text);
     const naturalDeleteBlog =
       deleteBlogRoute?.naturalLanguage?.(text) ?? false;
     const naturalDeleteProject =
@@ -1895,6 +1953,8 @@ export class WorkflowService {
       projectRoute?.naturalLanguage?.(text) ?? false;
     const naturalUpdateMenu =
       updateMenuRoute?.naturalLanguage?.(text) ?? false;
+    const naturalEditText =
+      editTextRoute?.naturalLanguage?.(text) ?? false;
     const deleteBlogEnabled =
       deleteBlogRoute === undefined
         ? false
@@ -1927,9 +1987,52 @@ export class WorkflowService {
             identity.projectId,
             updateMenuRoute.capabilityId,
           );
+    const editTextEnabled =
+      editTextRoute === undefined
+        ? false
+        : await this.hasCapability(
+            database,
+            identity.projectId,
+            editTextRoute.capabilityId,
+          );
+
+    if (editTextCommand !== null) {
+      return createEditTextRequest({
+        createAction: (db, request, requestVersionId, userId, action) =>
+          this.createAction(db, request, requestVersionId, userId, action),
+        database,
+        hasCapability: this.hasCapability.bind(this),
+        identity,
+        reply: this.reply.bind(this),
+      });
+    }
 
     if (updateMenuCommand !== null) {
       return createUpdateMenuRequest({
+        createAction: (db, request, requestVersionId, userId, action) =>
+          this.createAction(db, request, requestVersionId, userId, action),
+        database,
+        hasCapability: this.hasCapability.bind(this),
+        identity,
+        reply: this.reply.bind(this),
+      });
+    }
+
+    if (
+      editTextEnabled &&
+      naturalEditText &&
+      blogCommand === null &&
+      deleteBlogCommand === null &&
+      deleteProjectCommand === null &&
+      updateMenuCommand === null &&
+      editTextCommand === null &&
+      !naturalDeleteBlog &&
+      !naturalDeleteProject &&
+      !naturalBlog &&
+      !naturalProject &&
+      !naturalUpdateMenu
+    ) {
+      return createEditTextRequest({
         createAction: (db, request, requestVersionId, userId, action) =>
           this.createAction(db, request, requestVersionId, userId, action),
         database,
@@ -2506,6 +2609,15 @@ export class WorkflowService {
       projectId,
       tenantId,
     });
+  }
+
+  private async loadEditTextPages(
+    database: ScopedDatabase,
+    manifest: (typeof schema.projectManifestVersions.$inferSelect)['document'],
+    projectId: string,
+    tenantId: string,
+  ) {
+    return this.loadUpdateMenuPages(database, manifest, projectId, tenantId);
   }
 
   private async loadUpdateMenuCtaKeywords(
@@ -3670,6 +3782,160 @@ export class WorkflowService {
     );
   }
 
+  private async consumeAdminAction(
+    database: ScopedDatabase,
+    update: TelegramIngress,
+    adminTargetId: string,
+    token: string,
+  ): Promise<TelegramReply> {
+    const now = this.clock.now();
+    const [action] = await database
+      .select()
+      .from(schema.requestActions)
+      .where(
+        and(
+          eq(schema.requestActions.tokenHash, digest(token)),
+          eq(schema.requestActions.userId, ADMIN_PLATFORM_USER_ID),
+          isNull(schema.requestActions.consumedAt),
+          isNull(schema.requestActions.revokedAt),
+          sql`${schema.requestActions.expiresAt} > ${now}`,
+        ),
+      )
+      .limit(1);
+    if (action === undefined)
+      throw new DomainError('conflict_error', 'Action is invalid or expired.', {
+        code: 'invalid_action',
+      });
+    const parsed = parseAdminAction(action.action);
+    if (parsed === null)
+      throw new DomainError('conflict_error', 'Action is invalid or expired.', {
+        code: 'invalid_action',
+      });
+    await database.execute(
+      sql`select pg_advisory_xact_lock(hashtext(${`request:${action.requestId}`}))`,
+    );
+    const [request] = await database
+      .select()
+      .from(schema.requests)
+      .where(eq(schema.requests.id, action.requestId))
+      .limit(1);
+    if (request === undefined)
+      throw new DomainError('conflict_error', 'Action request is unavailable.');
+    if (request.state !== 'AWAITING_ADMIN_APPROVAL')
+      throw new DomainError(
+        'conflict_error',
+        'Request is not waiting for admin approval.',
+        { code: 'stale_action' },
+      );
+    const [currentVersion] = await database
+      .select()
+      .from(schema.requestVersions)
+      .where(
+        and(
+          eq(schema.requestVersions.requestId, request.id),
+          eq(schema.requestVersions.version, request.currentVersion),
+        ),
+      )
+      .limit(1);
+    if (currentVersion?.id !== action.requestVersionId)
+      throw new DomainError(
+        'conflict_error',
+        'Action targets a stale request version.',
+        { code: 'stale_action' },
+      );
+    const [evidence] = await database
+      .select({
+        artifactId: schema.artifacts.id,
+        deploymentId: schema.deployments.providerId,
+        headCommitSha: schema.repoChanges.headSha,
+      })
+      .from(schema.artifacts)
+      .innerJoin(
+        schema.repoChanges,
+        eq(schema.repoChanges.requestVersionId, schema.artifacts.requestVersionId),
+      )
+      .innerJoin(
+        schema.deployments,
+        and(
+          eq(schema.deployments.requestVersionId, schema.artifacts.requestVersionId),
+          eq(schema.deployments.environment, 'preview'),
+        ),
+      )
+      .where(
+        and(
+          eq(schema.artifacts.requestVersionId, action.requestVersionId),
+          eq(schema.artifacts.id, parsed.bindings.artifactId),
+        ),
+      )
+      .limit(1);
+    if (
+      evidence === undefined ||
+      evidence.headCommitSha !== parsed.bindings.headCommitSha ||
+      evidence.deploymentId !== parsed.bindings.deploymentId ||
+      evidence.artifactId !== parsed.bindings.artifactId
+    )
+      throw new DomainError(
+        'conflict_error',
+        'Preview evidence changed since this action was issued.',
+        { code: 'stale_action' },
+      );
+    const consumed = await database
+      .update(schema.requestActions)
+      .set({ consumedAt: now })
+      .where(
+        and(
+          eq(schema.requestActions.id, action.id),
+          isNull(schema.requestActions.consumedAt),
+        ),
+      )
+      .returning({ id: schema.requestActions.id });
+    if (consumed.length !== 1)
+      throw new DomainError('conflict_error', 'Action was already consumed.');
+    await database
+      .update(schema.requestActions)
+      .set({ revokedAt: now })
+      .where(
+        and(
+          eq(schema.requestActions.requestId, request.id),
+          eq(schema.requestActions.userId, ADMIN_PLATFORM_USER_ID),
+          isNull(schema.requestActions.consumedAt),
+        ),
+      );
+    const actorId = `telegram-admin:${update.externalUserId}`;
+    const correlationId = `telegram:${update.botId}:${update.updateId}`;
+    const decision =
+      parsed.kind === 'approve_publish' ? 'approved' : 'rejected';
+    await this.applyAdminDecision(
+      database,
+      request.id,
+      request.version,
+      actorId,
+      correlationId,
+      decision,
+      parsed.bindings,
+    );
+    await database.insert(schema.auditEvents).values({
+      action:
+        decision === 'approved'
+          ? 'admin_telegram.approved'
+          : 'admin_telegram.rejected',
+      actorId,
+      actorType: 'telegram_admin',
+      correlationId,
+      id: uuidv7(),
+      metadata: { adminTargetId, requestId: request.id },
+      objectId: request.id,
+      objectType: 'request',
+      projectId: request.projectId,
+      tenantId: request.tenantId,
+    });
+    return this.reply(
+      'en',
+      decision === 'approved' ? copy.en.adminApproved : copy.en.adminRejected,
+      request.id,
+    );
+  }
+
   private async consumeAction(
     database: ScopedDatabase,
     identity: ResolvedIdentity,
@@ -3762,6 +4028,81 @@ export class WorkflowService {
         'request.cancelled',
       );
       return this.reply(identity.locale, localeCopy.cancelled, request.id);
+    }
+    if (action.action.startsWith('pick_text_locale:')) {
+      if (request.capabilityId !== 'edit_text' || request.state !== 'NEEDS_INPUT')
+        throw new DomainError(
+          'conflict_error',
+          'Request is not waiting for text locale selection.',
+        );
+      const localeValue = action.action.slice('pick_text_locale:'.length);
+      if (localeValue !== 'de' && localeValue !== 'en' && localeValue !== 'es')
+        throw new DomainError('validation_error', 'Unsupported text locale.');
+      return consumeEditTextLocalePick({
+        contentLocale: localeValue,
+        createAction: (db, req, requestVersionId, userId, actionName) =>
+          this.createAction(db, req, requestVersionId, userId, actionName),
+        database,
+        identity,
+        reply: this.reply.bind(this),
+        request,
+        version: currentVersion,
+      });
+    }
+    if (action.action.startsWith('pick_text_target:')) {
+      if (request.capabilityId !== 'edit_text' || request.state !== 'NEEDS_INPUT')
+        throw new DomainError(
+          'conflict_error',
+          'Request is not waiting for text target selection.',
+        );
+      return consumeEditTextTargetPick({
+        createAction: (db, req, requestVersionId, userId, actionName) =>
+          this.createAction(db, req, requestVersionId, userId, actionName),
+        database,
+        identity,
+        reply: this.reply.bind(this),
+        request,
+        targetKey: action.action.slice('pick_text_target:'.length),
+        version: currentVersion,
+      });
+    }
+    if (action.action === 'confirm_text_target') {
+      if (request.capabilityId !== 'edit_text' || request.state !== 'NEEDS_INPUT')
+        throw new DomainError(
+          'conflict_error',
+          'Request is not waiting for text target confirmation.',
+        );
+      return consumeEditTextTargetConfirm({
+        database,
+        identity,
+        reply: this.reply.bind(this),
+        request,
+        version: currentVersion,
+      });
+    }
+    if (action.action === 'confirm_text_plan') {
+      if (request.capabilityId !== 'edit_text' || request.state !== 'NEEDS_INPUT')
+        throw new DomainError(
+          'conflict_error',
+          'Request is not waiting for text plan confirmation.',
+        );
+      return consumeEditTextPlanConfirm({
+        database,
+        graphVersion: await graphVersionForCapability(request.capabilityId),
+        identity,
+        onQueued: async ({ database: scoped, request: queued, requestVersionId }) => {
+          await this.enqueueResume(
+            scoped,
+            queued,
+            requestVersionId,
+            'execute',
+            1,
+          );
+        },
+        reply: this.reply.bind(this),
+        request,
+        version: currentVersion,
+      });
     }
     if (action.action.startsWith('toggle_menu_cta:')) {
       if (request.capabilityId !== 'update_menu' || request.state !== 'NEEDS_INPUT')
@@ -4142,9 +4483,10 @@ export class WorkflowService {
         tenantId: request.tenantId,
       });
       const needsAdmin =
-        (request.capabilityId === 'create_blog_draft' ||
+        request.capabilityId === 'edit_text' ||
+        ((request.capabilityId === 'create_blog_draft' ||
           request.capabilityId === 'create_blog_orbitype') &&
-        categoryKind === 'new';
+          categoryKind === 'new');
       await database
         .update(schema.requests)
         .set({
@@ -4169,14 +4511,43 @@ export class WorkflowService {
           'publish',
           2,
         );
-      if (needsAdmin)
-        await this.enqueueAdminNotification(
-          database,
-          request,
-          'admin_approval_required',
-          `Admin approval required for new blog category on request ${request.id}.`,
-          request.version + 1,
-        );
+      if (needsAdmin) {
+        const [scope] = await database
+          .select({
+            projectKey: schema.projects.key,
+            tenantKey: schema.tenants.key,
+          })
+          .from(schema.projects)
+          .innerJoin(
+            schema.tenants,
+            eq(schema.tenants.id, schema.projects.tenantId),
+          )
+          .where(eq(schema.projects.id, request.projectId))
+          .limit(1);
+        await enqueueAdminApprovalRequired(database, {
+          bindings: {
+            artifactId: evidence.artifactId,
+            deploymentId: evidence.deploymentId,
+            headCommitSha: evidence.headCommitSha,
+            requestVersionId: currentVersion.id,
+          },
+          clock: this.clock,
+          eventVersion: request.version + 1,
+          message: [
+            `Client: ${scope?.tenantKey ?? request.tenantId} / ${scope?.projectKey ?? request.projectId}`,
+            `Action: new blog category approval required`,
+            `Topic: ${request.topic ?? '—'}`,
+            `Capability: ${request.capabilityId}`,
+            `Request: ${request.id}`,
+            '',
+            'Approve → merge and publish path.',
+            'Reject → request cancelled; client notified.',
+          ].join('\n'),
+          projectId: request.projectId,
+          requestId: request.id,
+          tenantId: request.tenantId,
+        });
+      }
       await this.recordRequestEvent(
         database,
         request,
@@ -4386,114 +4757,21 @@ export class WorkflowService {
         });
         if (reserved.kind === 'replay')
           return requestSummarySchema.parse(reserved.responseBody);
-        await database.execute(
-          sql`select pg_advisory_xact_lock(hashtext(${`request:${requestId}`}))`,
-        );
-        const [context] = await database
-          .select({
-            artifactId: schema.artifacts.id,
-            deploymentId: schema.deployments.providerId,
-            headCommitSha: schema.repoChanges.headSha,
-            request: schema.requests,
-            requestVersionId: schema.requestVersions.id,
-          })
-          .from(schema.requests)
-          .innerJoin(
-            schema.requestVersions,
-            and(
-              eq(schema.requestVersions.requestId, schema.requests.id),
-              eq(
-                schema.requestVersions.version,
-                schema.requests.currentVersion,
-              ),
-            ),
-          )
-          .innerJoin(
-            schema.artifacts,
-            eq(schema.artifacts.requestVersionId, schema.requestVersions.id),
-          )
-          .innerJoin(
-            schema.repoChanges,
-            eq(schema.repoChanges.requestVersionId, schema.requestVersions.id),
-          )
-          .innerJoin(
-            schema.deployments,
-            and(
-              eq(
-                schema.deployments.requestVersionId,
-                schema.requestVersions.id,
-              ),
-              eq(schema.deployments.environment, 'preview'),
-            ),
-          )
-          .where(
-            and(
-              eq(schema.requests.id, requestId),
-              eq(schema.requests.version, expectedVersion),
-              eq(schema.requests.state, 'AWAITING_ADMIN_APPROVAL'),
-            ),
-          )
-          .limit(1);
-        if (context === undefined)
-          throw new DomainError(
-            'conflict_error',
-            'Admin decision targets a stale or ineligible request.',
-          );
-        const now = this.clock.now();
-        if (decision === 'approved')
-          await database.insert(schema.approvals).values({
-            approverId: actorId,
-            artifactId: context.artifactId,
-            decidedAt: now,
-            decision,
-            deploymentId: context.deploymentId,
-            expiresAt: new Date(now.getTime() + ACTION_TTL_MS),
-            headCommitSha: context.headCommitSha,
-            id: uuidv7(),
-            projectId: context.request.projectId,
-            requestId: context.request.id,
-            requestVersionId: context.requestVersionId,
-            role: 'admin',
-            tenantId: context.request.tenantId,
-          });
-        const [updated] = await database
-          .update(schema.requests)
-          .set({
-            state:
-              decision === 'approved'
-                ? 'APPROVED_FOR_PUBLISH'
-                : 'REVISION_REQUESTED',
-            terminalResult: {
-              ...(context.request.terminalResult as Record<string, unknown>),
-              approvalStatus:
-                decision === 'approved'
-                  ? 'approved_for_publish'
-                  : 'admin_rejected',
-            },
-            updatedAt: now,
-            version: expectedVersion + 1,
-          })
-          .where(eq(schema.requests.id, requestId))
-          .returning();
-        if (updated === undefined)
-          throw new DomainError('conflict_error', 'Admin decision was lost.');
-        if (decision === 'approved')
-          await this.enqueueResume(
-            database,
-            context.request,
-            context.requestVersionId,
-            'publish',
-            2,
-          );
-        await this.recordRequestEvent(
+        await this.applyAdminDecision(
           database,
-          context.request,
+          requestId,
+          expectedVersion,
           actorId,
           correlationId,
-          decision === 'approved'
-            ? 'request.admin_approved'
-            : 'request.admin_rejected',
+          decision,
         );
+        const [updated] = await database
+          .select()
+          .from(schema.requests)
+          .where(eq(schema.requests.id, requestId))
+          .limit(1);
+        if (updated === undefined)
+          throw new DomainError('internal_error', 'Admin decision was lost.');
         const summary = toSummary(
           updated,
           await requireTenant(database, updated.tenantId),
@@ -4506,6 +4784,151 @@ export class WorkflowService {
         });
         return summary;
       },
+    );
+  }
+
+  private async applyAdminDecision(
+    database: ScopedDatabase,
+    requestId: string,
+    expectedVersion: number,
+    actorId: string,
+    correlationId: string,
+    decision: 'approved' | 'rejected',
+    bindings?: Readonly<{
+      artifactId: string;
+      deploymentId: string;
+      headCommitSha: string;
+    }>,
+  ): Promise<void> {
+    await database.execute(
+      sql`select pg_advisory_xact_lock(hashtext(${`request:${requestId}`}))`,
+    );
+    const contextFilters = [
+      eq(schema.requests.id, requestId),
+      eq(schema.requests.version, expectedVersion),
+      eq(schema.requests.state, 'AWAITING_ADMIN_APPROVAL'),
+    ];
+    const [context] = await database
+      .select({
+        artifactId: schema.artifacts.id,
+        deploymentId: schema.deployments.providerId,
+        headCommitSha: schema.repoChanges.headSha,
+        request: schema.requests,
+        requestVersionId: schema.requestVersions.id,
+      })
+      .from(schema.requests)
+      .innerJoin(
+        schema.requestVersions,
+        and(
+          eq(schema.requestVersions.requestId, schema.requests.id),
+          eq(schema.requestVersions.version, schema.requests.currentVersion),
+        ),
+      )
+      .innerJoin(
+        schema.artifacts,
+        and(
+          eq(schema.artifacts.requestVersionId, schema.requestVersions.id),
+          ...(bindings === undefined
+            ? []
+            : [eq(schema.artifacts.id, bindings.artifactId)]),
+        ),
+      )
+      .innerJoin(
+        schema.repoChanges,
+        and(
+          eq(schema.repoChanges.requestVersionId, schema.requestVersions.id),
+          ...(bindings === undefined
+            ? []
+            : [eq(schema.repoChanges.headSha, bindings.headCommitSha)]),
+        ),
+      )
+      .innerJoin(
+        schema.deployments,
+        and(
+          eq(schema.deployments.requestVersionId, schema.requestVersions.id),
+          eq(schema.deployments.environment, 'preview'),
+          ...(bindings === undefined
+            ? []
+            : [eq(schema.deployments.providerId, bindings.deploymentId)]),
+        ),
+      )
+      .where(and(...contextFilters))
+      .limit(1);
+    if (context === undefined)
+      throw new DomainError(
+        'conflict_error',
+        'Admin decision targets a stale or ineligible request.',
+      );
+    const now = this.clock.now();
+    if (decision === 'approved')
+      await database.insert(schema.approvals).values({
+        approverId: actorId,
+        artifactId: context.artifactId,
+        decidedAt: now,
+        decision,
+        deploymentId: context.deploymentId,
+        expiresAt: new Date(now.getTime() + ACTION_TTL_MS),
+        headCommitSha: context.headCommitSha,
+        id: uuidv7(),
+        projectId: context.request.projectId,
+        requestId: context.request.id,
+        requestVersionId: context.requestVersionId,
+        role: 'admin',
+        tenantId: context.request.tenantId,
+      });
+    const [updated] = await database
+      .update(schema.requests)
+      .set({
+        state: decision === 'approved' ? 'APPROVED_FOR_PUBLISH' : 'CANCELLED',
+        ...(decision === 'approved'
+          ? {
+              terminalResult: {
+                ...(context.request.terminalResult as Record<string, unknown>),
+                approvalStatus: 'approved_for_publish',
+              },
+            }
+          : {}),
+        updatedAt: now,
+        version: expectedVersion + 1,
+      })
+      .where(eq(schema.requests.id, requestId))
+      .returning();
+    if (updated === undefined)
+      throw new DomainError('conflict_error', 'Admin decision was lost.');
+    if (decision === 'approved')
+      await this.enqueueResume(
+        database,
+        context.request,
+        context.requestVersionId,
+        'publish',
+        2,
+      );
+    else {
+      const locale = await this.clientConversationLocale(
+        database,
+        context.request,
+      );
+      if (locale !== undefined)
+        await this.enqueueClientNotification(database, {
+          aggregateId: context.request.id,
+          aggregateType: 'request',
+          eventVersion: updated.version,
+          jobKey: `client.notification:request.cancelled:${context.request.id}:${String(updated.version)}`,
+          message: copy[locale].cancelled,
+          notificationType: 'request.cancelled',
+          projectId: context.request.projectId,
+          requestId: context.request.id,
+          tenantId: context.request.tenantId,
+        });
+    }
+    await this.recordRequestEvent(
+      database,
+      context.request,
+      actorId,
+      correlationId,
+      decision === 'approved'
+        ? 'request.admin_approved'
+        : 'request.admin_rejected',
     );
   }
 
@@ -4922,9 +5345,11 @@ export class WorkflowService {
     await database.insert(schema.auditEvents).values({
       action,
       actorId,
-      actorType: actorId.startsWith('admin:')
-        ? 'platform_owner'
-        : 'telegram_client',
+      actorType: actorId.startsWith('telegram-admin:')
+        ? 'telegram_admin'
+        : actorId.startsWith('admin:')
+          ? 'platform_owner'
+          : 'telegram_client',
       correlationId,
       id: uuidv7(),
       metadata: {},

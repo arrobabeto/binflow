@@ -13,6 +13,7 @@ import { createOpenAIBlogGenerationPort, createOpenAIProjectGenerationPort } fro
 import { S3ArtifactStore } from '@binflow/artifacts';
 import { BlogExecutor, DeleteBlogExecutor, orbitypeBlogPublicationStages, type ContentCatalogPort } from '@binflow/blog';
 import { UpdateMenuExecutor } from '@binflow/menu';
+import { EditTextExecutor } from '@binflow/text';
 import {
   createOrbitypeBlogPublicationPort,
   createOrbitypeMenuPagesPort,
@@ -42,6 +43,7 @@ import {
   TelegramPollingLock,
   renderDeleteAdminPendingNotice,
   renderDeletePublicationCompleteNotice,
+  renderAdminTelegramReply,
   renderPreviewReadyNotice,
   renderPublicationCompleteNotice,
   renderRevisionPlanNotice,
@@ -59,6 +61,7 @@ import {
   DeleteProjectWorkflowRuntime,
   MenuWorkflowRuntime,
   ProjectWorkflowRuntime,
+  TextWorkflowRuntime,
   WorkflowService,
   filterBlogCatalogItems,
   filterPortfolioCatalogItems,
@@ -655,7 +658,54 @@ const processWorkflowJob = async (name: string, data: unknown) => {
         : { productionOrigin: context.productionOrigin }),
     });
     const runtime =
-      capabilityRuntime.kind === 'update_menu'
+      capabilityRuntime.kind === 'edit_text'
+        ? (() => {
+            if (context.orbitype === undefined)
+              throw new DomainError(
+                'validation_error',
+                'Orbitype credential is required for edit_text.',
+              );
+            const configuration = context.orbitype.configuration as {
+              baseUrl?: unknown;
+              pagesTable?: unknown;
+            };
+            if (typeof configuration.baseUrl !== 'string')
+              throw new DomainError(
+                'validation_error',
+                'Orbitype base URL is missing.',
+              );
+            const plaintext = decryptSecret(
+              context.orbitype.envelope,
+              masterKey,
+              context.orbitype.secretContext,
+            );
+            try {
+              const secret = JSON.parse(plaintext.toString('utf8')) as {
+                apiKey?: unknown;
+              };
+              if (typeof secret.apiKey !== 'string')
+                throw new DomainError(
+                  'validation_error',
+                  'Orbitype API key is missing.',
+                );
+              const orbitypePages = createOrbitypeMenuPagesPort({
+                apiKey: secret.apiKey,
+                baseUrl: configuration.baseUrl,
+                ...(typeof configuration.pagesTable === 'string'
+                  ? { pagesTable: configuration.pagesTable }
+                  : {}),
+              });
+              return new TextWorkflowRuntime(
+                database,
+                artifactStore,
+                new EditTextExecutor(repository, deployments),
+                orbitypePages,
+              );
+            } finally {
+              plaintext.fill(0);
+            }
+          })()
+        : capabilityRuntime.kind === 'update_menu'
         ? (() => {
             if (context.orbitype === undefined)
               throw new DomainError(
@@ -836,6 +886,21 @@ const processWorkflowJob = async (name: string, data: unknown) => {
             },
           }),
         );
+      } else if (capabilityRuntime.kind === 'edit_text') {
+        const textResult = await (runtime as TextWorkflowRuntime).execute(signal);
+        await notifyClient(
+          signal.requestId,
+          renderPreviewReadyNotice({
+            includeRevision: false,
+            locale,
+            title: textResult.result.patch.candidate.pageTitle,
+            tokens: {
+              approve: textResult.actions.approve,
+              cancel: textResult.actions.cancel,
+            },
+            urls: textResult.result.deployment.urls,
+          }),
+        );
       } else {
         const result = await (
           runtime as BlogWorkflowRuntime | ProjectWorkflowRuntime
@@ -907,6 +972,15 @@ const processWorkflowJob = async (name: string, data: unknown) => {
         );
       } else if (capabilityRuntime.kind === 'update_menu') {
         throw new Error('update_menu does not use publish resume.');
+      } else if (capabilityRuntime.kind === 'edit_text') {
+        const result = await (runtime as TextWorkflowRuntime).publish(signal);
+        await notifyClient(
+          signal.requestId,
+          renderPublicationCompleteNotice({
+            locale,
+            urls: result.urls,
+          }),
+        );
       } else {
         const result = await (
           runtime as BlogWorkflowRuntime | ProjectWorkflowRuntime
@@ -1497,14 +1571,30 @@ const dispatchAdminNotifications = async (): Promise<void> => {
         .orderBy(asc(schema.outboxEvents.createdAt))
         .limit(20);
       for (const event of events) {
-        const message = (event.payload as { message?: unknown }).message;
+        const payload = event.payload as {
+          actionTokens?: ReadonlyArray<{
+            action: 'approve_publish' | 'reject';
+            label: string;
+            token: string;
+          }>;
+          message?: unknown;
+        };
+        const message = payload.message;
         if (typeof message !== 'string') continue;
         const claimed = await claimPendingOutboxEvent(scoped, event.id);
         if (claimed === undefined) continue;
         try {
+          const body =
+            payload.actionTokens !== undefined &&
+            payload.actionTokens.length > 0
+              ? renderAdminTelegramReply({
+                  actionTokens: payload.actionTokens,
+                  text: message,
+                })
+              : message;
           await runtime.adapter.postMessage(
             `telegram:${target.chatId}`,
-            message,
+            body,
           );
           await markOutboxPublished(scoped, claimed);
           await scoped.insert(schema.auditEvents).values({
@@ -1755,13 +1845,11 @@ const startTelegramRuntime = async (input: Readonly<{
       }
       clientTelegramRuntimes.set(input.botId, runtime);
     } else {
-      if (pollingEnabled) {
-        registerAdminTelegramHandlers(runtime, {
-          botId: input.botId,
-          handler: (update) =>
-            workflowService.handleAdminTelegramUpdate(update),
-        });
-      }
+      registerAdminTelegramHandlers(runtime, {
+        botId: input.botId,
+        handler: (update) =>
+          workflowService.handleAdminTelegramUpdate(update),
+      });
       adminTelegramRuntimes.set(input.botId, runtime);
     }
     await runtime.chat.initialize();
@@ -1778,6 +1866,15 @@ const startTelegramRuntime = async (input: Readonly<{
         ? 'Telegram polling runtime started'
         : 'Telegram runtime started in send-only mode because another worker holds the polling lock',
     );
+    if (!pollingEnabled && input.kind === 'telegram-admin') {
+      logger.warn(
+        {
+          botId: input.botId,
+          role: input.kind,
+        },
+        'Admin Telegram bot cannot receive Approve/Reject clicks in send-only mode; ensure only one worker holds the polling lock for this bot',
+      );
+    }
   } catch (error) {
     if (pollingEnabled) await telegramPollingLock.release(input.botId);
     throw error;

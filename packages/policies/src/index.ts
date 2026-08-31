@@ -5,6 +5,7 @@ import {
   createProjectAstroInputSchema,
   deleteBlogDraftInputSchema,
   deleteProjectAstroInputSchema,
+  editTextInputSchema,
   updateMenuInputSchema,
   type CapabilityBinding,
   type CapabilityCatalogItem,
@@ -28,6 +29,7 @@ export type CapabilityDefinition = Readonly<{
     | typeof createProjectAstroInputSchema
     | typeof deleteBlogDraftInputSchema
     | typeof deleteProjectAstroInputSchema
+    | typeof editTextInputSchema
     | typeof updateMenuInputSchema;
   requiredPermissions: readonly string[];
   requiresPreview: boolean;
@@ -206,6 +208,41 @@ export const deleteBlogDraftDefinition: CapabilityDefinition = Object.freeze({
   version: 2,
 });
 
+export const editTextDefinition: CapabilityDefinition = Object.freeze({
+  approvalPolicyId: 'astro-orbitype-text-edit@1',
+  budget: Object.freeze({
+    maxEstimatedCostCents: 50,
+    maxModelCalls: 1,
+    maxTokens: 1_000,
+  }),
+  command: '/edit_text',
+  displayName: 'Edit page text',
+  executorId: 'workflow.edit_text@1',
+  id: 'edit_text',
+  inputSchema: editTextInputSchema,
+  requiredPermissions: Object.freeze([
+    'github:metadata:read',
+    'github:contents:write',
+    'github:pull_requests:write',
+    'github:checks:read',
+    'github:statuses:read',
+    'vercel:deployments:read',
+    'orbitype:content:read',
+    'orbitype:content:write',
+  ]),
+  requiresPreview: true,
+  retryPolicy: Object.freeze({
+    maxAttempts: 3,
+    retryableErrors: Object.freeze([
+      'provider_retryable',
+      'deployment_pending',
+    ]),
+  }),
+  riskClass: 'medium',
+  timeoutSeconds: 1_800,
+  version: 1,
+});
+
 export const updateMenuDefinition: CapabilityDefinition = Object.freeze({
   approvalPolicyId: 'astro-orbitype-menu-update@1',
   budget: Object.freeze({
@@ -250,6 +287,7 @@ export const capabilityRegistry = Object.freeze([
   createProjectAstroDefinition,
   deleteBlogDraftDefinition,
   deleteProjectAstroDefinition,
+  editTextDefinition,
   updateMenuDefinition,
 ] as const);
 
@@ -428,5 +466,20 @@ export const decideProjectPublicationPolicy = (
   effectiveRisk: 'medium',
   reasons: ['Portfolio publication requires client approval.'],
   requiredApprovals: ['client'],
+  requiresPreview: true,
+});
+
+export const decideTextEditPublicationPolicy = (
+  input: Readonly<{
+    editablePaths: readonly string[];
+  }>,
+): PublicationPolicyDecision => ({
+  allowed: true,
+  allowedPaths: [...input.editablePaths],
+  effectiveRisk: 'medium',
+  reasons: [
+    'Literal page text edits require client preview approval and admin publication approval.',
+  ],
+  requiredApprovals: ['client', 'admin'],
   requiresPreview: true,
 });

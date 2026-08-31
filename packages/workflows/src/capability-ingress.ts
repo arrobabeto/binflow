@@ -1,9 +1,12 @@
 import { capabilityRegistry } from '@binflow/policies';
 
+import { editTextNaturalLanguage } from './edit-text-ingress.js';
+
 export type CapabilityIngressHandlerKind =
   | 'blog'
   | 'delete_blog'
   | 'delete_project'
+  | 'edit_text'
   | 'project'
   | 'update_menu';
 
@@ -61,6 +64,8 @@ export const updateMenuNaturalLanguage = (text: string): boolean =>
     text,
   );
 
+export { editTextNaturalLanguage };
+
 const handlerKindForExecutor = (
   executorId: string,
 ): CapabilityIngressHandlerKind => {
@@ -73,6 +78,7 @@ const handlerKindForExecutor = (
   if (executorId === 'workflow.delete_blog@1') return 'delete_blog';
   if (executorId === 'workflow.delete_project@1') return 'delete_project';
   if (executorId === 'workflow.update_menu@1') return 'update_menu';
+  if (executorId === 'workflow.edit_text@1') return 'edit_text';
   throw new Error(`Unsupported ingress executor ${executorId}.`);
 };
 
@@ -88,6 +94,7 @@ const naturalLanguageForCapability = (
   if (capabilityId === 'delete_project_astro') return deleteProjectNaturalLanguage;
   if (capabilityId === 'create_project_astro') return matchesNaturalProject;
   if (capabilityId === 'update_menu') return updateMenuNaturalLanguage;
+  if (capabilityId === 'edit_text') return editTextNaturalLanguage;
   return undefined;
 };
 
@@ -113,6 +120,7 @@ export const collectionCapabilityIds = Object.freeze(
     'create_project_astro',
     'delete_blog_draft',
     'delete_project_astro',
+    'edit_text',
     'update_menu',
   ]),
 );

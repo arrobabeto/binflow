@@ -20,6 +20,7 @@
     "@binflow/domain": "workspace:*",
     "@binflow/github": "workspace:*",
     "@binflow/menu": "workspace:*",
+    "@binflow/text": "workspace:*",
     "@binflow/messaging": "workspace:*",
     "@binflow/orbitype": "workspace:*",
     "@binflow/projects": "workspace:*",

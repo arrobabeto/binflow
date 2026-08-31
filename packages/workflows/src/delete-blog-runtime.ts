@@ -24,6 +24,8 @@ import {
 import { DomainError, type Clock, systemClock } from '@binflow/domain';
 import { decideBlogDeletionPolicy } from '@binflow/policies';
 
+import { enqueueAdminApprovalRequired } from './admin-approval-notification.js';
+
 
 const stageRequestState = (node: string): string => {
   switch (node) {
@@ -182,9 +184,10 @@ export class DeleteBlogWorkflowRuntime {
           mime: 'application/json',
           sha256: planDigest,
         });
+        const artifactId = uuidv7();
         await database.insert(schema.artifacts).values({
           bytes: planBytes.byteLength,
-          id: uuidv7(),
+          id: artifactId,
           kind: 'deletion_plan',
           mime: 'application/json',
           projectId: context.request.projectId,
@@ -290,20 +293,30 @@ export class DeleteBlogWorkflowRuntime {
           )
           .where(eq(schema.projects.id, context.request.projectId))
           .limit(1);
-        await this.enqueueAdminNotification(
-          database,
-          context.request,
-          'admin_approval_required',
-          [
+        await enqueueAdminApprovalRequired(database, {
+          bindings: {
+            artifactId,
+            deploymentId: result.deployment.deploymentId,
+            headCommitSha: result.publication.headCommitSha,
+            requestVersionId: context.version.id,
+          },
+          clock: this.clock,
+          eventVersion: context.request.version + 2,
+          message: [
             `Cliente: ${scope?.tenantKey ?? context.request.tenantId}`,
             `Acción: quiere borrar el artículo «${result.resolvedTitle}»`,
             `URL: ${composeBlogArticleUrl(resolveDeleteBlogProductionOrigin(context.manifest.document), context.manifest.document, result.resolvedSlug)}`,
             `PR: ${result.publication.pullRequestUrl}`,
             `Request: ${context.request.id}`,
             `Dashboard: /requests/${context.request.id}`,
+            '',
+            'Approve → merge and publish path.',
+            'Reject → request cancelled; client notified.',
           ].join('\n'),
-          context.request.version + 2,
-        );
+          projectId: context.request.projectId,
+          requestId: context.request.id,
+          tenantId: context.request.tenantId,
+        });
       },
     );
     return { result };

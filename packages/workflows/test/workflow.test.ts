@@ -1257,7 +1257,7 @@ describeDatabase('Telegram request workflow kernel', () => {
     ).toHaveLength(1);
   });
 
-  it('does not enqueue client messages when admin rejects', async () => {
+  it('enqueues request.cancelled when admin rejects', async () => {
     await service.handleTelegramUpdate(
       update('1', '/start pairing-token-abcdefghijklmnopqrstuvwxyz'),
     );
@@ -1337,16 +1337,18 @@ describeDatabase('Telegram request workflow kernel', () => {
       'idempotency-reject',
     );
     const after = await database.db.select().from(schema.outboxEvents);
-    expect(after).toHaveLength(before.length);
-    expect(
-      after.filter(
-        (event) =>
-          event.eventType === 'client.notification_requested' &&
-          ((event.payload as { notificationType?: string }).notificationType ===
-            'admin.direct_message' ||
-            (event.payload as { notificationType?: string })
-              .notificationType === 'admin.request_message'),
-      ),
-    ).toHaveLength(0);
+    expect(after.length).toBeGreaterThan(before.length);
+    const cancelled = after.filter(
+      (event) =>
+        event.eventType === 'client.notification_requested' &&
+        (event.payload as { notificationType?: string }).notificationType ===
+          'request.cancelled',
+    );
+    expect(cancelled).toHaveLength(1);
+    const [updated] = await database.db
+      .select()
+      .from(schema.requests)
+      .where(eq(schema.requests.id, request!.id));
+    expect(updated?.state).toBe('CANCELLED');
   });
 });

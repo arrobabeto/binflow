@@ -1,0 +1,4 @@
+kind: compute
+label: Build literal Orbitype and GitHub patches
+nodeKind: text.render_patch@1
+acceptsClientCustomization: false

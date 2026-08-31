@@ -96,6 +96,60 @@ const actionButtonStyle = (
   return 'default';
 };
 
+export type AdminTelegramActionToken = Readonly<{
+  action: 'approve_publish' | 'reject';
+  label: string;
+  token: string;
+}>;
+
+export type AdminTelegramReply = Readonly<{
+  actionTokens: readonly AdminTelegramActionToken[];
+  text: string;
+}>;
+
+const adminActionButtonStyle = (
+  action: AdminTelegramActionToken['action'],
+): 'primary' | 'danger' | 'default' =>
+  action === 'approve_publish'
+    ? 'primary'
+    : action === 'reject'
+      ? 'danger'
+      : 'default';
+
+export const renderAdminTelegramReply = (
+  reply: AdminTelegramReply,
+  links: readonly TelegramPreviewLink[] = [],
+): AdapterPostableMessage => {
+  if (reply.actionTokens.length === 0 && links.length === 0) return reply.text;
+  return Card({
+    children: [
+      CardText(reply.text),
+      ...(links.length === 0
+        ? []
+        : [
+            Actions(
+              links.map((link) =>
+                LinkButton({ label: link.label, url: link.url }),
+              ),
+            ),
+          ]),
+      ...(reply.actionTokens.length === 0
+        ? []
+        : [
+            Actions(
+              reply.actionTokens.map((action) =>
+                Button({
+                  id: action.token,
+                  label: action.label,
+                  style: adminActionButtonStyle(action.action),
+                }),
+              ),
+            ),
+          ]),
+    ],
+  });
+};
+
 export const renderClientTelegramReply = (
   reply: TelegramReply,
   links: readonly TelegramPreviewLink[] = [],
@@ -241,28 +295,35 @@ const previewActionCopy: Record<
 
 export const renderPreviewReadyNotice = (
   input: Readonly<{
+    includeRevision?: boolean;
     locale: SupportedLocale;
     title: string;
-    tokens: Readonly<{ approve: string; cancel: string; revise: string }>;
+    tokens: Readonly<{ approve: string; cancel: string; revise?: string }>;
     urls: Readonly<Record<string, string>>;
   }>,
 ): AdapterPostableMessage => {
   const copy = previewActionCopy[input.locale];
+  const includeRevision = input.includeRevision !== false;
+  const actionTokens = [
+    {
+      action: 'approve_preview' as const,
+      label: copy.approve,
+      token: input.tokens.approve,
+    },
+    ...(includeRevision && input.tokens.revise !== undefined
+      ? [
+          {
+            action: 'request_revision' as const,
+            label: copy.revise,
+            token: input.tokens.revise,
+          },
+        ]
+      : []),
+    { action: 'cancel' as const, label: copy.cancel, token: input.tokens.cancel },
+  ];
   return renderClientTelegramReply(
     {
-      actionTokens: [
-        {
-          action: 'approve_preview',
-          label: copy.approve,
-          token: input.tokens.approve,
-        },
-        {
-          action: 'request_revision',
-          label: copy.revise,
-          token: input.tokens.revise,
-        },
-        { action: 'cancel', label: copy.cancel, token: input.tokens.cancel },
-      ],
+      actionTokens,
       duplicate: false,
       locale: input.locale,
       requestId: null,
@@ -512,7 +573,7 @@ const telegramCallbackIngress = (
   token: string,
 ): TelegramIngress | null => {
   const message = query.message;
-  if (message === undefined || !/^\d+$/u.test(query.id)) return null;
+  if (message === undefined) return null;
   return {
     botId,
     chatId: String(message.chat.id),
@@ -681,9 +742,17 @@ const registerTelegramIngressHandlers = (
     sink: TelegramReplySink,
   ): Promise<void> => {
     if (update === null) return;
-    const reply = await input.handler(update);
-    await sink.post(input.render(reply));
-    await input.afterReplyDelivered?.(update);
+    try {
+      const reply = await input.handler(update);
+      await sink.post(input.render(reply));
+      await input.afterReplyDelivered?.(update);
+    } catch (error) {
+      if (error instanceof DomainError) {
+        await sink.post(error.message);
+        return;
+      }
+      throw error;
+    }
   };
 
   runtime.chat.onDirectMessage(async (thread, message) => {
@@ -834,10 +903,32 @@ export const registerAdminTelegramHandlers = (
     handler: (update: TelegramIngress) => Promise<TelegramReply>;
   }>,
 ): void => {
-  registerTelegramIngressHandlers(runtime, {
+  const dispatch = registerTelegramIngressHandlers(runtime, {
     botId: input.botId,
     handler: input.handler,
-    render: (reply) => reply.text,
+    render: (reply) => {
+      const adminTokens = reply.actionTokens.filter(
+        (action): action is AdminTelegramActionToken =>
+          action.action === 'approve_publish' || action.action === 'reject',
+      );
+      if (adminTokens.length === 0) return reply.text;
+      return renderAdminTelegramReply({
+        actionTokens: adminTokens,
+        text: reply.text,
+      });
+    },
+  });
+  runtime.chat.onAction(async (event) => {
+    if (!ACTION_TOKEN_PATTERN.test(event.actionId) || event.thread === null)
+      return;
+    await dispatch(
+      telegramCallbackIngress(
+        input.botId,
+        event.raw as TelegramCallbackQuery,
+        event.actionId,
+      ),
+      event.thread,
+    );
   });
 };
 

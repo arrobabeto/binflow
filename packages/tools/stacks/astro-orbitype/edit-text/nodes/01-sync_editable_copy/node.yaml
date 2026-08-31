@@ -1,0 +1,9 @@
+kind: effect
+label: Sync editable copy corpus
+nodeKind: text.sync_editable_copy@1
+acceptsClientCustomization: false
+parameters:
+  catalogScope: pages
+permissions:
+  - orbitype:content:read
+  - github:metadata:read

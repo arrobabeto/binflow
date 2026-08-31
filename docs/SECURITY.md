@@ -19,6 +19,8 @@ Untrusted:
 Trusted only after verification:
 
 - Dashboard sessions with completed TOTP.
+- Paired admin Telegram target for **`AWAITING_ADMIN_APPROVAL` approve/reject
+  only** (ADR-0050); not a general dashboard session substitute.
 - Bot integration resolved from stored token/secret association.
 - GitHub App installation token scoped to the configured repository and downscoped to the current operation.
 - Vercel events validated and correlated to the configured project.

@@ -11,7 +11,11 @@ The dashboard manages client credentials, integrations, manifests and production
 
 ## Decision
 
-Use Better Auth with email/password, mandatory TOTP and backup codes. The platform owner is created through an explicit bootstrap process. Secret management and admin approvals require a completed two-factor session and may require recent reauthentication.
+Use Better Auth with email/password, mandatory TOTP and backup codes. The platform owner is created through an explicit bootstrap process. Secret management and admin approvals require a completed two-factor session
+and may require recent reauthentication. **Exception (ADR-0050):** approve/reject
+for requests in `AWAITING_ADMIN_APPROVAL` may also be taken from the paired
+admin Telegram target using admin action tokens; this does not extend to
+credentials, enrollment, or other dashboard mutations.
 
 ## Consequences
 
