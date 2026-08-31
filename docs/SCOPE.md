@@ -56,7 +56,8 @@
 - General code, CSS, dependency, infrastructure, authentication or workflow changes requested by an LLM.
 - Shell, filesystem, generic SQL, merge or publication tools exposed to the LLM.
 - Automatic rollback (except compensating restore of temporary preview CMS
-  patches for `edit_image` / `edit_text` — ADR-0051 / ADR-0052).
+  patches for `edit_image` / `edit_text` / `edit_text_style` — ADR-0051 /
+  ADR-0052 / ADR-0053).
 - Production VPS provisioning.
 - Validated German publication until a compatible real pilot exists.
 - WordPress runtime support as a separate later phase.

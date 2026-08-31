@@ -14,12 +14,15 @@ import {
 describe('@binflow/tools catalog', () => {
   it('loads Astro tools with matching executor stages', async () => {
     const tools = await listTools();
-    expect(tools).toHaveLength(8);
+    expect(tools).toHaveLength(9);
     const blog = tools.find((tool) => tool.tool.id === 'create_blog_draft');
     const blogOrbitype = tools.find(
       (tool) => tool.tool.id === 'create_blog_orbitype',
     );
     const editText = tools.find((tool) => tool.tool.id === 'edit_text');
+    const editTextStyle = tools.find(
+      (tool) => tool.tool.id === 'edit_text_style',
+    );
     const editImage = tools.find((tool) => tool.tool.id === 'edit_image');
     const updateMenu = tools.find((tool) => tool.tool.id === 'update_menu');
     const project = tools.find((tool) => tool.tool.id === 'create_project_astro');
@@ -30,6 +33,7 @@ describe('@binflow/tools catalog', () => {
     expect(blog?.tool.profile).toBe('astro_repo');
     expect(blogOrbitype?.tool.profile).toBe('astro_orbitype');
     expect(editText?.tool.profile).toBe('astro_orbitype');
+    expect(editTextStyle?.tool.profile).toBe('astro_orbitype');
     expect(editImage?.tool.profile).toBe('astro_orbitype');
     expect(updateMenu?.tool.profile).toBe('astro_orbitype');
     expect(project?.tool.profile).toBe('astro_repo');
@@ -43,8 +47,12 @@ describe('@binflow/tools catalog', () => {
       'stacks/astro-orbitype/update-menu@1',
     );
     expect(editText?.graph.version).toBe('stacks/astro-orbitype/edit-text@1');
+    expect(editTextStyle?.graph.version).toBe(
+      'stacks/astro-orbitype/edit-text-style@1',
+    );
     expect(editImage?.graph.version).toBe('stacks/astro-orbitype/edit-image@1');
     expect(editImage?.tool.requiresPreview).toBe(true);
+    expect(editTextStyle?.tool.requiresPreview).toBe(true);
     expect(
       editImage?.graph.edges.some(
         (edge) =>
@@ -53,6 +61,12 @@ describe('@binflow/tools catalog', () => {
     ).toBe(true);
     expect(
       editText?.graph.edges.some(
+        (edge) =>
+          edge.from === 'wait_preview' && edge.to === 'apply_orbitype_preview',
+      ),
+    ).toBe(true);
+    expect(
+      editTextStyle?.graph.edges.some(
         (edge) =>
           edge.from === 'wait_preview' && edge.to === 'apply_orbitype_preview',
       ),

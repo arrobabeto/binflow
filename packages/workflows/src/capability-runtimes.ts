@@ -7,6 +7,7 @@ export type CapabilityRuntimeKind =
   | 'delete_project'
   | 'edit_image'
   | 'edit_text'
+  | 'edit_text_style'
   | 'project'
   | 'update_menu';
 
@@ -38,6 +39,7 @@ export const catalogScopeForRuntimeKind = (
     case 'edit_image':
       return 'pages';
     case 'edit_text':
+    case 'edit_text_style':
       return 'pages';
   }
 };
@@ -57,6 +59,7 @@ export const catalogContentKindsForRuntimeKind = (
     case 'edit_image':
       return [];
     case 'edit_text':
+    case 'edit_text_style':
       return [];
   }
 };
@@ -97,6 +100,11 @@ const runtimeByExecutorId = Object.freeze({
     kind: 'edit_text',
     titleField: 'resolvedTitle',
   }),
+  'workflow.edit_text_style@1': Object.freeze({
+    consumerPrefix: 'edit_text_style',
+    kind: 'edit_text_style',
+    titleField: 'resolvedTitle',
+  }),
   'workflow.edit_image@1': Object.freeze({
     consumerPrefix: 'edit_image',
     kind: 'edit_image',
@@ -133,10 +141,18 @@ export const resolveCapabilityRuntime = (
       `Unknown capability ${capabilityId}.`,
       { code: 'unknown_capability' },
     );
-  const runtime =
-    runtimeByExecutorId[
-      definition.executorId as keyof typeof runtimeByExecutorId
-    ];
+  const runtime = (
+    runtimeByExecutorId as Readonly<
+      Record<
+        string,
+        Readonly<{
+          consumerPrefix: CapabilityRuntimeKind;
+          kind: CapabilityRuntimeKind;
+          titleField: 'descriptor' | 'resolvedTitle' | 'titulo';
+        }>
+      >
+    >
+  )[definition.executorId];
   if (runtime === undefined)
     throw new DomainError(
       'validation_error',

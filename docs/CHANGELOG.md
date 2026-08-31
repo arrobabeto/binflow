@@ -4,6 +4,53 @@ All notable changes to product behavior, architecture, contracts, security, oper
 
 ## Unreleased
 
+### edit_text_style: visible spans + fail-closed preview restore
+
+- Pilot Bistro: render allowlisted `text` bodies (e.g. `SectionStory`) via
+  `CmsText` so surgical `<span data-binflow-style>` styles are not escaped as
+  literal HTML. Deploy Bistro to take effect on production.
+- `edit_text_style` cancel/admin-reject restore: look up `text_style_patch` by
+  request version, then fall back to latest patch for the request; missing
+  artifact / store / snapshot now marks `orbitypeRestoreFailed` instead of a
+  silent no-op. Other tools’ CTAs and flows unchanged (ADR-0042).
+
+### Surgical text style + preserved edit_text (isolation)
+
+- **`edit_text_style`**: apply weight/size/color by wrapping `targetExcerpt` in
+  `<span style="…" data-binflow-style="1">` so CMS-backed Astro sites show the
+  change; sibling `${field}Style` is no longer the visibility contract
+  (ADR-0053 amendment). `verify_production` checks styled markup for the
+  excerpt.
+- **`edit_text`**: unchanged usage — substring locates the field; execute still
+  replaces the **whole field** with `newValue` (ADR-0051). CTAs, commands, and
+  messages stay the prior edit_text surface (ADR-0042 isolation).
+- Pilot Bistro: sanitize allows safe `span` styles; editable title/lead/body
+  fields render via sanitized HTML so inline styles are not escaped.
+  Site-only change; does not alter other Binflow capabilities.
+
+### Edit text style (`edit_text_style`, astro_orbitype)
+
+- New capability **`edit_text_style@1`** (ADR-0053): change weight, size, and/or
+  color on one allowlisted text target without rewriting copy; dual-write GitHub
+  plus Orbitype; Vercel preview with client **Approve/Cancel only**; admin
+  approval before merge.
+- Guardrails: one `fieldKind` per request (mixed → cancel); HEX ≤2 retries then
+  cancel; isolated CTAs (`confirm_text_style_*`, Aplicar estilo / Apply style).
+- Style collection is a stepped interview (menu → one attribute → back to menu;
+  Done after ≥1). Missing target text shows a retry message.
+- Preview temporarily patches Orbitype after Vercel is ready; snapshot restored
+  on client cancel / admin reject via `restore_orbitype_preview`.
+- Ingress: English phrases such as “edit text style” / “change text style” and
+  German `Schriftstil` match `edit_text_style` (not only ES stems). Plan confirm
+  shows human weight/size/color lines — never raw JSON style objects.
+- Packages: shared discovery in `@binflow/text` plus `EditTextStyleExecutor` and
+  `TextStyleWorkflowRuntime` — no changes to `edit_text` / `edit_image` graphs.
+- Migration `0030_edit_text_style_capability.sql`; graph
+  `stacks/astro-orbitype/edit-text-style@1`.
+- Spec: `docs/specs/edit-text-style.md`.
+- Bistro binding script:
+  `packages/tools/scripts/add-bistro-edit-text-style-binding.ts`.
+
 ### Edit site image (`edit_image`, astro_orbitype)
 
 - New capability **`edit_image@1`** (ADR-0052): replace one allowlisted page or

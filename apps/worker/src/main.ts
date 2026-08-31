@@ -14,7 +14,7 @@ import { S3ArtifactStore } from '@binflow/artifacts';
 import { BlogExecutor, DeleteBlogExecutor, orbitypeBlogPublicationStages, type ContentCatalogPort } from '@binflow/blog';
 import { UpdateMenuExecutor } from '@binflow/menu';
 import { EditImageExecutor } from '@binflow/images';
-import { EditTextExecutor } from '@binflow/text';
+import { EditTextExecutor, EditTextStyleExecutor } from '@binflow/text';
 import {
   createOrbitypeBlogPublicationPort,
   createOrbitypeImagesPort,
@@ -65,6 +65,7 @@ import {
   ImageWorkflowRuntime,
   MenuWorkflowRuntime,
   ProjectWorkflowRuntime,
+  TextStyleWorkflowRuntime,
   TextWorkflowRuntime,
   WorkflowService,
   filterBlogCatalogItems,
@@ -851,6 +852,53 @@ const processWorkflowJob = async (name: string, data: unknown) => {
               plaintext.fill(0);
             }
           })()
+        : capabilityRuntime.kind === 'edit_text_style'
+        ? (() => {
+            if (context.orbitype === undefined)
+              throw new DomainError(
+                'validation_error',
+                'Orbitype credential is required for edit_text_style.',
+              );
+            const configuration = context.orbitype.configuration as {
+              baseUrl?: unknown;
+              pagesTable?: unknown;
+            };
+            if (typeof configuration.baseUrl !== 'string')
+              throw new DomainError(
+                'validation_error',
+                'Orbitype base URL is missing.',
+              );
+            const plaintext = decryptSecret(
+              context.orbitype.envelope,
+              masterKey,
+              context.orbitype.secretContext,
+            );
+            try {
+              const secret = JSON.parse(plaintext.toString('utf8')) as {
+                apiKey?: unknown;
+              };
+              if (typeof secret.apiKey !== 'string')
+                throw new DomainError(
+                  'validation_error',
+                  'Orbitype API key is missing.',
+                );
+              const orbitypePages = createOrbitypeMenuPagesPort({
+                apiKey: secret.apiKey,
+                baseUrl: configuration.baseUrl,
+                ...(typeof configuration.pagesTable === 'string'
+                  ? { pagesTable: configuration.pagesTable }
+                  : {}),
+              });
+              return new TextStyleWorkflowRuntime(
+                database,
+                artifactStore,
+                new EditTextStyleExecutor(repository, deployments),
+                orbitypePages,
+              );
+            } finally {
+              plaintext.fill(0);
+            }
+          })()
         : capabilityRuntime.kind === 'update_menu'
         ? (() => {
             if (context.orbitype === undefined)
@@ -1047,6 +1095,23 @@ const processWorkflowJob = async (name: string, data: unknown) => {
             urls: textResult.result.deployment.urls,
           }),
         );
+      } else if (capabilityRuntime.kind === 'edit_text_style') {
+        const styleResult = await (
+          runtime as TextStyleWorkflowRuntime
+        ).execute(signal);
+        await notifyClient(
+          signal.requestId,
+          renderPreviewReadyNotice({
+            includeRevision: false,
+            locale,
+            title: styleResult.result.patch.candidate.pageTitle,
+            tokens: {
+              approve: styleResult.actions.approve,
+              cancel: styleResult.actions.cancel,
+            },
+            urls: styleResult.result.deployment.urls,
+          }),
+        );
       } else if (capabilityRuntime.kind === 'edit_image') {
         const imageResult = await (runtime as ImageWorkflowRuntime).execute(
           signal,
@@ -1144,6 +1209,17 @@ const processWorkflowJob = async (name: string, data: unknown) => {
             urls: result.urls,
           }),
         );
+      } else if (capabilityRuntime.kind === 'edit_text_style') {
+        const result = await (
+          runtime as TextStyleWorkflowRuntime
+        ).publish(signal);
+        await notifyClient(
+          signal.requestId,
+          renderPublicationCompleteNotice({
+            locale,
+            urls: result.urls,
+          }),
+        );
       } else if (capabilityRuntime.kind === 'edit_image') {
         const result = await (runtime as ImageWorkflowRuntime).publish(signal);
         await notifyClient(
@@ -1170,9 +1246,11 @@ const processWorkflowJob = async (name: string, data: unknown) => {
         await (runtime as ImageWorkflowRuntime).restorePreview(signal);
       } else if (capabilityRuntime.kind === 'edit_text') {
         await (runtime as TextWorkflowRuntime).restorePreview(signal);
+      } else if (capabilityRuntime.kind === 'edit_text_style') {
+        await (runtime as TextStyleWorkflowRuntime).restorePreview(signal);
       } else {
         throw new Error(
-          'restore_orbitype_preview is only supported for edit_image and edit_text.',
+          'restore_orbitype_preview is only supported for edit_image, edit_text, and edit_text_style.',
         );
       }
     } else {

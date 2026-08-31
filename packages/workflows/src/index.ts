@@ -109,6 +109,19 @@ import {
   type EditTextPagesLoader,
 } from './edit-text-collection.js';
 import {
+  continueEditTextStyleCollection,
+  consumeEditTextStyleAttrsDone,
+  consumeEditTextStyleAttrPick,
+  consumeEditTextStyleColorPick,
+  consumeEditTextStyleLocalePick,
+  consumeEditTextStylePlanConfirm,
+  consumeEditTextStyleSizePick,
+  consumeEditTextStyleTargetConfirm,
+  consumeEditTextStyleTargetPick,
+  consumeEditTextStyleWeightPick,
+  createEditTextStyleRequest,
+} from './edit-text-style-collection.js';
+import {
   continueEditImageCollection,
   continueEditImageCollectionWithAttachment,
   consumeEditImagePlanConfirm,
@@ -126,10 +139,13 @@ export * from './delete-blog-runtime.js';
 export * from './delete-project-runtime.js';
 export * from './edit-image-collection.js';
 export * from './edit-image-ingress.js';
+export * from './edit-text-style-collection.js';
+export * from './edit-text-style-ingress.js';
 export * from './image-runtime.js';
 export * from './menu-runtime.js';
 export * from './project-runtime.js';
 export * from './text-runtime.js';
+export * from './text-style-runtime.js';
 export { graphVersionForCapability } from './capability-graph.js';
 export {
   capabilityIngressRoutes,
@@ -137,6 +153,7 @@ export {
   deleteProjectNaturalLanguage,
   editImageNaturalLanguage,
   editTextNaturalLanguage,
+  editTextStyleNaturalLanguage,
   matchesNaturalProject,
   updateMenuNaturalLanguage,
 } from './capability-ingress.js';
@@ -212,6 +229,8 @@ const copy = {
       'Vorschau genehmigt. Die neue Kategorie wartet jetzt auf die Admin-Freigabe.',
     adminPendingTextEdit:
       'Vorschau genehmigt. Die Textänderung wartet jetzt auf die Admin-Freigabe.',
+    adminPendingTextStyleEdit:
+      'Vorschau genehmigt. Die Stiländerung wartet jetzt auf die Admin-Freigabe.',
     adminPendingImageEdit:
       'Vorschau genehmigt. Die Bildänderung wartet jetzt auf die Admin-Freigabe.',
     revisionPrompt:
@@ -273,6 +292,8 @@ const copy = {
       'Preview approved. The new category is now waiting for admin approval.',
     adminPendingTextEdit:
       'Preview approved. The text change is now waiting for admin approval.',
+    adminPendingTextStyleEdit:
+      'Preview approved. The style change is now waiting for admin approval.',
     adminPendingImageEdit:
       'Preview approved. The image change is now waiting for admin approval.',
     revisionPrompt:
@@ -338,6 +359,8 @@ const copy = {
       'Preview aprobado. La categoría nueva ahora espera aprobación del admin.',
     adminPendingTextEdit:
       'Preview aprobado. El cambio de texto ahora espera aprobación del admin.',
+    adminPendingTextStyleEdit:
+      'Preview aprobado. El cambio de estilo ahora espera aprobación del admin.',
     adminPendingImageEdit:
       'Preview aprobado. El cambio de imagen ahora espera aprobación del admin.',
     revisionPrompt:
@@ -1908,6 +1931,24 @@ export class WorkflowService {
           text: text.trim(),
           version: await this.currentRequestVersion(database, latestCollecting),
         });
+      if (latestCollecting.capabilityId === 'edit_text_style')
+        return continueEditTextStyleCollection({
+          createAction: (db, request, requestVersionId, userId, action) =>
+            this.createAction(db, request, requestVersionId, userId, action),
+          database,
+          identity,
+          loadPages: (args) =>
+            this.loadEditTextPages(
+              args.database,
+              args.manifest,
+              args.projectId,
+              args.tenantId,
+            ),
+          reply: this.reply.bind(this),
+          request: latestCollecting,
+          text: text.trim(),
+          version: await this.currentRequestVersion(database, latestCollecting),
+        });
       if (latestCollecting.capabilityId === 'edit_image') {
         const version = await this.currentRequestVersion(
           database,
@@ -1993,6 +2034,9 @@ export class WorkflowService {
     const editTextRoute = capabilityIngressRoutes.find(
       (route) => route.handlerKind === 'edit_text',
     );
+    const editTextStyleRoute = capabilityIngressRoutes.find(
+      (route) => route.handlerKind === 'edit_text_style',
+    );
     const editImageRoute = capabilityIngressRoutes.find(
       (route) => route.handlerKind === 'edit_image',
     );
@@ -2020,6 +2064,10 @@ export class WorkflowService {
       editTextRoute === undefined
         ? null
         : editTextRoute.commandPattern.exec(text);
+    const editTextStyleCommand =
+      editTextStyleRoute === undefined
+        ? null
+        : editTextStyleRoute.commandPattern.exec(text);
     const editImageCommand =
       editImageRoute === undefined
         ? null
@@ -2036,6 +2084,8 @@ export class WorkflowService {
       updateMenuRoute?.naturalLanguage?.(text) ?? false;
     const naturalEditText =
       editTextRoute?.naturalLanguage?.(text) ?? false;
+    const naturalEditTextStyle =
+      editTextStyleRoute?.naturalLanguage?.(text) ?? false;
     const naturalEditImage =
       editImageRoute?.naturalLanguage?.(text) ?? false;
     const deleteBlogEnabled =
@@ -2078,6 +2128,14 @@ export class WorkflowService {
             identity.projectId,
             editTextRoute.capabilityId,
           );
+    const editTextStyleEnabled =
+      editTextStyleRoute === undefined
+        ? false
+        : await this.hasCapability(
+            database,
+            identity.projectId,
+            editTextStyleRoute.capabilityId,
+          );
     const editImageEnabled =
       editImageRoute === undefined
         ? false
@@ -2099,6 +2157,29 @@ export class WorkflowService {
               initialQuery: editImageCommand[1].trim(),
               loadContent: (args) =>
                 this.loadEditImageContent(
+                  args.database,
+                  args.manifest,
+                  args.projectId,
+                  args.tenantId,
+                ),
+            }
+          : {}),
+        reply: this.reply.bind(this),
+      });
+    }
+
+    if (editTextStyleCommand !== null) {
+      return createEditTextStyleRequest({
+        createAction: (db, request, requestVersionId, userId, action) =>
+          this.createAction(db, request, requestVersionId, userId, action),
+        database,
+        hasCapability: this.hasCapability.bind(this),
+        identity,
+        ...(editTextStyleCommand[1]?.trim()
+          ? {
+              initialQuery: editTextStyleCommand[1].trim(),
+              loadPages: (args) =>
+                this.loadEditTextPages(
                   args.database,
                   args.manifest,
                   args.projectId,
@@ -2171,13 +2252,14 @@ export class WorkflowService {
     }
 
     if (
-      editTextEnabled &&
-      naturalEditText &&
+      editTextStyleEnabled &&
+      naturalEditTextStyle &&
       blogCommand === null &&
       deleteBlogCommand === null &&
       deleteProjectCommand === null &&
       updateMenuCommand === null &&
       editTextCommand === null &&
+      editTextStyleCommand === null &&
       editImageCommand === null &&
       !naturalDeleteBlog &&
       !naturalDeleteProject &&
@@ -2185,6 +2267,34 @@ export class WorkflowService {
       !naturalProject &&
       !naturalUpdateMenu &&
       !naturalEditImage
+    ) {
+      return createEditTextStyleRequest({
+        createAction: (db, request, requestVersionId, userId, action) =>
+          this.createAction(db, request, requestVersionId, userId, action),
+        database,
+        hasCapability: this.hasCapability.bind(this),
+        identity,
+        reply: this.reply.bind(this),
+      });
+    }
+
+    if (
+      editTextEnabled &&
+      naturalEditText &&
+      blogCommand === null &&
+      deleteBlogCommand === null &&
+      deleteProjectCommand === null &&
+      updateMenuCommand === null &&
+      editTextCommand === null &&
+      editTextStyleCommand === null &&
+      editImageCommand === null &&
+      !naturalDeleteBlog &&
+      !naturalDeleteProject &&
+      !naturalBlog &&
+      !naturalProject &&
+      !naturalUpdateMenu &&
+      !naturalEditImage &&
+      !naturalEditTextStyle
     ) {
       return createEditTextRequest({
         createAction: (db, request, requestVersionId, userId, action) =>
@@ -4190,7 +4300,8 @@ export class WorkflowService {
         throw new DomainError('conflict_error', 'Request is already terminal.');
       const shouldRestoreOrbitypePreview =
         (request.capabilityId === 'edit_image' ||
-          request.capabilityId === 'edit_text') &&
+          request.capabilityId === 'edit_text' ||
+          request.capabilityId === 'edit_text_style') &&
         (request.state === 'AWAITING_CLIENT_APPROVAL' ||
           request.state === 'AWAITING_ADMIN_APPROVAL');
       await database
@@ -4280,6 +4391,215 @@ export class WorkflowService {
         graphVersion: await graphVersionForCapability(request.capabilityId),
         identity,
         onQueued: async ({ database: scoped, request: queued, requestVersionId }) => {
+          await this.enqueueResume(
+            scoped,
+            queued,
+            requestVersionId,
+            'execute',
+            1,
+          );
+        },
+        reply: this.reply.bind(this),
+        request,
+        version: currentVersion,
+      });
+    }
+    if (action.action.startsWith('pick_text_style_locale:')) {
+      if (
+        request.capabilityId !== 'edit_text_style' ||
+        request.state !== 'NEEDS_INPUT'
+      )
+        throw new DomainError(
+          'conflict_error',
+          'Request is not waiting for text style locale selection.',
+        );
+      const localeValue = action.action.slice('pick_text_style_locale:'.length);
+      if (localeValue !== 'de' && localeValue !== 'en' && localeValue !== 'es')
+        throw new DomainError('validation_error', 'Unsupported text locale.');
+      return consumeEditTextStyleLocalePick({
+        contentLocale: localeValue,
+        database,
+        identity,
+        reply: this.reply.bind(this),
+        request,
+        version: currentVersion,
+      });
+    }
+    if (action.action.startsWith('pick_text_style_target:')) {
+      if (
+        request.capabilityId !== 'edit_text_style' ||
+        request.state !== 'NEEDS_INPUT'
+      )
+        throw new DomainError(
+          'conflict_error',
+          'Request is not waiting for text style target selection.',
+        );
+      return consumeEditTextStyleTargetPick({
+        createAction: (db, req, requestVersionId, userId, actionName) =>
+          this.createAction(db, req, requestVersionId, userId, actionName),
+        database,
+        identity,
+        reply: this.reply.bind(this),
+        request,
+        targetKey: action.action.slice('pick_text_style_target:'.length),
+        version: currentVersion,
+      });
+    }
+    if (action.action === 'confirm_text_style_target') {
+      if (
+        request.capabilityId !== 'edit_text_style' ||
+        request.state !== 'NEEDS_INPUT'
+      )
+        throw new DomainError(
+          'conflict_error',
+          'Request is not waiting for text style target confirmation.',
+        );
+      return consumeEditTextStyleTargetConfirm({
+        createAction: (db, req, requestVersionId, userId, actionName) =>
+          this.createAction(db, req, requestVersionId, userId, actionName),
+        database,
+        identity,
+        loadPages: (args) =>
+          this.loadEditTextPages(
+            args.database,
+            args.manifest,
+            args.projectId,
+            args.tenantId,
+          ),
+        reply: this.reply.bind(this),
+        request,
+        version: currentVersion,
+      });
+    }
+    if (action.action.startsWith('pick_text_style_attr:')) {
+      if (
+        request.capabilityId !== 'edit_text_style' ||
+        request.state !== 'NEEDS_INPUT'
+      )
+        throw new DomainError(
+          'conflict_error',
+          'Request is not waiting for text style attribute selection.',
+        );
+      const attr = action.action.slice('pick_text_style_attr:'.length);
+      if (attr !== 'weight' && attr !== 'size' && attr !== 'color')
+        throw new DomainError('validation_error', 'Unsupported style attribute.');
+      return consumeEditTextStyleAttrPick({
+        attr,
+        createAction: (db, req, requestVersionId, userId, actionName) =>
+          this.createAction(db, req, requestVersionId, userId, actionName),
+        database,
+        identity,
+        reply: this.reply.bind(this),
+        request,
+        version: currentVersion,
+      });
+    }
+    if (action.action.startsWith('pick_text_style_weight:')) {
+      if (
+        request.capabilityId !== 'edit_text_style' ||
+        request.state !== 'NEEDS_INPUT'
+      )
+        throw new DomainError(
+          'conflict_error',
+          'Request is not waiting for text style weight selection.',
+        );
+      const weight = Number(action.action.slice('pick_text_style_weight:'.length));
+      if (weight !== 400 && weight !== 600 && weight !== 700)
+        throw new DomainError('validation_error', 'Unsupported font weight.');
+      return consumeEditTextStyleWeightPick({
+        createAction: (db, req, requestVersionId, userId, actionName) =>
+          this.createAction(db, req, requestVersionId, userId, actionName),
+        database,
+        fontWeight: weight,
+        identity,
+        reply: this.reply.bind(this),
+        request,
+        version: currentVersion,
+      });
+    }
+    if (action.action.startsWith('pick_text_style_size:')) {
+      if (
+        request.capabilityId !== 'edit_text_style' ||
+        request.state !== 'NEEDS_INPUT'
+      )
+        throw new DomainError(
+          'conflict_error',
+          'Request is not waiting for text style size selection.',
+        );
+      const delta = Number(action.action.slice('pick_text_style_size:'.length));
+      if (delta !== 4 && delta !== 8 && delta !== 16 && delta !== 32)
+        throw new DomainError('validation_error', 'Unsupported size delta.');
+      return consumeEditTextStyleSizePick({
+        createAction: (db, req, requestVersionId, userId, actionName) =>
+          this.createAction(db, req, requestVersionId, userId, actionName),
+        database,
+        fontSizeDeltaPx: delta,
+        identity,
+        reply: this.reply.bind(this),
+        request,
+        version: currentVersion,
+      });
+    }
+    if (action.action.startsWith('pick_text_style_color:')) {
+      if (
+        request.capabilityId !== 'edit_text_style' ||
+        request.state !== 'NEEDS_INPUT'
+      )
+        throw new DomainError(
+          'conflict_error',
+          'Request is not waiting for text style color selection.',
+        );
+      const mode = action.action.slice('pick_text_style_color:'.length);
+      if (mode !== 'hex' && mode !== 'darken50' && mode !== 'lighten50')
+        throw new DomainError('validation_error', 'Unsupported color mode.');
+      return consumeEditTextStyleColorPick({
+        colorMode: mode,
+        createAction: (db, req, requestVersionId, userId, actionName) =>
+          this.createAction(db, req, requestVersionId, userId, actionName),
+        database,
+        identity,
+        reply: this.reply.bind(this),
+        request,
+        version: currentVersion,
+      });
+    }
+    if (action.action === 'done_text_style_attrs') {
+      if (
+        request.capabilityId !== 'edit_text_style' ||
+        request.state !== 'NEEDS_INPUT'
+      )
+        throw new DomainError(
+          'conflict_error',
+          'Request is not waiting for text style attributes.',
+        );
+      return consumeEditTextStyleAttrsDone({
+        createAction: (db, req, requestVersionId, userId, actionName) =>
+          this.createAction(db, req, requestVersionId, userId, actionName),
+        database,
+        identity,
+        reply: this.reply.bind(this),
+        request,
+        version: currentVersion,
+      });
+    }
+    if (action.action === 'confirm_text_style_plan') {
+      if (
+        request.capabilityId !== 'edit_text_style' ||
+        request.state !== 'NEEDS_INPUT'
+      )
+        throw new DomainError(
+          'conflict_error',
+          'Request is not waiting for text style plan confirmation.',
+        );
+      return consumeEditTextStylePlanConfirm({
+        database,
+        graphVersion: await graphVersionForCapability(request.capabilityId),
+        identity,
+        onQueued: async ({
+          database: scoped,
+          request: queued,
+          requestVersionId,
+        }) => {
           await this.enqueueResume(
             scoped,
             queued,
@@ -4742,6 +5062,7 @@ export class WorkflowService {
       });
       const needsAdmin =
         request.capabilityId === 'edit_text' ||
+        request.capabilityId === 'edit_text_style' ||
         request.capabilityId === 'edit_image' ||
         ((request.capabilityId === 'create_blog_draft' ||
           request.capabilityId === 'create_blog_orbitype') &&
@@ -4786,9 +5107,11 @@ export class WorkflowService {
         const adminAction =
           request.capabilityId === 'edit_image'
             ? 'image edit approval required'
-            : request.capabilityId === 'edit_text'
-              ? 'text edit approval required'
-              : 'new blog category approval required';
+            : request.capabilityId === 'edit_text_style'
+              ? 'text style approval required'
+              : request.capabilityId === 'edit_text'
+                ? 'text edit approval required'
+                : 'new blog category approval required';
         const terminal =
           request.terminalResult !== null &&
           typeof request.terminalResult === 'object'
@@ -4846,9 +5169,11 @@ export class WorkflowService {
       const clientPendingCopy =
         request.capabilityId === 'edit_image'
           ? localeCopy.adminPendingImageEdit
-          : request.capabilityId === 'edit_text'
-            ? localeCopy.adminPendingTextEdit
-            : localeCopy.adminPending;
+          : request.capabilityId === 'edit_text_style'
+            ? localeCopy.adminPendingTextStyleEdit
+            : request.capabilityId === 'edit_text'
+              ? localeCopy.adminPendingTextEdit
+              : localeCopy.adminPending;
       return this.reply(
         identity.locale,
         needsAdmin ? clientPendingCopy : localeCopy.previewApproved,
@@ -5200,7 +5525,8 @@ export class WorkflowService {
     else {
       if (
         context.request.capabilityId === 'edit_image' ||
-        context.request.capabilityId === 'edit_text'
+        context.request.capabilityId === 'edit_text' ||
+        context.request.capabilityId === 'edit_text_style'
       )
         await this.enqueueResume(
           database,

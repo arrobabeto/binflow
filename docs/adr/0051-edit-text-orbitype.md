@@ -26,6 +26,10 @@ approval policies.
    `astro_orbitype` with executor `workflow.edit_text@1`.
 2. Collection interviews for locale (when multilingual), target substring,
    disambiguation, target confirm, replacement text, and plan confirm.
+   Substring search only locates the allowlisted field; execute replaces the
+   **entire field value** with the client’s literal `newValue` (not a partial
+   in-field splice). Surgical excerpt wrapping belongs to `edit_text_style`
+   (ADR-0053), not this tool.
 3. Execute graph: open GitHub PR → wait Vercel preview → **temporary
    Orbitype pages patch** (after snapshot) → client approve/cancel → admin
    approval → merge → `publish_orbitype_pages` (idempotent final patch) →
@@ -62,7 +66,8 @@ approval policies.
 
 ## Verification
 
-- Package tests for discovery, literal patch, snapshot restore.
+- Package tests for discovery, literal whole-field patch, snapshot restore.
 - Cancel / admin reject enqueue `restore_orbitype_preview`.
 - Conformance: catalog, policies, contracts, runtime registry.
 - Manual pilot on Bistro.
+- CTAs, commands, and NL dispatch for other tools unchanged (ADR-0042).

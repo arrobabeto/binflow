@@ -51,6 +51,52 @@ const normalizeText = (value: string): string =>
     .replaceAll(/[^a-z0-9]+/gu, ' ')
     .trim();
 
+/**
+ * Resolve the exact slice inside `fieldValue` that matches `query`
+ * (exact → case-insensitive → normalized search used by discovery).
+ */
+export const resolveMatchedExcerpt = (
+  fieldValue: string,
+  query: string,
+): string | null => {
+  const trimmed = query.trim();
+  if (trimmed.length === 0 || fieldValue.length === 0) return null;
+  if (fieldValue.includes(trimmed)) return trimmed;
+  const lowerField = fieldValue.toLowerCase();
+  const lowerQuery = trimmed.toLowerCase();
+  const caseIdx = lowerField.indexOf(lowerQuery);
+  if (caseIdx >= 0) return fieldValue.slice(caseIdx, caseIdx + trimmed.length);
+
+  const normalizedQuery = normalizeText(trimmed);
+  if (normalizedQuery.length === 0) return null;
+  for (let start = 0; start < fieldValue.length; start += 1) {
+    for (let end = start + 1; end <= fieldValue.length; end += 1) {
+      const slice = fieldValue.slice(start, end);
+      if (normalizeText(slice) === normalizedQuery) return slice;
+      if (normalizeText(slice).length > normalizedQuery.length) break;
+    }
+  }
+  return null;
+};
+
+export const applySurgicalTextReplace = (
+  fieldValue: string,
+  excerpt: string,
+  replacement: string,
+): string => {
+  const matched = resolveMatchedExcerpt(fieldValue, excerpt);
+  if (matched === null)
+    throw new Error('Surgical excerpt not found in field value.');
+  const index = fieldValue.indexOf(matched);
+  if (index < 0)
+    throw new Error('Surgical excerpt not found in field value.');
+  return (
+    fieldValue.slice(0, index) +
+    replacement +
+    fieldValue.slice(index + matched.length)
+  );
+};
+
 export const buildTextEditKey = (
   pageSlug: string,
   sectionIndex: number,
@@ -208,6 +254,50 @@ export const applyTextFieldPatch = (
   }
   record[patch.field] = { [patch.locale]: patch.newValue };
   return next;
+};
+
+/** Replace only `excerpt` inside the locale field value (surgical edit_text). */
+export const applySurgicalTextFieldPatch = (
+  sections: unknown,
+  patch: Readonly<{
+    excerpt: string;
+    field: string;
+    locale: SupportedLocale;
+    replacement: string;
+    sectionIndex: number;
+  }>,
+): unknown => {
+  if (!Array.isArray(sections))
+    throw new Error('Page sections must be an array.');
+  const next = structuredClone(sections);
+  const section = next[patch.sectionIndex];
+  if (section === null || typeof section !== 'object' || Array.isArray(section))
+    throw new Error('Target section is missing.');
+  const record = section as Record<string, unknown>;
+  const current = record[patch.field];
+  let fieldValue: string | null = null;
+  if (typeof current === 'string') fieldValue = current;
+  else if (
+    current !== null &&
+    typeof current === 'object' &&
+    !Array.isArray(current)
+  ) {
+    const localeValue = (current as Record<string, unknown>)[patch.locale];
+    if (typeof localeValue === 'string') fieldValue = localeValue;
+  }
+  if (fieldValue === null)
+    throw new Error('Target field value is missing.');
+  const updated = applySurgicalTextReplace(
+    fieldValue,
+    patch.excerpt,
+    patch.replacement,
+  );
+  return applyTextFieldPatch(next, {
+    field: patch.field,
+    locale: patch.locale,
+    newValue: updated,
+    sectionIndex: patch.sectionIndex,
+  });
 };
 
 export const assertTextFieldStillMatches = (

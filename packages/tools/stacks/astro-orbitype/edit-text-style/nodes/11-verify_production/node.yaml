@@ -1,0 +1,6 @@
+kind: effect
+label: Verify production styles
+nodeKind: text.verify_style_production@1
+acceptsClientCustomization: false
+permissions:
+  - vercel:deployments:read

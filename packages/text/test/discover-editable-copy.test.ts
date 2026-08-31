@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
 import {
+  applySurgicalTextFieldPatch,
   applyTextFieldPatch,
   discoverEditableCopy,
   searchEditableCopy,
@@ -41,6 +42,19 @@ describe('discoverEditableCopy', () => {
     );
     expect(matches).toHaveLength(1);
     expect(matches[0]?.currentValue).toContain('Willkommen');
+  });
+
+  it('applies surgical excerpt replacement inside the field', () => {
+    const patched = applySurgicalTextFieldPatch(pages[0]!.sections, {
+      excerpt: 'Willkommen',
+      field: 'content',
+      locale: 'de',
+      replacement: 'Hallo',
+      sectionIndex: 0,
+    }) as Array<Record<string, unknown>>;
+    expect((patched[0]?.content as { de: string }).de).toBe(
+      'Hallo im Bistro Zurlinde.',
+    );
   });
 
   it('applies literal locale replacement', () => {

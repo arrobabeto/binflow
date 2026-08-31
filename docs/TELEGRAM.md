@@ -103,6 +103,7 @@ For the local MVP router:
 - **Blog:** messages mentioning *blog*, *article*, *artículo*, *Beitrag*, *post*, etc. start the project's assigned create-blog capability (`create_blog_draft` on `astro_repo`, `create_blog_orbitype` on `astro_orbitype`).
 - **Menu update (`astro_orbitype`):** messages mentioning *menú*, *carta*, *Speisekarte*, *update menu*, *upload menu*, etc. start `update_menu` when assigned.
 - **Text edit (`astro_orbitype`):** messages mentioning *editar texto*, *cambiar texto*, *edit text*, *Text ändern*, etc. start `edit_text` when assigned.
+- **Text style (`astro_orbitype`):** messages mentioning *cambiar estilo*, *tamaño del texto*, *negrita*, *color del texto*, *edit text style*, *Schriftgröße*, etc. start `edit_text_style` when assigned (not `edit_text`).
 - **Image edit (`astro_orbitype`):** messages mentioning *cambiar imagen*, *change image*, *Bild ändern*, *edit image*, *portada*, *cover*, etc. start `edit_image` when assigned. Target confirm may include the current image photo; replacement accepts a photo attachment or HTTPS URL.
 - **Portfolio project:** messages mentioning *proyecto*, *portafolio*, *portfolio*, *case study*, etc., or briefs with at least two structural cues (`Stack:`, `Rol:`, `Estado:`, `confidencial`, …), start `create_project_astro` when assigned — with or without the `/create_project` prefix.
 - **`/create_project <brief>`** always routes to the portfolio tool when it is enabled.

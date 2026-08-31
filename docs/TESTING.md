@@ -246,8 +246,15 @@ stuck states, and customization asks. Pilot reference:
   confirm without preview; see `docs/specs/update-menu.md` and
   `packages/menu/test/update-menu.test.ts`.
 - **`/edit_text`** (astro_orbitype) — substring target, disambiguation, literal
-  replacement, preview Approve/Cancel, admin before merge; see
+  whole-field replacement, preview Approve/Cancel, admin before merge; see
   `docs/specs/edit-text.md` and `packages/text/test/`.
+- **`/edit_text_style`** (astro_orbitype) — same targeting as text edit; stepped
+  weight/size/color interview (multi OK, ≥1); one fieldKind; HEX ≤2 retries;
+  target-not-found retry; wrap excerpt in styled span; isolated CTAs; preview +
+  admin; cancel/reject restore fail-closed (artifact fallback); pilot sites must
+  sanitize-allow style spans and render allowlisted fields via CmsText/SafeHtml;
+  see `docs/specs/edit-text-style.md` and
+  `packages/text/test/text-style.test.ts`.
 - **`/edit_image`** (astro_orbitype) — image target search, photo confirm /
   reject loop, replacement via photo or HTTPS URL, all-locale patch, preview +
   admin (with preview link); see `docs/specs/edit-image.md` and

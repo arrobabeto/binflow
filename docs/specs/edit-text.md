@@ -11,7 +11,7 @@ Mutation class: `update`
 
 ## 1. Three layers
 
-- **code** — Allowlisted editable copy paths (paragraphs and non-H1 section titles only). Denylist H1, button labels, link text, nav, and footer menus. Exact substring match corpus from Orbitype pages plus GitHub mirror paths. One replacement per request per locale. Literal oldValue→newValue patch with no LLM mutation. Collection: optional locale pick, target disambiguation, confirm_target, await_replacement, plan confirm. Preview: GitHub PR → Vercel wait → temporary Orbitype pages patch (snapshot first). Preview approve/cancel only (no revision). Cancel/admin reject restore snapshot via `restore_orbitype_preview`. Admin approval before merge; `publish_orbitype_pages` re-applies after merge.
+- **code** — Allowlisted editable copy paths (paragraphs and non-H1 section titles only). Denylist H1, button labels, link text, nav, and footer menus. Exact substring match corpus from Orbitype pages plus GitHub mirror paths. One replacement per request per locale. Literal oldValue→newValue **whole-field** patch with no LLM mutation (substring only locates the field). Collection: optional locale pick, target disambiguation, confirm_target, await_replacement, plan confirm. Preview: GitHub PR → Vercel wait → temporary Orbitype pages patch (snapshot first). Preview approve/cancel only (no revision). Cancel/admin reject restore snapshot via `restore_orbitype_preview`. Admin approval before merge; `publish_orbitype_pages` re-applies after merge.
 - **manifest** — contentLocales for locale gate and corpus labels; editablePaths for GitHub page copy files; deployment.productionOrigin; publicationTargets github+orbitype.
 - **customization** — Optional editorial hints for collection prompts only. No paths, models, permissions, or approval overrides.
 
@@ -71,8 +71,8 @@ Document plan confirm and admin notice shapes per `client-facing-copy.md`.
 - Monolingual project skips locale question; multilingual asks once.
 - Denylist blocks H1, buttons, links, nav, and footer from discovery.
 - Ambiguous substring returns numbered disambiguation, not auto-pick.
-- confirm_target then plan confirm show exact old and new strings only.
-- Execute performs literal replacement without LLM paraphrase.
+- confirm_target then plan confirm show exact old and new field strings only.
+- Execute performs literal whole-field replacement without LLM paraphrase.
 - Preview temporarily patches Orbitype so CMS-backed sites show the new copy;
   client Approve or Cancel only. Cancel / admin reject restore the snapshot.
 - After client preview approval, admin approval is required before merge;

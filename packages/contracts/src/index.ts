@@ -964,6 +964,80 @@ export const editTextInputSchema = z.discriminatedUnion('mode', [
     .strict(),
 ]);
 
+export const textStylePatchSchema = z
+  .object({
+    color: z
+      .string()
+      .regex(/^#[0-9A-Fa-f]{6}$/u)
+      .optional(),
+    fontSizePx: z.number().int().positive().max(400).optional(),
+    fontWeight: z.union([z.literal(400), z.literal(600), z.literal(700)]).optional(),
+  })
+  .strict()
+  .refine(
+    (value) =>
+      value.color !== undefined ||
+      value.fontSizePx !== undefined ||
+      value.fontWeight !== undefined,
+    { message: 'At least one style attribute is required.' },
+  );
+
+const editTextStyleSharedSchema = {
+  projectId: z.string().min(1),
+} as const;
+
+export const editTextStyleInputSchema = z.discriminatedUnion('mode', [
+  z
+    .object({
+      collectionComplete: z.boolean().default(false),
+      collectionStep: z
+        .enum([
+          'await_locale',
+          'await_target',
+          'disambiguate',
+          'confirm_target',
+          'await_style',
+          'await_style_weight',
+          'await_style_size',
+          'await_style_color',
+          'await_hex',
+          'ready',
+        ])
+        .default('await_target'),
+      colorMode: z.enum(['hex', 'darken50', 'lighten50']).optional(),
+      contentLocale: z.enum(['de', 'en', 'es']).optional(),
+      currentColor: z.string().regex(/^#[0-9A-Fa-f]{6}$/u).optional(),
+      currentFontSizePx: z.number().int().positive().max(400).optional(),
+      currentFontWeight: z
+        .union([z.literal(400), z.literal(600), z.literal(700)])
+        .optional(),
+      discoveredTargets: z.array(textEditCandidateSchema).max(40).default([]),
+      fieldKind: z.enum(['heading', 'subtitle', 'body']).optional(),
+      fontSizeDeltaPx: z
+        .union([z.literal(4), z.literal(8), z.literal(16), z.literal(32)])
+        .optional(),
+      fontWeight: z.union([z.literal(400), z.literal(600), z.literal(700)]).optional(),
+      hex: z.string().regex(/^#[0-9A-Fa-f]{6}$/u).optional(),
+      hexAttempts: z.number().int().min(0).max(2).default(0),
+      messages: z.array(z.string().trim().max(10_000)).max(40).default([]),
+      mode: z.literal('collect'),
+      projectId: z.string().min(1),
+      targetExcerpt: z.string().trim().min(1).max(10_000).optional(),
+      targetKey: z.string().trim().min(1).max(160).optional(),
+    })
+    .strict(),
+  z
+    .object({
+      ...editTextStyleSharedSchema,
+      contentLocale: z.enum(['de', 'en', 'es']),
+      mode: z.literal('execute'),
+      style: textStylePatchSchema,
+      targetExcerpt: z.string().trim().min(1).max(10_000),
+      targetKey: z.string().trim().min(1).max(160),
+    })
+    .strict(),
+]);
+
 export const imageEditCandidateSchema = z
   .object({
     currentPath: z.string().trim().min(1).max(500),
@@ -1050,6 +1124,7 @@ export const capabilityInputSchema = z.union([
   deleteBlogDraftInputSchema,
   deleteProjectAstroInputSchema,
   editTextInputSchema,
+  editTextStyleInputSchema,
   editImageInputSchema,
   updateMenuInputSchema,
 ]);
@@ -1223,6 +1298,8 @@ export type CreateBlogDraftInput = z.infer<typeof createBlogDraftInputSchema>;
 export type DeleteBlogDraftInput = z.infer<typeof deleteBlogDraftInputSchema>;
 export type UpdateMenuInput = z.infer<typeof updateMenuInputSchema>;
 export type EditTextInput = z.infer<typeof editTextInputSchema>;
+export type EditTextStyleInput = z.infer<typeof editTextStyleInputSchema>;
+export type TextStylePatch = z.infer<typeof textStylePatchSchema>;
 export type TextEditCandidate = z.infer<typeof textEditCandidateSchema>;
 export type EditImageInput = z.infer<typeof editImageInputSchema>;
 export type ImageEditCandidate = z.infer<typeof imageEditCandidateSchema>;
@@ -1283,6 +1360,7 @@ export const capabilityIdSchema = z.enum([
   'delete_project_astro',
   'edit_image',
   'edit_text',
+  'edit_text_style',
   'update_menu',
 ]);
 
@@ -1804,6 +1882,15 @@ export const telegramReplySchema = z
               'confirm_text_target',
               'pick_text_locale',
               'pick_text_target',
+              'confirm_text_style_plan',
+              'confirm_text_style_target',
+              'pick_text_style_locale',
+              'pick_text_style_target',
+              'pick_text_style_attr',
+              'pick_text_style_weight',
+              'pick_text_style_size',
+              'pick_text_style_color',
+              'done_text_style_attrs',
               'pick_image_target',
               'confirm_image_target',
               'reject_image_target',

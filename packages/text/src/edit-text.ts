@@ -521,9 +521,12 @@ export const restoreOrbitypeTextPreview = async (
 export type EditTextExecuteInput = Extract<EditTextInput, { mode: 'execute' }>;
 
 export {
+  applySurgicalTextFieldPatch,
+  applySurgicalTextReplace,
   applyTextFieldPatch,
   buildTextEditKey,
   discoverEditableCopy,
+  resolveMatchedExcerpt,
   resolveTextEditCandidate,
   searchEditableCopy,
   type TextEditCandidate,

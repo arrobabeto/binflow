@@ -18,7 +18,7 @@ import {
 
 describe('code-owned capability policy', () => {
   it('exposes Webbin blog, project and delete capabilities', () => {
-    expect(capabilityRegistry).toHaveLength(8);
+    expect(capabilityRegistry).toHaveLength(9);
     expect(
       projectCapabilityCatalog([
         webbinCapabilityBinding,
