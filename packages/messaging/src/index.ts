@@ -58,6 +58,12 @@ export {
   telegramPollingLockKey,
   type RedisPollingLockClient,
 } from './telegram-polling-lock.js';
+export {
+  selectSendOnlyTelegramBotsToPromote,
+  selectUnstartedTelegramBots,
+  type TelegramRuntimeCandidate,
+  type TelegramRuntimeCredentialKind,
+} from './telegram-runtime-reconcile.js';
 
 export type TelegramRuntime = Readonly<{
   adapter: TelegramAdapter;
@@ -126,17 +132,20 @@ export const renderClientTelegramReply = (
 
 const previewLinkCopy: Record<
   SupportedLocale,
-  Readonly<{ english: string; spanish: string }>
+  Readonly<{ article: string; english: string; spanish: string }>
 > = {
   de: {
+    article: 'Vorschau öffnen',
     english: 'Englische Vorschau öffnen',
     spanish: 'Spanische Vorschau öffnen',
   },
   en: {
+    article: 'Open preview',
     english: 'Open English preview',
     spanish: 'Open Spanish preview',
   },
   es: {
+    article: 'Abrir preview',
     english: 'Abrir preview en inglés',
     spanish: 'Abrir preview en español',
   },
@@ -144,17 +153,20 @@ const previewLinkCopy: Record<
 
 const productionLinkCopy: Record<
   SupportedLocale,
-  Readonly<{ english: string; spanish: string }>
+  Readonly<{ article: string; english: string; spanish: string }>
 > = {
   de: {
+    article: 'Artikel öffnen',
     english: 'Englischen Artikel öffnen',
     spanish: 'Spanischen Artikel öffnen',
   },
   en: {
+    article: 'Open article',
     english: 'Open English article',
     spanish: 'Open Spanish article',
   },
   es: {
+    article: 'Abrir artículo',
     english: 'Abrir artículo en inglés',
     spanish: 'Abrir artículo en español',
   },
@@ -163,14 +175,18 @@ const productionLinkCopy: Record<
 const isSpanishContentRoute = (route: string): boolean =>
   route === '/es' || route.startsWith('/es/');
 
+/** Webbin/`astro_repo` English article path shapes (not Orbitype `/posts/`). */
 const isEnglishContentRoute = (route: string): boolean =>
   route.startsWith('/en/') ||
   route.startsWith('/articles/') ||
   route.startsWith('/articulos/');
 
+const isOrbitypePostRoute = (route: string): boolean =>
+  route.startsWith('/posts/');
+
 const contentUrlButtons = (
   urls: Readonly<Record<string, string>>,
-  labels: Readonly<{ english: string; spanish: string }>,
+  labels: Readonly<{ english: string; spanish: string; article?: string }>,
 ): TelegramPreviewLink[] => {
   const links: TelegramPreviewLink[] = [];
   const seen = new Set<string>();
@@ -183,6 +199,10 @@ const contentUrlButtons = (
     }
     if (isEnglishContentRoute(route)) {
       links.push({ label: labels.english, url });
+      continue;
+    }
+    if (isOrbitypePostRoute(route)) {
+      links.push({ label: labels.article ?? 'Open', url });
       continue;
     }
     links.push({ label: route, url });

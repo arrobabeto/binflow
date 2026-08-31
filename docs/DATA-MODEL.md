@@ -124,7 +124,9 @@ Immutable JSON contract, tenant/project scope, positive project-local version,
 global-profile version, dependency fingerprint, validation state, creator,
 timestamps and superseded link. A unique project/version key serializes version
 creation. A validated version is reused only when its dependency fingerprint is
-unchanged; active versions are never updated or superseded by a draft save.
+unchanged. Active manifest **rows** are never mutated in place; profile edits
+on an active enrollment rematerialize a new version and supersede the previous
+active row (same path as validation when bindings change).
 
 ### `capability_definitions` and `project_capability_bindings`
 
@@ -174,7 +176,9 @@ status and tested/verified/used/revoked timestamps. Statuses are `unverified`,
 `active`, `invalid`, `superseded` and `revoked`. At most one version per owner
 scope/kind is active, and one Telegram bot ID can be active globally. First MVP
 requires an active OpenAI credential per tenant. The client Telegram bot is
-tenant-owned and does not require a synthetic project binding.
+tenant-owned and does not require a synthetic project binding. Post-MVP
+`astro_orbitype` enrollments also require a project-scoped `orbitype-api`
+credential (ADR-0045).
 
 ### `credential_events`
 
@@ -250,7 +254,9 @@ Base/head SHA, branch, allowed file list, before/after hashes and PR association
 
 ### `pull_requests`
 
-Provider ID/URL, base/head, state, merge commit and timestamps.
+Provider ID/URL, base/head, state, merge commit and timestamps. Provider ID
+(GitHub PR number) is unique **per project**, not globally — PR numbers are
+per-repository.
 
 ### `checks` and `deployments`
 

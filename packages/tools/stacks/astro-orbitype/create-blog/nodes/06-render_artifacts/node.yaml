@@ -1,0 +1,4 @@
+kind: compute
+label: Render manifest artifacts
+nodeKind: content.render_artifacts@1
+acceptsClientCustomization: false

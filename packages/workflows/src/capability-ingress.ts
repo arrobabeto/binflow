@@ -59,7 +59,11 @@ const handlerKindForExecutor = (
   executorId: string,
 ): CapabilityIngressHandlerKind => {
   if (executorId === 'workflow.create_project@1') return 'project';
-  if (executorId === 'workflow.create_blog@1') return 'blog';
+  if (
+    executorId === 'workflow.create_blog@1' ||
+    executorId === 'workflow.create_blog_orbitype@1'
+  )
+    return 'blog';
   if (executorId === 'workflow.delete_blog@1') return 'delete_blog';
   if (executorId === 'workflow.delete_project@1') return 'delete_project';
   throw new Error(`Unsupported ingress executor ${executorId}.`);
@@ -68,7 +72,11 @@ const handlerKindForExecutor = (
 const naturalLanguageForCapability = (
   capabilityId: string,
 ): ((text: string) => boolean) | undefined => {
-  if (capabilityId === 'create_blog_draft') return blogNaturalLanguage;
+  if (
+    capabilityId === 'create_blog_draft' ||
+    capabilityId === 'create_blog_orbitype'
+  )
+    return blogNaturalLanguage;
   if (capabilityId === 'delete_blog_draft') return deleteBlogNaturalLanguage;
   if (capabilityId === 'delete_project_astro') return deleteProjectNaturalLanguage;
   if (capabilityId === 'create_project_astro') return matchesNaturalProject;

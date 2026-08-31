@@ -1,0 +1,321 @@
+identity:
+  id: create_blog_orbitype
+  version: 1
+  stack: astro-orbitype
+  toolDir: create-blog
+  graphVersionSuffix: '@1'
+  displayName: Create blog
+  command: /create_blog
+  description: >
+    Creates a blog article for astro_orbitype projects with dual-write to GitHub
+    (Vercel preview) and Orbitype CMS. Locales and translation policy come from
+    the project manifest. Independent writer nodes allow disabling GitHub later.
+  profile: astro_orbitype
+  executorId: workflow.create_blog_orbitype@1
+  riskClass: medium
+  requiresPreview: true
+  mutationClass: create
+  approvalPolicyId: astro-orbitype-blog-publication@1
+
+specTitle: Create blog (Astro + Orbitype) — capability specification
+
+migration:
+  inputSchemaId: create_blog_orbitype.input@1
+  outputSchemaId: create_blog_orbitype.output@1
+  allowedProfiles:
+    - astro_orbitype
+  requiredPermissions:
+    - github:metadata:read
+    - github:contents:write
+    - github:pull_requests:write
+    - github:checks:read
+    - github:statuses:read
+    - vercel:deployments:read
+    - orbitype:content:write
+  timeoutSeconds: 1800
+  retryPolicy:
+    maxAttempts: 3
+    retryableErrors:
+      - provider_retryable
+      - deployment_pending
+  budget:
+    maxEstimatedCostCents: 500
+    maxModelCalls: 12
+    maxTokens: 120000
+
+nodes:
+  - sortPrefix: '01'
+    id: catalog_sync
+    kind: effect
+    nodeKind: content.catalog_sync@1
+    label: Sync content catalog
+    acceptsClientCustomization: false
+    parameters:
+      catalogScope: blog
+    permissions:
+      - github:metadata:read
+      - github:contents:read
+      - orbitype:content:write
+  - sortPrefix: '015'
+    id: interpret_brief
+    kind: agent
+    nodeKind: content.propose_topic@1
+    label: Interpret brief into topic
+    workload: text
+    model: gpt-5.6-luna
+    effort: low
+    acceptsClientCustomization: false
+  - sortPrefix: '02'
+    id: similarity
+    kind: agent
+    nodeKind: content.similarity_embed@1
+    label: Similarity analysis
+    workload: embedding
+    model: text-embedding-3-small
+    acceptsClientCustomization: false
+  - sortPrefix: '03'
+    id: category_decision
+    kind: compute
+    nodeKind: content.category_decision@1
+    label: Category decision
+    acceptsClientCustomization: false
+  - sortPrefix: '04'
+    id: generate
+    kind: agent
+    nodeKind: content.generate_blog@1
+    label: Generate article for manifest locales
+    workload: text
+    model: gpt-5.6-terra
+    effort: medium
+    acceptsClientCustomization: true
+    rulesRef: shared/rules/editorial-content@1
+  - sortPrefix: '05'
+    id: prepare_image
+    kind: agent
+    nodeKind: content.prepare_image@1
+    label: Prepare cover image
+    workload: image
+    model: gpt-image-2
+    acceptsClientCustomization: true
+    parameters:
+      quality: high
+      size: 1536x1024
+  - sortPrefix: '06'
+    id: render_artifacts
+    kind: compute
+    nodeKind: content.render_artifacts@1
+    label: Render manifest artifacts
+    acceptsClientCustomization: false
+  - sortPrefix: '07'
+    id: create_github_draft
+    kind: effect
+    nodeKind: publication.create_github_draft@1
+    label: Create GitHub draft PR
+    acceptsClientCustomization: false
+    permissions:
+      - github:contents:write
+      - github:pull_requests:write
+  - sortPrefix: '075'
+    id: create_orbitype_draft
+    kind: effect
+    nodeKind: publication.create_orbitype_draft@1
+    label: Create Orbitype CMS draft
+    acceptsClientCustomization: false
+    permissions:
+      - orbitype:content:write
+  - sortPrefix: '08'
+    id: wait_preview
+    kind: effect
+    nodeKind: publication.wait_preview@1
+    label: Wait for Vercel preview
+    acceptsClientCustomization: false
+    permissions:
+      - vercel:deployments:read
+      - github:checks:read
+      - github:statuses:read
+  - sortPrefix: '09'
+    id: awaiting_client_approval
+    kind: interrupt
+    nodeKind: await.client_approval@1
+    label: Client preview approval
+    acceptsClientCustomization: false
+    actor: client
+    ttlHours: 24
+  - sortPrefix: '10'
+    id: awaiting_admin_approval
+    kind: interrupt
+    nodeKind: await.admin_approval@1
+    label: Admin approval for new category
+    acceptsClientCustomization: false
+    actor: admin
+    ttlHours: 48
+  - sortPrefix: '11'
+    id: merge_github
+    kind: effect
+    nodeKind: publication.merge_github@1
+    label: Merge GitHub PR
+    acceptsClientCustomization: false
+    permissions:
+      - github:pull_requests:write
+      - github:contents:write
+  - sortPrefix: '115'
+    id: publish_orbitype
+    kind: effect
+    nodeKind: publication.publish_orbitype@1
+    label: Publish Orbitype CMS version
+    acceptsClientCustomization: false
+    permissions:
+      - orbitype:content:write
+  - sortPrefix: '12'
+    id: verify_production
+    kind: effect
+    nodeKind: publication.verify_production@1
+    label: Verify production
+    acceptsClientCustomization: false
+    permissions:
+      - vercel:deployments:read
+  - sortPrefix: '13'
+    id: completed
+    kind: compute
+    nodeKind: workflow.completed@1
+    label: Completed
+    acceptsClientCustomization: false
+  - sortPrefix: '14'
+    id: interpret_revision
+    kind: agent
+    nodeKind: content.interpret_revision@1
+    label: Interpret revision feedback
+    workload: text
+    model: gpt-5.6-luna
+    effort: medium
+    acceptsClientCustomization: false
+  - sortPrefix: '15'
+    id: awaiting_revision_plan_confirmation
+    kind: interrupt
+    nodeKind: await.revision_plan_confirmation@1
+    label: Client revision plan confirmation
+    acceptsClientCustomization: false
+    actor: client
+    ttlHours: 24
+  - sortPrefix: '16'
+    id: apply_revision
+    kind: agent
+    nodeKind: content.apply_revision@1
+    label: Apply confirmed revision plan
+    workload: text
+    model: gpt-5.6-terra
+    effort: medium
+    acceptsClientCustomization: true
+    rulesRef: shared/rules/editorial-content@1
+
+edges:
+  - from: catalog_sync
+    to: interpret_brief
+  - from: interpret_brief
+    to: similarity
+  - from: similarity
+    to: category_decision
+    when: similarity.is_not_high_overlap
+  - from: category_decision
+    to: generate
+  - from: generate
+    to: prepare_image
+  - from: prepare_image
+    to: render_artifacts
+  - from: render_artifacts
+    to: create_github_draft
+  - from: create_github_draft
+    to: create_orbitype_draft
+  - from: create_orbitype_draft
+    to: wait_preview
+  - from: wait_preview
+    to: awaiting_client_approval
+  - from: awaiting_client_approval
+    to: interpret_revision
+    when: review.is_revision
+  - from: interpret_revision
+    to: awaiting_revision_plan_confirmation
+  - from: awaiting_revision_plan_confirmation
+    to: apply_revision
+    when: revision_plan.is_confirmed_surgical
+  - from: awaiting_revision_plan_confirmation
+    to: generate
+    when: revision_plan.is_confirmed_full
+  - from: awaiting_revision_plan_confirmation
+    to: interpret_revision
+    when: revision_plan.is_adjusted
+  - from: awaiting_revision_plan_confirmation
+    to: awaiting_client_approval
+    when: revision_plan.is_cancelled
+  - from: apply_revision
+    to: render_artifacts
+  - from: awaiting_client_approval
+    to: awaiting_admin_approval
+    when: category.is_new
+  - from: awaiting_client_approval
+    to: merge_github
+    when: category.is_existing_or_normalized
+  - from: awaiting_admin_approval
+    to: merge_github
+  - from: merge_github
+    to: publish_orbitype
+  - from: publish_orbitype
+    to: verify_production
+  - from: verify_production
+    to: completed
+
+contentSchemaFields: []
+
+customizableNodeIds:
+  - generate
+  - prepare_image
+
+layerAssignments:
+  - layer: code
+    behavior: >
+      Input schema, dual-write ports, similarity, locale resolution from
+      active manifest, executor registry, GitHub/Orbitype idempotency,
+      Vercel preview binding.
+  - layer: manifest
+    behavior: >
+      contentLocales, translationPolicy, publicationTargets
+      (github+orbitype), GitHub editablePaths for blog files, Orbitype
+      collection paths, route prefixes, image directories.
+  - layer: customization
+    behavior: >
+      Editorial voice and cover mood for Bistro (generate / prepare_image
+      only). No paths, models, or locale hardcoding.
+
+typedErrors:
+  - code: high_content_overlap
+    when: Similarity against catalog exceeds threshold.
+  - code: slug_collision
+    when: Slug already exists in GitHub or Orbitype catalog.
+  - code: orbitype_draft_failed
+    when: Orbitype CMS draft create is rejected.
+  - code: orbitype_publish_failed
+    when: Orbitype publish fails after GitHub merge.
+  - code: github_draft_evidence_mismatch
+    when: PR file set does not match rendered artifacts.
+  - code: preview_binding_mismatch
+    when: Vercel preview is not bound to approved head.
+  - code: publication_target_disabled
+    when: Writer node runs while its publication target is disabled.
+  - code: manifest_locale_invalid
+    when: Active manifest locales or translation policy are inconsistent.
+
+verification:
+  scenarios:
+    - Dual-write GitHub then Orbitype then Vercel preview for Bistro mono-de.
+    - Locales and translationPolicy read from project manifest (not hardcoded).
+    - New category requires admin approval before merge_github.
+    - Surgical and full revision loops re-enter writers and wait_preview.
+    - Idempotent create_github_draft and create_orbitype_draft on retry.
+    - Orbitype 5xx is provider_retryable; schema 4xx is final.
+    - GitHub draft success plus Orbitype failure does not enter wait_preview.
+    - Dashboard assignment only for astro_orbitype (Bistro); not astro_repo.
+    - Preview CTAs list only manifest locales (single DE button for Bistro).
+    - Plan confirm CTAs are Create draft / Entwurf erstellen (create family).
+  fixtures:
+    - packages/*/test/fixtures/bistro-astro-orbitype-manifest.json
+    - docs/customizations/bistro-create-blog-orbitype.md

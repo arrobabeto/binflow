@@ -50,5 +50,9 @@ ADRs preserve why durable decisions exist. Accepted ADRs are binding until a lat
 | [0042](0042-tool-isolation-and-shared-ports.md)                      | Tool isolation and fail-closed shared ports                    | Accepted |
 | [0043](0043-admin-client-direct-messages.md)                         | Bounded admin→client Telegram direct messages                  | Accepted |
 | [0044](0044-dashboard-dark-design-system.md)                         | Dark control-plane dashboard design system                     | Accepted |
+| [0045](0045-astro-orbitype-enrollment.md)                            | Astro+Orbitype enrollment and Orbitype API-key credential      | Accepted |
+| [0046](0046-selectable-monolingual-locales.md)                       | Selectable en/es/de locales including monolingual              | Accepted |
+| [0047](0047-create-blog-orbitype-dual-write.md)                      | Create blog Orbitype dual-write (GitHub + CMS)                 | Accepted |
+| [0048](0048-enrolled-client-production-origin.md)                    | Enrolled client production origin (extends ADR-0029)           | Accepted |
 
 Use [0000-template.md](0000-template.md) for new decisions.

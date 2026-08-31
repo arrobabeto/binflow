@@ -19,6 +19,7 @@
     "@binflow/github": "workspace:*",
     "@binflow/integrations": "workspace:*",
     "@binflow/messaging": "workspace:*",
+    "@binflow/orbitype": "workspace:*",
     "@binflow/secrets": "workspace:*",
     "@binflow/vercel": "workspace:*",
     "@inquirer/prompts": "8.5.2",

@@ -33,6 +33,7 @@ import {
   CredentialVerificationService,
 } from '@binflow/integrations';
 import { createTelegramCredentialVerifier } from '@binflow/messaging';
+import { createOrbitypeCredentialVerifier } from '@binflow/orbitype';
 import {
   createMasterKeyFile,
   encryptSecret,
@@ -209,7 +210,9 @@ integrations
         throw new Error(`${kind} requires --tenant.`);
       }
       if (
-        (kind === 'github-app' || kind === 'vercel') &&
+        (kind === 'github-app' ||
+          kind === 'vercel' ||
+          kind === 'orbitype-api') &&
         (options.tenant === undefined || options.project === undefined)
       ) {
         throw new Error(`${kind} requires --tenant and --project.`);
@@ -248,12 +251,13 @@ integrations
               credentialScope = { tenantId: scope.tenantId };
               break;
             }
-            case 'vercel': {
+            case 'vercel':
+            case 'orbitype-api': {
               if (
                 scope.tenantId === undefined ||
                 scope.projectId === undefined
               ) {
-                throw new Error('vercel requires a project scope.');
+                throw new Error(`${kind} requires a project scope.`);
               }
               ownerScope = 'project';
               credentialScope = scope;
@@ -269,25 +273,34 @@ integrations
           await withDatabase((db) =>
             storeCredentialVersion(db, {
               alias: prompted.alias,
-              configuration: kind === 'vercel' ? {} : prompted.configuration,
-              ...((kind === 'github-app' || kind === 'vercel') &&
+              configuration:
+                kind === 'vercel' ? {} : prompted.configuration,
+              ...((kind === 'github-app' ||
+                kind === 'vercel' ||
+                kind === 'orbitype-api') &&
               scope.tenantId !== undefined &&
               scope.projectId !== undefined
                 ? {
                     connection: {
-                      configuration: {
-                        ...(kind === 'vercel' ? prompted.configuration : {}),
-                        ...(kind === 'github-app'
-                          ? {
-                              defaultBranch:
-                                webbinPilotBinding.productionBranch,
-                            }
+                      configuration:
+                        kind === 'orbitype-api'
+                          ? prompted.configuration
                           : {
-                              expectedProductionBranch:
-                                webbinPilotBinding.productionBranch,
-                            }),
-                        expectedRepository: webbinPilotBinding.repository,
-                      },
+                              ...(kind === 'vercel'
+                                ? prompted.configuration
+                                : {}),
+                              ...(kind === 'github-app'
+                                ? {
+                                    defaultBranch:
+                                      webbinPilotBinding.productionBranch,
+                                  }
+                                : {
+                                    expectedProductionBranch:
+                                      webbinPilotBinding.productionBranch,
+                                  }),
+                              expectedRepository:
+                                webbinPilotBinding.repository,
+                            },
                       kind,
                       scope: {
                         projectId: scope.projectId,
@@ -352,6 +365,7 @@ integrations
             createTelegramCredentialVerifier(),
             createGitHubCredentialVerifier(),
             createVercelCredentialVerifier(),
+            createOrbitypeCredentialVerifier(),
           ],
         );
         if (options.all === true) return service.verifyAll(key);

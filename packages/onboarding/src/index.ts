@@ -34,6 +34,7 @@ import {
 } from '@binflow/db';
 import { DomainError, type Clock, systemClock } from '@binflow/domain';
 import {
+  astroOrbitypeGlobalProfile,
   astroRepoGlobalProfile,
   buildProjectManifest,
   type VerifiedManifestBindings,
@@ -44,21 +45,35 @@ import {
 } from '@binflow/policies';
 
 const CONFIGURATION_CHECK = 'configuration';
-const CREDENTIAL_CHECKS = [
+const SHARED_CREDENTIAL_CHECKS = [
   'openai_credential',
   'telegram_admin_credential',
   'telegram_client_credential',
   'github_app_binding',
   'vercel_binding',
 ] as const;
-const ACTIVATION_CHECKS = [
+const ORBITYPE_CREDENTIAL_CHECK = 'orbitype_api_credential' as const;
+
+const credentialChecksForProfile = (
+  profile: string,
+): readonly (
+  | (typeof SHARED_CREDENTIAL_CHECKS)[number]
+  | typeof ORBITYPE_CREDENTIAL_CHECK
+)[] =>
+  profile === 'astro_orbitype'
+    ? [...SHARED_CREDENTIAL_CHECKS, ORBITYPE_CREDENTIAL_CHECK]
+    : SHARED_CREDENTIAL_CHECKS;
+
+const activationChecksForProfile = (
+  profile: string,
+): readonly string[] => [
   CONFIGURATION_CHECK,
-  ...CREDENTIAL_CHECKS,
+  ...credentialChecksForProfile(profile),
   'project_manifest',
   'capability_catalog',
   'telegram_test_send',
   'client_pairing',
-] as const;
+];
 
 type ActorContext = Readonly<{
   actorId: string;
@@ -161,6 +176,24 @@ const ensureConfigurationComplete = (
     !content.has(configuration.slugLocale)
   ) {
     missing.push('slugLocale');
+  }
+  if (
+    configuration.defaultContentLocale !== undefined &&
+    !content.has(configuration.defaultContentLocale)
+  ) {
+    missing.push('defaultContentLocale');
+  }
+  if (
+    configuration.translationPolicy !== undefined &&
+    configuration.contentLocales !== undefined
+  ) {
+    const localeCount = configuration.contentLocales.length;
+    if (localeCount === 1 && configuration.translationPolicy !== 'none') {
+      missing.push('translationPolicy');
+    }
+    if (localeCount > 1 && configuration.translationPolicy === 'none') {
+      missing.push('translationPolicy');
+    }
   }
   if (configuration.timezone !== undefined) {
     try {
@@ -378,7 +411,10 @@ export class EnrollmentService {
           .orderBy(desc(schema.projectManifestVersions.version))
           .limit(1);
         return projectManifestResponseSchema.parse({
-          globalProfile: astroRepoGlobalProfile,
+          globalProfile:
+            enrollment.projectProfile === 'astro_orbitype'
+              ? astroOrbitypeGlobalProfile
+              : astroRepoGlobalProfile,
           manifest: row === undefined ? null : toProjectManifest(row),
         });
       },
@@ -407,12 +443,6 @@ export class EnrollmentService {
     const enabledBindings = input.bindings.filter(
       (binding) => binding.access !== 'disabled',
     );
-    if (enabledBindings.length === 0)
-      throw new DomainError(
-        'policy_denied',
-        'At least one tool must remain enabled.',
-        { code: 'capability_catalog_empty' },
-      );
 
     return withPlatformOwnerScope(
       this.database,
@@ -452,6 +482,15 @@ export class EnrollmentService {
                 'validation_error',
                 'Project enrollment was not found.',
                 { code: 'project_not_found' },
+              );
+            if (
+              enabledBindings.length === 0 &&
+              project.profile !== 'astro_orbitype'
+            )
+              throw new DomainError(
+                'policy_denied',
+                'At least one tool must remain enabled.',
+                { code: 'capability_catalog_empty' },
               );
             await assertBindingsCompatibleWithProjectProfile(
               database,
@@ -612,13 +651,13 @@ export class EnrollmentService {
                   displayName: input.projectDisplayName,
                   id: uuidv7(),
                   key: input.projectKey,
-                  profile: 'astro_repo',
+                  profile: input.projectProfile,
                   tenantId: tenant.id,
                 })
                 .returning();
             } else if (
               project.status !== 'draft' ||
-              project.profile !== 'astro_repo'
+              project.profile !== input.projectProfile
             ) {
               throw new DomainError(
                 'conflict_error',
@@ -691,12 +730,85 @@ export class EnrollmentService {
           },
           async () => {
             const now = this.clock.now();
+            const [current] = await database
+              .select()
+              .from(schema.clientEnrollments)
+              .where(eq(schema.clientEnrollments.id, enrollmentId))
+              .limit(1);
+            if (current === undefined)
+              throw new DomainError(
+                'validation_error',
+                'Enrollment was not found.',
+                { code: 'enrollment_not_found' },
+              );
+            if (current.version !== expectedVersion)
+              throw new DomainError(
+                'conflict_error',
+                'Enrollment version is stale.',
+                { code: 'stale_enrollment' },
+              );
+            const editableStates = [
+              'draft',
+              'configuring',
+              'validation_failed',
+              'ready_for_pairing',
+              'pairing_pending',
+              'active',
+              'revalidation_required',
+            ] as const;
+            if (
+              !editableStates.includes(
+                current.state as (typeof editableStates)[number],
+              )
+            )
+              throw new DomainError(
+                'conflict_error',
+                'Enrollment cannot be edited in its current state.',
+                { code: 'enrollment_not_editable' },
+              );
+            // Keep live/pairing states; pre-activation edits return to configuring.
+            const nextState =
+              current.state === 'active' ||
+              current.state === 'pairing_pending' ||
+              current.state === 'revalidation_required'
+                ? current.state
+                : 'configuring';
+            // Active saves must not resurrect stale wizard capability versions;
+            // freeze the current active catalog bindings into configuration.
+            let nextConfiguration = configuration;
+            if (nextState === 'active') {
+              const [activeManifest] = await database
+                .select({ document: schema.projectManifestVersions.document })
+                .from(schema.projectManifestVersions)
+                .where(
+                  and(
+                    eq(
+                      schema.projectManifestVersions.projectId,
+                      current.projectId,
+                    ),
+                    eq(
+                      schema.projectManifestVersions.tenantId,
+                      current.tenantId,
+                    ),
+                    eq(schema.projectManifestVersions.status, 'active'),
+                  ),
+                )
+                .orderBy(desc(schema.projectManifestVersions.version))
+                .limit(1);
+              const liveBindings = activeManifest?.document.enabledCapabilities;
+              if (liveBindings !== undefined && liveBindings.length > 0) {
+                nextConfiguration = {
+                  ...configuration,
+                  enabledCapabilities: [...liveBindings],
+                };
+              }
+            }
             const updated = await database
               .update(schema.clientEnrollments)
               .set({
-                configuration,
+                configuration: nextConfiguration,
                 currentStep: input.currentStep,
-                state: 'configuring',
+                state: nextState,
                 updatedAt: now,
                 version: sql`${schema.clientEnrollments.version} + 1`,
               })
@@ -704,12 +816,7 @@ export class EnrollmentService {
                 and(
                   eq(schema.clientEnrollments.id, enrollmentId),
                   eq(schema.clientEnrollments.version, expectedVersion),
-                  inArray(schema.clientEnrollments.state, [
-                    'draft',
-                    'configuring',
-                    'validation_failed',
-                    'ready_for_pairing',
-                  ]),
+                  inArray(schema.clientEnrollments.state, [...editableStates]),
                 ),
               )
               .returning();
@@ -730,7 +837,12 @@ export class EnrollmentService {
               tenantId: row.tenantId,
               version: row.version,
             });
-            return asJson(await selectEnrollment(database, enrollmentId));
+            const enrollment = enrollmentSchema.parse(
+              asJson(await selectEnrollment(database, enrollmentId)),
+            );
+            if (enrollment.state === 'active')
+              await this.materializeManifest(database, enrollment, context);
+            return asJson(enrollment);
           },
         ).then((value) => enrollmentSchema.parse(value)),
     );
@@ -833,6 +945,9 @@ export class EnrollmentService {
                 const catalog = projectCapabilityCatalog(
                   manifest.enabledCapabilities,
                 );
+                const catalogOk =
+                  current.projectProfile === 'astro_orbitype' ||
+                  catalog.some((capability) => capability.enabled);
                 checks.push({
                   checkName: 'capability_catalog',
                   evidence: {
@@ -840,13 +955,11 @@ export class EnrollmentService {
                       (capability) =>
                         `${capability.id}@${String(capability.version)}`,
                     ),
+                    emptyAllowed: current.projectProfile === 'astro_orbitype',
                     manifestVersion: manifest.version,
                   },
-                  result:
-                    catalog.some((capability) => capability.enabled)
-                      ? 'success'
-                      : 'failed',
-                  ...(catalog.some((capability) => capability.enabled)
+                  result: catalogOk ? 'success' : 'failed',
+                  ...(catalogOk
                     ? {}
                     : {
                         errorCategory: 'policy_denied',
@@ -1196,7 +1309,9 @@ export class EnrollmentService {
                 ),
               )
               .orderBy(desc(schema.enrollmentValidationAttempts.checkedAt));
-            const blockers: string[] = ACTIVATION_CHECKS.filter(
+            const blockers: string[] = activationChecksForProfile(
+              enrollment.projectProfile,
+            ).filter(
               (name) =>
                 attempts.find(
                   (attempt) =>
@@ -1246,6 +1361,10 @@ export class EnrollmentService {
     const candidate = buildProjectManifest({
       configuration: enrollment.configuration,
       id: uuidv7(),
+      profile:
+        enrollment.projectProfile === 'astro_orbitype'
+          ? 'astro_orbitype'
+          : 'astro_repo',
       projectId: enrollment.projectId,
       projectKey: enrollment.projectKey,
       tenantKey: enrollment.tenantKey,
@@ -1486,10 +1605,16 @@ export class EnrollmentService {
           eq(schema.integrationConnections.tenantId, enrollment.tenantId),
           eq(schema.integrationConnections.status, 'active'),
           eq(schema.providerCredentials.status, 'active'),
-          inArray(schema.integrationConnections.kind, ['github-app', 'vercel']),
+          inArray(schema.integrationConnections.kind, [
+            'github-app',
+            'vercel',
+            'orbitype-api',
+          ]),
         ),
       );
-    const match = (checkName: (typeof CREDENTIAL_CHECKS)[number]) => {
+    const match = (
+      checkName: ReturnType<typeof credentialChecksForProfile>[number],
+    ) => {
       if (checkName === 'openai_credential')
         return direct.find((item) => item.kind === 'openai');
       if (checkName === 'telegram_admin_credential')
@@ -1498,22 +1623,26 @@ export class EnrollmentService {
         return direct.find((item) => item.kind === 'telegram-client');
       if (checkName === 'github_app_binding')
         return connected.find((item) => item.kind === 'github-app');
-      return connected.find((item) => item.kind === 'vercel');
+      if (checkName === 'vercel_binding')
+        return connected.find((item) => item.kind === 'vercel');
+      return connected.find((item) => item.kind === 'orbitype-api');
     };
-    return CREDENTIAL_CHECKS.map((checkName) => {
-      const credential = match(checkName);
-      return {
-        checkName,
-        evidence:
-          credential === undefined
-            ? { active: false }
-            : {
-                active: true,
-                credentialId: credential.id,
-                version: credential.version,
-              },
-        result: credential === undefined ? 'failed' : 'success',
-      };
-    });
+    return credentialChecksForProfile(enrollment.projectProfile).map(
+      (checkName) => {
+        const credential = match(checkName);
+        return {
+          checkName,
+          evidence:
+            credential === undefined
+              ? { active: false }
+              : {
+                  active: true,
+                  credentialId: credential.id,
+                  version: credential.version,
+                },
+          result: credential === undefined ? 'failed' : 'success',
+        };
+      },
+    );
   }
 }

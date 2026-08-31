@@ -1,0 +1,6 @@
+kind: effect
+label: Publish Orbitype CMS version
+nodeKind: publication.publish_orbitype@1
+acceptsClientCustomization: false
+permissions:
+  - orbitype:content:write

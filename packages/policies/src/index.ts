@@ -1,6 +1,7 @@
 import {
   capabilityCatalogItemSchema,
   createBlogDraftInputSchema,
+  createBlogOrbitypeInputSchema,
   createProjectAstroInputSchema,
   deleteBlogDraftInputSchema,
   deleteProjectAstroInputSchema,
@@ -22,6 +23,7 @@ export type CapabilityDefinition = Readonly<{
   id: string;
   inputSchema:
     | typeof createBlogDraftInputSchema
+    | typeof createBlogOrbitypeInputSchema
     | typeof createProjectAstroInputSchema
     | typeof deleteBlogDraftInputSchema
     | typeof deleteProjectAstroInputSchema;
@@ -55,6 +57,40 @@ export const createBlogDraftDefinition: CapabilityDefinition = Object.freeze({
     'github:checks:read',
     'github:statuses:read',
     'vercel:deployments:read',
+  ]),
+  requiresPreview: true,
+  retryPolicy: Object.freeze({
+    maxAttempts: 3,
+    retryableErrors: Object.freeze([
+      'provider_retryable',
+      'deployment_pending',
+    ]),
+  }),
+  riskClass: 'medium',
+  timeoutSeconds: 1_800,
+  version: 1,
+});
+
+export const createBlogOrbitypeDefinition: CapabilityDefinition = Object.freeze({
+  approvalPolicyId: 'astro-orbitype-blog-publication@1',
+  budget: Object.freeze({
+    maxEstimatedCostCents: 500,
+    maxModelCalls: 12,
+    maxTokens: 120_000,
+  }),
+  command: '/create_blog',
+  displayName: 'Create blog',
+  executorId: 'workflow.create_blog_orbitype@1',
+  id: 'create_blog_orbitype',
+  inputSchema: createBlogOrbitypeInputSchema,
+  requiredPermissions: Object.freeze([
+    'github:metadata:read',
+    'github:contents:write',
+    'github:pull_requests:write',
+    'github:checks:read',
+    'github:statuses:read',
+    'vercel:deployments:read',
+    'orbitype:content:write',
   ]),
   requiresPreview: true,
   retryPolicy: Object.freeze({
@@ -173,6 +209,7 @@ export const createProjectDraftDefinition = createProjectAstroDefinition;
 
 export const capabilityRegistry = Object.freeze([
   createBlogDraftDefinition,
+  createBlogOrbitypeDefinition,
   createProjectAstroDefinition,
   deleteBlogDraftDefinition,
   deleteProjectAstroDefinition,
@@ -215,14 +252,17 @@ export const resolveProjectCapabilityBindings = (
   configuration: Readonly<{
     enabledCapabilities?: readonly CapabilityBinding[] | undefined;
   }>,
+  options: Readonly<{ allowEmpty?: boolean }> = {},
 ): readonly CapabilityBinding[] => {
   if (configuration.enabledCapabilities !== undefined) {
-    if (configuration.enabledCapabilities.length === 0)
+    if (configuration.enabledCapabilities.length === 0) {
+      if (options.allowEmpty === true) return [];
       throw new DomainError(
         'policy_denied',
         'At least one capability must remain enabled.',
         { code: 'capability_catalog_empty' },
       );
+    }
     for (const binding of configuration.enabledCapabilities) {
       assertKnownBinding(binding);
       if (binding.access === 'disabled')
@@ -234,6 +274,7 @@ export const resolveProjectCapabilityBindings = (
     }
     return configuration.enabledCapabilities;
   }
+  if (options.allowEmpty === true) return [];
   return astroRepoDefaultCapabilityBindings;
 };
 

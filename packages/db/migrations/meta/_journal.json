@@ -169,6 +169,27 @@
       "when": 1787800000000,
       "tag": "0023_delete_project_astro_capability",
       "breakpoints": true
+    },
+    {
+      "idx": 24,
+      "version": "7",
+      "when": 1787900000000,
+      "tag": "0024_create_blog_orbitype_capability",
+      "breakpoints": true
+    },
+    {
+      "idx": 25,
+      "version": "7",
+      "when": 1788000000000,
+      "tag": "0025_pull_requests_project_provider_unique",
+      "breakpoints": true
+    },
+    {
+      "idx": 26,
+      "version": "7",
+      "when": 1788100000000,
+      "tag": "0026_github_app_active_per_app_id",
+      "breakpoints": true
     }
   ]
 }

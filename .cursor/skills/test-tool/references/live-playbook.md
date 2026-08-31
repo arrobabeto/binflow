@@ -3,12 +3,19 @@
 ## Environment setup
 
 1. Stack running: Postgres, Redis, API, worker, dashboard.
-2. `BINFLOW_LIVE_EXECUTION_ENABLED=true` on worker for execute/publish jobs.
-3. Client Telegram bot paired; admin bot for approval notifications.
-4. Tool assigned to pilot project (Webbin): capability + version in dashboard.
-5. If `customized`: customization uploaded and active (hash matches doc).
+2. **Exactly one** worker polling Telegram (no Compose worker + host worker).
+   Clear stale `binflow:telegram:polling:*` locks if bots stay send-only.
+3. `BINFLOW_LIVE_EXECUTION_ENABLED=true` on worker for execute/publish jobs.
+4. Client Telegram bot paired; admin bot for approval notifications.
+5. Tool assigned to the **correct profile** project (Webbin=`astro_repo`,
+   Bistro=`astro_orbitype`): capability + version in dashboard.
+6. If `customized`: customization uploaded and active (hash matches doc).
+7. Load stack contract; for Orbitype confirm Preview `PUBLIC_*` and
+   Preview Deployment Protection disabled for client review.
+8. Manifest has `deployment.productionOrigin` (rematerialize if missing).
 
-Record versions: tool catalog version, manifest version, customization version.
+Record versions: tool catalog version, manifest version, customization version,
+enrolled production origin.
 
 ## Evidence to capture per scenario
 
@@ -71,7 +78,7 @@ For delete_blog: client should **not** receive PR URL buttons after PR opens.
 
 ## Production absence check (DEL-06)
 
-After merge + verify:
+After merge + verify (use the **client** production origin — Webbin example):
 
 ```bash
 curl -sI 'https://webbin.com.mx/articulos/{slug}' | head -5
@@ -80,6 +87,15 @@ curl -sI 'https://webbin.com.mx/es/articulos/{slug}' | head -5
 
 Expect `404`. Post-deletion redirects are deferred until the client repo supports
 Vercel-native routing (ADR-0041).
+
+## Orbitype create publish check (STK-AO-01 / 02)
+
+After `create_blog_orbitype` completes:
+
+1. Telegram production button host must equal enrollment domain (e.g.
+   `www.bistrozurlinde.ch`), never `webbin.com.mx`.
+2. Path shape `/posts/{draftId}/{titleSlug}`.
+3. Preview earlier used `*.vercel.app` + same path — client can open without SSO.
 
 ## Boundaries
 
@@ -95,3 +111,5 @@ When `environment=offline`:
 2. Read `*-runtime.ts` for state transitions.
 3. Grep ingress tests for button labels and error messages.
 4. Mark all Phase 4 rows **unverified-live**.
+5. Still score stack-contract offline checks (origin resolution, route builders)
+   against unit tests.

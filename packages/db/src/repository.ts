@@ -254,6 +254,7 @@ export const storeCredentialVersion = async (
       const [boundProject] = await tx
         .select({
           id: projects.id,
+          profile: projects.profile,
           projectKey: projects.key,
           tenantKey: tenants.key,
         })
@@ -272,17 +273,33 @@ export const storeCredentialVersion = async (
           'Integration project binding does not belong to the selected tenant.',
         );
       }
+      const isWebbinPilot =
+        boundProject.tenantKey === webbinPilotBinding.tenantKey &&
+        boundProject.projectKey === webbinPilotBinding.projectKey;
       if (
         (input.kind === 'github-app' || input.kind === 'vercel') &&
-        (boundProject.tenantKey !== webbinPilotBinding.tenantKey ||
-          boundProject.projectKey !== webbinPilotBinding.projectKey)
+        !isWebbinPilot &&
+        boundProject.profile !== 'astro_orbitype'
       ) {
         throw new DomainError(
           'policy_denied',
           'The external Webbin binding is authorized only for webbin/webbin.',
         );
       }
-    } else if (input.kind === 'github-app' || input.kind === 'vercel') {
+      if (
+        input.kind === 'orbitype-api' &&
+        boundProject.profile !== 'astro_orbitype'
+      ) {
+        throw new DomainError(
+          'policy_denied',
+          'Orbitype credentials are only allowed for astro_orbitype projects.',
+        );
+      }
+    } else if (
+      input.kind === 'github-app' ||
+      input.kind === 'vercel' ||
+      input.kind === 'orbitype-api'
+    ) {
       throw new DomainError(
         'validation_error',
         `${input.kind} requires a project integration connection.`,
@@ -364,6 +381,54 @@ export const listCredentials = async (db: ScopedDatabase) =>
     .from(providerCredentials)
     .orderBy(desc(providerCredentials.createdAt));
 
+export type ProjectGithubAppBinding = Readonly<{
+  credentialId: string;
+  installationId: string;
+  repositoryId: string;
+}>;
+
+/**
+ * Resolve the active GitHub App credential + installation for a project.
+ * Execution must never pick "any" platform github-app row — that crosses
+ * repos when multiple Apps are registered (e.g. Webbin vs Bistro).
+ */
+export const resolveActiveProjectGithubAppBinding = async (
+  db: ScopedDatabase,
+  projectId: string,
+): Promise<ProjectGithubAppBinding | undefined> => {
+  const [row] = await db
+    .select({
+      credentialId: providerCredentials.id,
+      evidence: integrationConnections.verificationEvidence,
+    })
+    .from(integrationConnections)
+    .innerJoin(
+      providerCredentials,
+      eq(providerCredentials.id, integrationConnections.credentialId),
+    )
+    .where(
+      and(
+        eq(integrationConnections.projectId, projectId),
+        eq(integrationConnections.kind, 'github-app'),
+        eq(integrationConnections.status, 'active'),
+        eq(providerCredentials.kind, 'github-app'),
+        eq(providerCredentials.status, 'active'),
+      ),
+    )
+    .limit(1);
+  if (row === undefined) return undefined;
+  const evidence = asConfiguration(row.evidence);
+  const installationId = evidence.installationId;
+  const repositoryId = evidence.repositoryId;
+  if (typeof installationId !== 'string' || typeof repositoryId !== 'string')
+    return undefined;
+  return {
+    credentialId: row.credentialId,
+    installationId,
+    repositoryId,
+  };
+};
+
 export const getCredentialForVerification = async (
   db: ScopedDatabase,
   credentialId: string,
@@ -403,7 +468,11 @@ export const getCredentialForVerification = async (
     .where(eq(providerCredentials.id, credentialId))
     .limit(1);
   if (row === undefined) return undefined;
-  if (row.kind === 'github-app' || row.kind === 'vercel') {
+  if (
+    row.kind === 'github-app' ||
+    row.kind === 'vercel' ||
+    row.kind === 'orbitype-api'
+  ) {
     if (
       row.connectionProjectId === null ||
       row.connectionTenantId === null ||
@@ -414,23 +483,48 @@ export const getCredentialForVerification = async (
         `${row.kind} credential is missing its project connection.`,
       );
     }
-    const [authorizedProject] = await db
-      .select({ id: projects.id })
+    const [boundProject] = await db
+      .select({
+        id: projects.id,
+        profile: projects.profile,
+        projectKey: projects.key,
+        tenantKey: tenants.key,
+      })
       .from(projects)
       .innerJoin(tenants, eq(tenants.id, projects.tenantId))
       .where(
         and(
           eq(projects.id, row.connectionProjectId),
           eq(projects.tenantId, row.connectionTenantId),
-          eq(projects.key, webbinPilotBinding.projectKey),
-          eq(tenants.key, webbinPilotBinding.tenantKey),
         ),
       )
       .limit(1);
-    if (authorizedProject === undefined) {
+    if (boundProject === undefined) {
+      throw new DomainError(
+        'policy_denied',
+        'Credential connection does not belong to a known project.',
+      );
+    }
+    const isWebbinPilot =
+      boundProject.tenantKey === webbinPilotBinding.tenantKey &&
+      boundProject.projectKey === webbinPilotBinding.projectKey;
+    if (
+      (row.kind === 'github-app' || row.kind === 'vercel') &&
+      !isWebbinPilot &&
+      boundProject.profile !== 'astro_orbitype'
+    ) {
       throw new DomainError(
         'policy_denied',
         'Credential connection is not authorized for the Webbin pilot scope.',
+      );
+    }
+    if (
+      row.kind === 'orbitype-api' &&
+      boundProject.profile !== 'astro_orbitype'
+    ) {
+      throw new DomainError(
+        'policy_denied',
+        'Orbitype credentials are only allowed for astro_orbitype projects.',
       );
     }
     if (
@@ -603,12 +697,21 @@ export const recordCredentialVerificationSuccess = async (
       );
     }
 
+    const githubAppId =
+      credential.kind === 'github-app'
+        ? asConfiguration(credential.configuration).appId
+        : undefined;
+    const githubAppIdFilter =
+      typeof githubAppId === 'string'
+        ? sql`${providerCredentials.configuration}->>'appId' = ${githubAppId}`
+        : undefined;
     const currentActive = await tx.query.providerCredentials.findFirst({
       orderBy: desc(providerCredentials.version),
       where: and(
         ...scopeConditions(credential),
         eq(providerCredentials.status, 'active'),
         ne(providerCredentials.id, credential.id),
+        ...(githubAppIdFilter === undefined ? [] : [githubAppIdFilter]),
       ),
     });
     if (
@@ -644,6 +747,8 @@ export const recordCredentialVerificationSuccess = async (
       }
     }
 
+    // Platform github-app registrations are keyed by App id: verifying a
+    // second distinct GitHub App must not kill another project's binding.
     const replaced = await tx
       .update(providerCredentials)
       .set({
@@ -655,6 +760,7 @@ export const recordCredentialVerificationSuccess = async (
           ...scopeConditions(credential),
           eq(providerCredentials.status, 'active'),
           ne(providerCredentials.id, credential.id),
+          ...(githubAppIdFilter === undefined ? [] : [githubAppIdFilter]),
         ),
       )
       .returning({

@@ -1,0 +1,9 @@
+kind: agent
+label: Prepare cover image
+nodeKind: content.prepare_image@1
+acceptsClientCustomization: true
+model: gpt-image-2
+parameters:
+  quality: high
+  size: 1536x1024
+workload: image

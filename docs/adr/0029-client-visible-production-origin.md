@@ -3,7 +3,8 @@
 - Status: Accepted
 - Date: 2026-08-19
 - Supersedes: ADR-0028 decision 3 for client-visible production URLs only
-- Superseded by: None
+- Superseded by: [ADR-0048](0048-enrolled-client-production-origin.md) for
+  multi-tenant enrolled `productionDomain` (Webbin pilot default remains)
 
 ## Context
 

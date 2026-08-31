@@ -35,6 +35,10 @@ Webbin manifest path allowlist so `render_artifacts` accepts
 
 `pnpm --filter @binflow/tools exec tsx scripts/refresh-webbin-manifest-avif-paths.ts`
 
+After Astro Orbitype blog collection path changes, force-bump Bistro:
+
+`pnpm --filter @binflow/tools exec tsx scripts/refresh-bistro-manifest-blog-paths.ts`
+
 ### New tool scaffolding (ADR-0039)
 
 Author a validated brief under `packages/tools/briefs/<id>.brief.yaml`, then:
@@ -74,6 +78,15 @@ supports Vercel-native redirects (ADR-0041). Search Console cleanup for removed
 URLs is handled in the client repository.
 
 Do not re-run full delete execute for slugs already removed from the repository.
+
+### Multiple GitHub Apps (Webbin + Bistro)
+
+After migration `0026`, distinct GitHub App registrations (`configuration.appId`)
+may both be `active` at platform scope. The worker must resolve installation IDs
+through the project's active `integration_connections` row. If a client draft
+lands in the wrong repository, check that the project's GitHub connection is
+`active` and that only one live worker holds Telegram polling locks
+(`binflow:telegram:polling:*` in Redis).
 
 `DATABASE_URL` is the runtime application connection. `BINFLOW_MIGRATION_DATABASE_URL`
 or its `_FILE` variant is the schema-owner connection used only by migration and
@@ -125,7 +138,7 @@ persisted last activity already exceeds the new limit are rejected immediately.
 - Database, Redis and object-store credentials.
 - Better Auth secret and bootstrap material.
 - SecretsProvider KEK.
-- Telegram, OpenAI, GitHub App, Vercel and future integration credentials.
+- Telegram, OpenAI, GitHub App, Vercel, Orbitype API key and future integration credentials.
 
 Production secrets use Docker secrets or a future managed secret provider. They never appear in Compose files, images, Git or documentation.
 
@@ -296,7 +309,9 @@ Host `pnpm dev` and the Compose worker must not poll the same Telegram
 bot at the same time. The worker now enforces this with a Redis polling lock
 per bot: the holder long-polls ingress; any other instance starts in
 **send-only** mode and can still deliver outbound notices without calling
-`getUpdates`. Keep Docker dependencies (`postgres`, `redis`,
+`getUpdates`. When the lock holder exits, the send-only instance promotes
+itself to polling on the next heartbeat (no manual restart). Keep Docker
+dependencies (`postgres`, `redis`,
 `minio`, `clamav`) running under Compose, but run **one** polling worker only:
 either the Compose `worker` service **or** the host `@binflow/worker`
 started by `pnpm dev`, never both. With `pnpm run dev` already polling,
@@ -305,6 +320,13 @@ stop the Compose poller with
 `getUpdates` client produces Telegram
 `Conflict: terminated by other getUpdates request` and drops ingress
 until only one poller remains.
+
+The local worker also reconciles Telegram runtimes on the heartbeat
+interval: newly verified `telegram-client` (or admin) credentials start
+polling automatically so enrollment pairing can activate without bouncing
+the worker. Running two host workers (for example `pnpm dev` plus a second
+`apps/worker` `pnpm dev`) still causes the same Telegram conflict; stop the
+extra process.
 
 ### Notification dispatch
 
@@ -345,8 +367,9 @@ preview without a Vercel account:
 5. Save, then open a current `*.vercel.app` preview URL in a private/incognito
    window with no Vercel session. The article should load.
 
-Publication-complete Telegram messages use `https://webbin.com.mx`, not the unique
-production deployment hostname.
+Publication-complete Telegram messages use the enrolled production origin
+(ADR-0048; Webbin `https://webbin.com.mx`), not the unique production deployment
+hostname.
 
 Re-enable Preview protection after the review if you do not want later preview
 URLs to stay world-readable. Changing this setting does not alter Git, the

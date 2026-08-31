@@ -111,6 +111,9 @@ importers:
       '@binflow/messaging':
         specifier: workspace:*
         version: link:../../packages/messaging
+      '@binflow/orbitype':
+        specifier: workspace:*
+        version: link:../../packages/orbitype
       '@binflow/secrets':
         specifier: workspace:*
         version: link:../../packages/secrets
@@ -201,6 +204,9 @@ importers:
       '@binflow/messaging':
         specifier: workspace:*
         version: link:../../packages/messaging
+      '@binflow/orbitype':
+        specifier: workspace:*
+        version: link:../../packages/orbitype
       '@binflow/projects':
         specifier: workspace:*
         version: link:../../packages/projects
@@ -426,6 +432,9 @@ importers:
       '@binflow/messaging':
         specifier: workspace:*
         version: link:../messaging
+      '@binflow/orbitype':
+        specifier: workspace:*
+        version: link:../orbitype
       '@binflow/secrets':
         specifier: workspace:*
         version: link:../secrets
@@ -535,6 +544,31 @@ importers:
       uuid:
         specifier: 14.0.1
         version: 14.0.1
+    devDependencies:
+      '@types/node':
+        specifier: 24.13.3
+        version: 24.13.3
+
+  packages/orbitype:
+    dependencies:
+      '@binflow/contracts':
+        specifier: workspace:*
+        version: link:../contracts
+      '@binflow/db':
+        specifier: workspace:*
+        version: link:../db
+      '@binflow/domain':
+        specifier: workspace:*
+        version: link:../domain
+      '@binflow/integrations':
+        specifier: workspace:*
+        version: link:../integrations
+      '@binflow/secrets':
+        specifier: workspace:*
+        version: link:../secrets
+      zod:
+        specifier: 4.4.3
+        version: 4.4.3
     devDependencies:
       '@types/node':
         specifier: 24.13.3

@@ -1,0 +1,6 @@
+kind: interrupt
+label: Client revision plan confirmation
+nodeKind: await.revision_plan_confirmation@1
+acceptsClientCustomization: false
+actor: client
+ttlHours: 24

@@ -34,6 +34,10 @@ const { data: toolCatalog } = await useFetch<ToolCatalogResponse>(
 );
 const enabledToolKeys = ref<Set<string>>(new Set());
 const capabilityMessage = ref('');
+const attempts = ref<EnrollmentValidationAttempt[]>([]);
+const pairingUrl = ref('');
+const message = ref('');
+const busy = ref(false);
 
 watch(
   capabilityState,
@@ -49,31 +53,106 @@ const canAssignTools = computed(
     manifestState.value?.manifest !== undefined &&
     enrollment.value?.projectId !== undefined,
 );
+const assignableTools = computed(() => {
+  const profile = enrollment.value?.projectProfile;
+  return (toolCatalog.value?.items ?? []).filter(
+    (tool) => profile === undefined || tool.profile === profile,
+  );
+});
+const allowsEmptyTools = computed(
+  () => enrollment.value?.projectProfile === 'astro_orbitype',
+);
+const platformLocales = ['en', 'es', 'de'] as const;
+const isWebbinLocaleOverlay = computed(
+  () =>
+    enrollment.value?.projectProfile === 'astro_repo' ||
+    (enrollment.value?.tenantKey === 'webbin' &&
+      enrollment.value?.projectKey === 'webbin'),
+);
 const form = reactive({
   clientContactEmail: '',
   clientConversationLocale: 'en',
-  contentLocales: 'en, es',
-  defaultContentLocale: 'es',
+  contentLocales: ['de'] as Array<(typeof platformLocales)[number]>,
+  defaultContentLocale: 'de' as (typeof platformLocales)[number],
   editorialAudience: '',
   editorialVoice: '',
   previewDomain: '',
   productionDomain: '',
   prohibitedClaims: '',
-  requiredLocales: 'en, es',
   researchPolicy: '',
-  slugLocale: 'es',
+  slugLocale: 'de' as (typeof platformLocales)[number],
   timezone: 'America/Mexico_City',
-  translationPolicy: 'always_translate',
+  translationPolicy: 'none' as 'always_translate' | 'ask_each_action' | 'none',
   maxEstimatedCostCentsPerDay: 2000,
   maxEstimatedCostCentsPerRequest: 500,
   maxModelCallsPerRequest: 12,
   maxRequestsPerDay: 10,
   maxTokensPerRequest: 120000,
 });
-const attempts = ref<EnrollmentValidationAttempt[]>([]);
-const pairingUrl = ref('');
-const message = ref('');
-const busy = ref(false);
+const translationPolicyOptions = computed(() => {
+  if (isWebbinLocaleOverlay.value) return ['always_translate'];
+  return form.contentLocales.length <= 1
+    ? ['none']
+    : ['always_translate', 'ask_each_action'];
+});
+const sourceLocaleOptions = computed(() =>
+  isWebbinLocaleOverlay.value ? ['es'] : [...form.contentLocales],
+);
+
+const syncLocalePolicy = () => {
+  if (isWebbinLocaleOverlay.value) {
+    form.contentLocales = ['es', 'en'];
+    form.defaultContentLocale = 'es';
+    form.slugLocale = 'es';
+    form.translationPolicy = 'always_translate';
+    return;
+  }
+  if (form.contentLocales.length === 0) {
+    form.contentLocales = ['de'];
+  }
+  if (!form.contentLocales.includes(form.defaultContentLocale)) {
+    form.defaultContentLocale = form.contentLocales[0]!;
+  }
+  if (!form.contentLocales.includes(form.slugLocale)) {
+    form.slugLocale = form.contentLocales[0]!;
+  }
+  form.translationPolicy =
+    form.contentLocales.length === 1 ? 'none' : 'always_translate';
+};
+
+const toggleContentLocale = (locale: (typeof platformLocales)[number]) => {
+  if (isWebbinLocaleOverlay.value) return;
+  const next = new Set(form.contentLocales);
+  if (next.has(locale)) {
+    if (next.size === 1) return;
+    next.delete(locale);
+  } else {
+    next.add(locale);
+  }
+  form.contentLocales = platformLocales.filter((item) => next.has(item));
+  syncLocalePolicy();
+};
+const isEditableEnrollment = computed(() => {
+  const state = enrollment.value?.state;
+  return (
+    state === 'draft' ||
+    state === 'configuring' ||
+    state === 'validation_failed' ||
+    state === 'ready_for_pairing' ||
+    state === 'pairing_pending' ||
+    state === 'active' ||
+    state === 'revalidation_required'
+  );
+});
+const isLiveEnrollment = computed(
+  () =>
+    enrollment.value?.state === 'active' ||
+    enrollment.value?.state === 'pairing_pending' ||
+    enrollment.value?.state === 'revalidation_required',
+);
+const saveLabel = computed(() =>
+  isLiveEnrollment.value ? 'Save profile' : 'Save draft',
+);
 
 let pairingRefresh: ReturnType<typeof createPendingPairingRefresh> | undefined;
 const onVisibilityChange = () => {
@@ -104,18 +183,13 @@ watchEffect(() => {
   if (!config) return;
   form.clientContactEmail = config.clientContactEmail ?? '';
   form.clientConversationLocale = config.clientConversationLocale ?? 'en';
-  form.contentLocales = 'es, en';
-  form.defaultContentLocale = 'es';
   form.editorialAudience = config.editorialAudience ?? '';
   form.editorialVoice = config.editorialVoice ?? '';
   form.previewDomain = config.previewDomain ?? '';
   form.productionDomain = config.productionDomain ?? '';
   form.prohibitedClaims = (config.prohibitedClaims ?? []).join('\n');
-  form.requiredLocales = 'es, en';
   form.researchPolicy = config.researchPolicy ?? '';
-  form.slugLocale = 'es';
   form.timezone = config.timezone ?? 'America/Mexico_City';
-  form.translationPolicy = 'always_translate';
   form.maxEstimatedCostCentsPerDay =
     config.budgetPolicy?.maxEstimatedCostCentsPerDay ?? 2000;
   form.maxEstimatedCostCentsPerRequest =
@@ -124,13 +198,39 @@ watchEffect(() => {
     config.budgetPolicy?.maxModelCallsPerRequest ?? 12;
   form.maxRequestsPerDay = config.budgetPolicy?.maxRequestsPerDay ?? 10;
   form.maxTokensPerRequest = config.budgetPolicy?.maxTokensPerRequest ?? 120000;
+
+  if (isWebbinLocaleOverlay.value) {
+    form.contentLocales = ['es', 'en'];
+    form.defaultContentLocale = 'es';
+    form.slugLocale = 'es';
+    form.translationPolicy = 'always_translate';
+    return;
+  }
+
+  const savedLocales = (config.contentLocales ?? []).filter(
+    (locale): locale is (typeof platformLocales)[number] =>
+      platformLocales.includes(locale as (typeof platformLocales)[number]),
+  );
+  form.contentLocales =
+    savedLocales.length > 0 ? savedLocales : (['de'] as typeof form.contentLocales);
+  form.defaultContentLocale =
+    config.defaultContentLocale &&
+    form.contentLocales.includes(config.defaultContentLocale)
+      ? config.defaultContentLocale
+      : form.contentLocales[0]!;
+  form.slugLocale =
+    config.slugLocale && form.contentLocales.includes(config.slugLocale)
+      ? config.slugLocale
+      : form.contentLocales[0]!;
+  form.translationPolicy =
+    config.translationPolicy ??
+    (form.contentLocales.length === 1 ? 'none' : 'always_translate');
+  if (form.contentLocales.length === 1) form.translationPolicy = 'none';
+  if (form.contentLocales.length > 1 && form.translationPolicy === 'none') {
+    form.translationPolicy = 'always_translate';
+  }
 });
 
-const locales = (value: string) =>
-  value
-    .split(',')
-    .map((item) => item.trim())
-    .filter(Boolean);
 const configuration = () => ({
   budgetPolicy: {
     maxEstimatedCostCentsPerDay: Number(form.maxEstimatedCostCentsPerDay),
@@ -143,7 +243,7 @@ const configuration = () => ({
   },
   clientContactEmail: form.clientContactEmail,
   clientConversationLocale: form.clientConversationLocale,
-  contentLocales: locales(form.contentLocales),
+  contentLocales: [...form.contentLocales],
   defaultContentLocale: form.defaultContentLocale,
   editorialAudience: form.editorialAudience,
   editorialVoice: form.editorialVoice,
@@ -153,7 +253,7 @@ const configuration = () => ({
     .split('\n')
     .map((item) => item.trim())
     .filter(Boolean),
-  requiredLocales: locales(form.requiredLocales),
+  requiredLocales: [...form.contentLocales],
   researchPolicy: form.researchPolicy,
   slugLocale: form.slugLocale,
   timezone: form.timezone,
@@ -163,6 +263,20 @@ const mutationHeaders = () => ({
   'Idempotency-Key': crypto.randomUUID(),
   'If-Match': `"${enrollment.value?.version ?? 0}"`,
 });
+const conflictStatus = (error: unknown): boolean => {
+  if (typeof error !== 'object' || error === null) return false;
+  const record = error as { status?: unknown; statusCode?: unknown };
+  return record.statusCode === 409 || record.status === 409;
+};
+const runMutation = async (action: () => Promise<void>) => {
+  try {
+    await action();
+  } catch (error) {
+    if (!conflictStatus(error)) throw error;
+    await refresh();
+    await action();
+  }
+};
 const run = async (action: () => Promise<void>) => {
   busy.value = true;
   message.value = '';
@@ -177,49 +291,57 @@ const run = async (action: () => Promise<void>) => {
 };
 const save = () =>
   run(async () => {
-    enrollment.value = await $fetch<Enrollment>(
-      `/api/v1/admin/enrollments/${id}`,
-      {
-        body: { configuration: configuration(), currentStep: 3 },
-        headers: mutationHeaders(),
-        method: 'PATCH',
-      },
-    );
-    message.value = 'Draft saved.';
+    await runMutation(async () => {
+      enrollment.value = await $fetch<Enrollment>(
+        `/api/v1/admin/enrollments/${id}`,
+        {
+          body: { configuration: configuration(), currentStep: 3 },
+          headers: mutationHeaders(),
+          method: 'PATCH',
+        },
+      );
+    });
+    message.value = isLiveEnrollment.value
+      ? 'Profile saved. Active manifest rematerialized when needed.'
+      : 'Draft saved.';
   });
 const validate = () =>
   run(async () => {
-    const result = await $fetch<{
-      attempts: EnrollmentValidationAttempt[];
-      enrollment: Enrollment;
-    }>(`/api/v1/admin/enrollments/${id}/validate`, {
-      body: {},
-      headers: mutationHeaders(),
-      method: 'POST',
+    await runMutation(async () => {
+      const result = await $fetch<{
+        attempts: EnrollmentValidationAttempt[];
+        enrollment: Enrollment;
+      }>(`/api/v1/admin/enrollments/${id}/validate`, {
+        body: {},
+        headers: mutationHeaders(),
+        method: 'POST',
+      });
+      enrollment.value = result.enrollment;
+      attempts.value = result.attempts;
     });
-    enrollment.value = result.enrollment;
-    attempts.value = result.attempts;
     await refreshManifest();
     await refreshCapabilities();
     message.value =
-      result.enrollment.state === 'ready_for_pairing'
+      enrollment.value?.state === 'ready_for_pairing'
         ? 'Validation passed.'
         : 'Validation found blockers.';
   });
 const createPairing = () =>
   run(async () => {
-    const result = await $fetch<{
-      enrollment: Enrollment;
-      expiresAt: string;
-      pairingUrl: string;
-    }>(`/api/v1/admin/enrollments/${id}/pairing-link`, {
-      body: {},
-      headers: mutationHeaders(),
-      method: 'POST',
+    await runMutation(async () => {
+      const result = await $fetch<{
+        enrollment: Enrollment;
+        expiresAt: string;
+        pairingUrl: string;
+      }>(`/api/v1/admin/enrollments/${id}/pairing-link`, {
+        body: {},
+        headers: mutationHeaders(),
+        method: 'POST',
+      });
+      enrollment.value = result.enrollment;
+      pairingUrl.value = result.pairingUrl;
+      message.value = `Pairing link expires at ${result.expiresAt}. Copy it now; it will not be shown again.`;
     });
-    enrollment.value = result.enrollment;
-    pairingUrl.value = result.pairingUrl;
-    message.value = `Pairing link expires at ${result.expiresAt}. Copy it now; it will not be shown again.`;
   });
 const toggleTool = (toolId: string, version: number, enabled: boolean) => {
   const key = capabilityKey(toolId, version);
@@ -232,10 +354,10 @@ const saveCapabilities = () =>
   run(async () => {
     if (enrollment.value?.projectId === undefined) return;
     const bindings = buildCapabilityBindings(
-      toolCatalog.value?.items ?? [],
+      assignableTools.value,
       enabledToolKeys.value,
     );
-    if (bindings.length === 0) {
+    if (bindings.length === 0 && !allowsEmptyTools.value) {
       capabilityMessage.value = 'At least one tool must stay enabled.';
       return;
     }
@@ -278,6 +400,9 @@ const saveCapabilities = () =>
           class="mt-1 font-mono text-sm text-[var(--binflow-accent)]"
         >
           Project {{ enrollment.projectKey }}
+          <span v-if="enrollment.projectProfile">
+            · {{ enrollment.projectProfile }}
+          </span>
         </p>
       </template>
       <template #actions>
@@ -298,7 +423,16 @@ const saveCapabilities = () =>
           ><div>
             <p class="font-semibold">Client and content contract</p>
             <p class="text-sm text-muted">
-              English, Spanish and German are the supported client locales.
+              Platform locales are English, Spanish and German. Enable one or
+              more for this project; a single locale means no translation.
+            </p>
+            <p
+              v-if="isLiveEnrollment"
+              class="mt-2 text-sm text-[var(--binflow-accent)]"
+            >
+              Active clients can edit production URL, locales, editorial and
+              budgets here. Saving rematerializes the frozen project manifest
+              when those fields change.
             </p>
           </div></template
         >
@@ -316,28 +450,52 @@ const saveCapabilities = () =>
             ><USelect
               v-model="form.clientConversationLocale"
               class="w-full"
-              :items="['en', 'es', 'de']"
+              :items="[...platformLocales]"
           /></UFormField>
           <UFormField label="Translation policy"
             ><USelect
               v-model="form.translationPolicy"
               class="w-full"
-              :items="['always_translate']"
+              :items="translationPolicyOptions"
+              :disabled="isWebbinLocaleOverlay || form.contentLocales.length <= 1"
           /></UFormField>
-          <UFormField label="Content locales"
-            ><UInput v-model="form.contentLocales" class="w-full" disabled
-          /></UFormField>
-          <UFormField label="Required locales"
-            ><UInput v-model="form.requiredLocales" class="w-full" disabled
-          /></UFormField>
+          <UFormField class="sm:col-span-2" label="Content locales">
+            <div class="flex flex-wrap gap-4">
+              <label
+                v-for="locale in platformLocales"
+                :key="locale"
+                class="flex items-center gap-2 text-sm"
+              >
+                <input
+                  type="checkbox"
+                  class="size-4"
+                  :checked="form.contentLocales.includes(locale)"
+                  :disabled="isWebbinLocaleOverlay"
+                  @change="toggleContentLocale(locale)"
+                />
+                <span class="uppercase">{{ locale }}</span>
+              </label>
+            </div>
+            <p v-if="isWebbinLocaleOverlay" class="mt-2 text-xs text-muted">
+              Webbin pilot locks content to Spanish + English.
+            </p>
+            <p v-else-if="form.contentLocales.length === 1" class="mt-2 text-xs text-muted">
+              Monolingual project — translation policy is none.
+            </p>
+          </UFormField>
           <UFormField label="Source locale"
             ><USelect
               v-model="form.defaultContentLocale"
               class="w-full"
-              :items="['es']"
+              :items="sourceLocaleOptions"
+              :disabled="isWebbinLocaleOverlay"
           /></UFormField>
           <UFormField label="Slug locale"
-            ><USelect v-model="form.slugLocale" class="w-full" :items="['es']"
+            ><USelect
+              v-model="form.slugLocale"
+              class="w-full"
+              :items="sourceLocaleOptions"
+              :disabled="isWebbinLocaleOverlay"
           /></UFormField>
           <UFormField label="Production URL"
             ><UInput
@@ -411,7 +569,12 @@ const saveCapabilities = () =>
               min="1"
               type="number"
           /></UFormField>
-          <UButton type="submit" :loading="busy">Save draft</UButton>
+          <UButton
+            type="submit"
+            :loading="busy"
+            :disabled="!isEditableEnrollment"
+            >{{ saveLabel }}</UButton
+          >
         </form>
       </UCard>
       <div class="grid content-start gap-4">
@@ -492,9 +655,13 @@ const saveCapabilities = () =>
           <p class="mt-1 text-sm text-muted">
             Assign code-owned capabilities after validation. Each change creates a
             new manifest revision.
+            <span v-if="allowsEmptyTools">
+              This profile may stay active with zero tools until Orbitype content
+              capabilities are assigned.
+            </span>
           </p>
           <div
-            v-for="tool in toolCatalog?.items ?? []"
+            v-for="tool in assignableTools"
             :key="`${tool.id}@${tool.version}`"
             class="mt-3 flex items-start justify-between gap-3 rounded-lg border border-default p-3 text-sm"
           >

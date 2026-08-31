@@ -1,0 +1,8 @@
+kind: effect
+label: Wait for Vercel preview
+nodeKind: publication.wait_preview@1
+acceptsClientCustomization: false
+permissions:
+  - vercel:deployments:read
+  - github:checks:read
+  - github:statuses:read

@@ -39,6 +39,11 @@ const runtimeByExecutorId = Object.freeze({
     kind: 'blog',
     titleField: 'titulo',
   }),
+  'workflow.create_blog_orbitype@1': Object.freeze({
+    consumerPrefix: 'blog',
+    kind: 'blog',
+    titleField: 'titulo',
+  }),
   'workflow.create_project@1': Object.freeze({
     consumerPrefix: 'project',
     kind: 'project',

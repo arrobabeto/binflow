@@ -2,7 +2,20 @@
 
 Stop after each phase; show a summary; wait for user confirmation.
 
-See also: `graph-by-mutation.md`, `client-facing-copy.md`, `post-ship-ops.md`.
+See also: `graph-by-mutation.md`, `client-facing-copy.md`, `post-ship-ops.md`,
+and **`references/stacks/<stack>.md`** for the chosen stack (required).
+
+## Phase 0 — Stack contract gate
+
+Before Phase 1:
+
+1. Confirm `identity.stack` / profile and open `references/stacks/<stack>.md`.
+2. If missing → stop; finish new-stack so it writes the contract.
+3. For `astro-orbitype`, confirm the user has read (or you summarize)
+   `docs/guides/astro-orbitype-tool-implementation.md` failure checklist.
+4. Confirm with the user: production origin rule, preview routes, required
+   credentials (incl. Orbitype API when applicable), Preview `PUBLIC_*` env,
+   and rematerialize triggers from the contract.
 
 ## Phase 1 — Intent and trigger
 
@@ -10,9 +23,9 @@ See also: `graph-by-mutation.md`, `client-facing-copy.md`, `post-ship-ops.md`.
 - Telegram command (`/snake_case`)? Natural-language cues?
 - **NL:** infinitives **and** conjugations (`borra`, `elimina`, `delete`, …).
 - If create + delete share a domain (blog): **delete must win** in dispatch order.
-- Which stack/profile (`astro_repo`, …)? Written into brief `allowedProfiles`
+- Which stack/profile (`astro_repo`, `astro_orbitype`, …)? Written into brief `allowedProfiles`
   and migration `allowed_profiles` — only projects with that profile can be
-  assigned the tool in the dashboard.
+  assigned the tool in the dashboard. Must match an existing stack contract.
 - Mutation class: `create` | `update` | `destructive` | `read_only`
 - Risk class and preview required? (See `graph-by-mutation.md` defaults.)
 - Reuse executor family: blog, project, or new?

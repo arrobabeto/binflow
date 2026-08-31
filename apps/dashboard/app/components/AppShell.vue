@@ -24,6 +24,7 @@ const toolsLinks: readonly NavItem[] = [
 const systemLinks: readonly NavItem[] = [
   { icon: 'i-lucide-cable', label: 'Integrations', to: '/integrations' },
   { icon: 'i-lucide-activity', label: 'Operations', to: '/operations' },
+  { icon: 'i-lucide-chart-column', label: 'Analytics', to: '/analytics' },
 ];
 
 const isActive = (path: string): boolean => {

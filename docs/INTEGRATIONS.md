@@ -72,9 +72,19 @@ any other admin/client credential or tenant.
 
 ### Authentication
 
-The GitHub App private key/webhook secret are one platform registration credential. App/client IDs are non-secret configuration. Webbin stores a separate non-secret installation binding; installation tokens are short-lived and never persisted.
+The GitHub App private key/webhook secret are a platform registration
+credential keyed by GitHub `appId`. App/client IDs are non-secret configuration.
+Each project stores a separate non-secret installation binding
+(`integration_connections`); installation tokens are short-lived and never
+persisted. Runtime execution must load the App credential **and** installation
+IDs through the requesting project's active connection — never by selecting an
+arbitrary active `github-app` row. Distinct App registrations (different
+`appId`) may coexist at platform scope; rotating the same App supersedes only
+that `appId`.
 
-The GitHub App is installed only on `arrobabeto/webbin`. Its explicitly approved registration permission ceiling is:
+The first pilot GitHub App is installed on `arrobabeto/webbin`. Additional
+client Apps (for example Bistro) bind their own installation to their project.
+Its explicitly approved registration permission ceiling is:
 
 - Administration: read/write.
 - Metadata: read.
@@ -123,6 +133,10 @@ bot/webbin/create-blog/<request-id>-<slug>
 ```
 
 Webbin content PRs target `main`. The current local `develop` publishing skill is reference material and is not copied into Binflow.
+
+For non-Webbin projects (`astro_orbitype` and later profiles), draft and merge
+operations use the verified GitHub connection `expectedRepository` and
+`defaultBranch` from enrollment — not the Webbin pilot constants.
 
 ### Webhooks/reconciliation
 
@@ -213,9 +227,24 @@ pnpm run check
 
 Checks run in isolated CI/Vercel rather than a general worker shell.
 
-## Future Orbitype
+## Orbitype (astro_orbitype enrollment)
 
-The adapter will expose typed content operations over an allowlisted MCP connection, with HTTP SQL/S3 fallback hidden behind the same port. Generic `sql_crud_execute` is never LLM-visible. Draft, version, rollback and webhook behavior require a spike before implementation.
+Profile: `astro_orbitype` (ADR-0045). Stack directory: `astro-orbitype`.
+
+Enrollment requires a **project-scoped** Orbitype API-key credential:
+
+- Operator pastes the API key in the dashboard enrollment flow.
+- Secret material is encrypted at rest (ADR-0014 envelope); configuration may
+  hold non-secret base URL / project identifiers.
+- Verification is **read-only** (authenticate and confirm identity/access). It
+  must not create, update, or delete CMS content during enrollment.
+- Failed auth marks the candidate invalid or leaves it unverified; it never
+  displaces a prior active version without a successful verify.
+- The LLM never receives the API key or a generic Orbitype SQL/MCP execute tool.
+
+Content mutations use allowlisted ports only. First tool: `create_blog_orbitype`
+(ADR-0047) — dual-write GitHub + CMS draft/publish. Further CMS tools remain
+later Phase 6 slices.
 
 ## Future WordPress
 

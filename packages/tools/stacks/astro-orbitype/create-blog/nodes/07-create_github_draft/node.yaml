@@ -1,0 +1,7 @@
+kind: effect
+label: Create GitHub draft PR
+nodeKind: publication.create_github_draft@1
+acceptsClientCustomization: false
+permissions:
+  - github:contents:write
+  - github:pull_requests:write

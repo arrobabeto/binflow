@@ -429,5 +429,26 @@ export class DeleteProjectExecutor {
   }
 }
 
+/**
+ * Client-visible origin for delete URL compose / resolve.
+ * Prefer frozen manifest `deployment.productionOrigin` (ADR-0048).
+ * Webbin/`astro_repo` may omit it and fall back to the pilot constant.
+ */
+export const resolveDeleteProjectProductionOrigin = (
+  manifest?: Pick<ProjectManifest, 'deployment' | 'profile'> | null,
+): string => {
+  const fromManifest = manifest?.deployment?.productionOrigin;
+  if (typeof fromManifest === 'string' && fromManifest.trim().length > 0)
+    return fromManifest.replace(/\/$/u, '');
+  if (manifest?.profile === 'astro_orbitype')
+    throw new DomainError(
+      'validation_error',
+      'Manifest deployment.productionOrigin is required for this profile.',
+      { code: 'production_origin_required' },
+    );
+  return webbinPilotBinding.productionOrigin;
+};
+
+/** @deprecated Prefer resolveDeleteProjectProductionOrigin(manifest). */
 export const defaultDeleteProjectProductionOrigin = (): string =>
-  webbinPilotBinding.productionOrigin;
+  resolveDeleteProjectProductionOrigin(null);

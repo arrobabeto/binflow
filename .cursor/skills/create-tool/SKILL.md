@@ -5,18 +5,27 @@ implement → post-ship → conform.
 
 If the ask is broader than one capability (new **stack/profile**, integration,
 dashboard, trust boundary, or anything that may change SCOPE/MVP/ADRs), run
-[`new-feature`](../new-feature/SKILL.md) **first**. Use this skill after
-governance docs/ADR are aligned, or when the feature is clearly a single tool on
-an existing profile.
+[`new-feature`](../new-feature/SKILL.md) and, for stacks/profiles specifically,
+[`new-stack`](../new-stack/SKILL.md) **first**. Use this skill after governance
+docs/ADR are aligned **and** the profile is documented (or already enrollable),
+or when the feature is clearly a single tool on an existing profile.
 
 ## Preconditions
 
 1. Read `docs/README.md`, ADR-0030, ADR-0038, ADR-0039, ADR-0042, and `packages/tools/README.md`.
 2. Confirm behavior is documented; add or amend an ADR when trust boundaries change.
-3. Destructive tools (`mutationClass: destructive`) require **ADR-0040** gap review
+   New profiles/stacks should have completed [`new-stack`](../new-stack/SKILL.md)
+   prep (and implementation) unless the profile already exists.
+3. **Load the stack tool contract** for the target stack before Phase 0 continues:
+   [`references/stacks/<stack>.md`](references/stacks/README.md)
+   (e.g. `astro-repo.md`, `astro-orbitype.md`). If the file is missing, stop and
+   run or finish [`new-stack`](../new-stack/SKILL.md) so it emits the contract.
+   For `astro-orbitype`, also read
+   [`docs/guides/astro-orbitype-tool-implementation.md`](../../../docs/guides/astro-orbitype-tool-implementation.md).
+4. Destructive tools (`mutationClass: destructive`) require **ADR-0040** gap review
    before catalog registration (GitHub DELETE, verification semantics, tombstone,
    no Vercel preview unless explicitly documented).
-4. Shared ports (GitHub catalog, OpenAI, Vercel): declare scope per capability
+5. Shared ports (GitHub catalog, OpenAI, Vercel): declare scope per capability
    (**ADR-0042**). Catalog tools need `parameters.catalogScope` and a
    `catalogScopeForRuntimeKind` entry — never widen a shared factory default.
 
@@ -99,6 +108,11 @@ Pilot customization: `docs/customizations/<client>-<tool>.md` + upload script if
 - Register destructive tools without closing ADR-0040 platform gaps.
 - Put model/effort in customization markdown.
 - Expose repo paths, SHAs, or raw UUIDs in client-facing copy.
+- Hardcode a client production origin or path layout (`webbin.com.mx`,
+  `/articulos`, …) in shared messaging, delete defaults, or Vercel wait — use
+  frozen manifest / enrollment (ADR-0048). Webbin-only strings belong in the
+  `astro_repo` builder or customization layer.
+- Skip loading [`references/stacks/<stack>.md`](references/stacks/README.md).
 - Reuse create CTAs (`Crear borrador` / `Create draft`) on destructive or update tools — define `*ActionLabels` per capability.
 - Reuse `create_draft` / `wait_preview` node ids on destructive tools.
 - Assign tool in dashboard before `pnpm db:migrate`.
@@ -109,6 +123,7 @@ Pilot customization: `docs/customizations/<client>-<tool>.md` + upload script if
 
 ## References
 
+- `references/stacks/` — per-stack contracts (required; maintained by new-stack)
 - `references/interview.md` — phased question bank
 - `references/layers.md` — code / manifest / customization split
 - `references/graph-by-mutation.md` — node naming by mutation class
@@ -117,3 +132,4 @@ Pilot customization: `docs/customizations/<client>-<tool>.md` + upload script if
 - `references/checklist.md` — layer checklist
 - `references/templates/spec-template.md` — capability spec skeleton
 - `references/templates/adr-template.md` — ADR skeleton
+- `docs/guides/astro-orbitype-tool-implementation.md` — Orbitype tool manual

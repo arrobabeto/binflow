@@ -42,6 +42,12 @@ inside JSON evidence.
 ## Local and production transport
 
 - Local: long polling; startup verifies that no incompatible webhook is active and explicitly disables Chat SDK webhook deletion.
+- The worker discovers active `telegram-admin` and `telegram-client`
+  credentials at process start **and** on each heartbeat reconcile. A client
+  bot credential activated during enrollment starts polling without requiring
+  a worker restart; otherwise `/start <token>` never reaches the pairing
+  service and the enrollment stays `pairing_pending` after the operator
+  believes pairing succeeded.
 - Production cutover: HTTPS webhook with a unique secret token and restricted
   allowed updates. The production profile remains disabled until that later VPS
   ingress is implemented and validated.
@@ -92,7 +98,7 @@ A normal message is evaluated only against enabled capabilities. The planner ret
 
 For the local MVP router:
 
-- **Blog:** messages mentioning *blog*, *article*, *artículo*, *post*, etc. start `create_blog_draft` when that tool is assigned.
+- **Blog:** messages mentioning *blog*, *article*, *artículo*, *Beitrag*, *post*, etc. start the project's assigned create-blog capability (`create_blog_draft` on `astro_repo`, `create_blog_orbitype` on `astro_orbitype`).
 - **Portfolio project:** messages mentioning *proyecto*, *portafolio*, *portfolio*, *case study*, etc., or briefs with at least two structural cues (`Stack:`, `Rol:`, `Estado:`, `confidencial`, …), start `create_project_astro` when assigned — with or without the `/create_project` prefix.
 - **`/create_project <brief>`** always routes to the portfolio tool when it is enabled.
 - Portfolio collection (ADR-0035/0037): new project requests enter `NEEDS_INPUT`
@@ -157,7 +163,8 @@ The bot communicates user-relevant state, never internal chain-of-thought:
 - Waiting for client/admin approval.
 - Publishing.
 - Production verified, with URL buttons to the project's public production
-  origin (`https://webbin.com.mx` for Webbin) and article routes. The message must
+  origin (enrollment `productionDomain` / manifest `deployment.productionOrigin`;
+  Webbin defaults to `https://webbin.com.mx`) and article routes. The message must
   not use a `*.vercel.app` deployment hostname as the live site.
 - Failed with an actionable next step.
 
@@ -265,6 +272,9 @@ Required events:
   dashboard. The notice is the neutral terminal copy already used for
   client-initiated `/cancel`; it does not attribute the cancellation, name the
   platform owner or expose dashboard paths.
+- `request.failed_final`: the request reached a terminal failure. The notice
+  includes the request ID and error summary so the client is not left without
+  a reply after plan confirmation; it does not include dashboard paths.
 - `admin.direct_message` / `admin.request_message`: bounded freeform plain text
   (max 2000 characters) queued from the dashboard Message modal (ADR-0043).
   Enrollment-scoped and request-scoped (only after `admin_rejected`) sends share

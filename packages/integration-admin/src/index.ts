@@ -39,6 +39,7 @@ import {
   type CredentialVerifier,
 } from '@binflow/integrations';
 import { createTelegramCredentialVerifier } from '@binflow/messaging';
+import { createOrbitypeCredentialVerifier } from '@binflow/orbitype';
 import { encryptSecret } from '@binflow/secrets';
 import { createVercelCredentialVerifier } from '@binflow/vercel';
 
@@ -91,15 +92,37 @@ const safeCandidateRequest = (
       projectKey: input.projectKey,
       secretMac,
       tenantKey: input.tenantKey,
+      ...(input.defaultBranch === undefined
+        ? {}
+        : { defaultBranch: input.defaultBranch }),
+      ...(input.expectedRepository === undefined
+        ? {}
+        : { expectedRepository: input.expectedRepository }),
+    };
+  }
+  if (input.kind === 'vercel') {
+    return {
+      alias: input.alias,
+      kind: input.kind,
+      projectId: input.projectId,
+      projectKey: input.projectKey,
+      secretMac,
+      ...(input.teamId === undefined ? {} : { teamId: input.teamId }),
+      tenantKey: input.tenantKey,
+      ...(input.expectedProductionBranch === undefined
+        ? {}
+        : { expectedProductionBranch: input.expectedProductionBranch }),
+      ...(input.expectedRepository === undefined
+        ? {}
+        : { expectedRepository: input.expectedRepository }),
     };
   }
   return {
     alias: input.alias,
+    baseUrl: input.baseUrl,
     kind: input.kind,
-    projectId: input.projectId,
     projectKey: input.projectKey,
     secretMac,
-    ...(input.teamId === undefined ? {} : { teamId: input.teamId }),
     tenantKey: input.tenantKey,
   };
 };
@@ -354,22 +377,64 @@ const candidateMaterial = async (
     projectId: resolvedBinding.projectId,
     tenantId: resolvedBinding.tenantId,
   };
-  if (
-    input.tenantKey !== webbinPilotBinding.tenantKey ||
-    input.projectKey !== webbinPilotBinding.projectKey
-  ) {
+  const [boundProject] = await database
+    .select({
+      profile: schema.projects.profile,
+    })
+    .from(schema.projects)
+    .where(eq(schema.projects.id, binding.projectId))
+    .limit(1);
+  if (boundProject === undefined) {
+    throw new DomainError('validation_error', 'Project was not found.');
+  }
+  const isWebbinPilot =
+    input.tenantKey === webbinPilotBinding.tenantKey &&
+    input.projectKey === webbinPilotBinding.projectKey;
+  if (!isWebbinPilot && boundProject.profile !== 'astro_orbitype') {
     throw new DomainError(
       'policy_denied',
       'Phase 0 external integrations are limited to the Webbin pilot.',
     );
   }
+  if (input.kind === 'orbitype-api') {
+    if (boundProject.profile !== 'astro_orbitype') {
+      throw new DomainError(
+        'policy_denied',
+        'Orbitype credentials are only allowed for astro_orbitype projects.',
+      );
+    }
+    return {
+      configuration: { baseUrl: input.baseUrl },
+      connection: {
+        configuration: { baseUrl: input.baseUrl },
+        kind: input.kind,
+        scope: binding,
+      },
+      ownerScope: 'project',
+      plaintext: Buffer.from(JSON.stringify({ apiKey: input.apiKey })),
+      scope: binding,
+      secretSuffix: input.apiKey.slice(-4),
+    };
+  }
   if (input.kind === 'github-app') {
+    const expectedRepository = isWebbinPilot
+      ? webbinPilotBinding.repository
+      : input.expectedRepository;
+    const defaultBranch = isWebbinPilot
+      ? webbinPilotBinding.productionBranch
+      : (input.defaultBranch ?? 'main');
+    if (expectedRepository === undefined) {
+      throw new DomainError(
+        'validation_error',
+        'expectedRepository is required for non-Webbin GitHub App bindings.',
+      );
+    }
     return {
       configuration: { appId: input.appId, clientId: input.clientId },
       connection: {
         configuration: {
-          defaultBranch: webbinPilotBinding.productionBranch,
-          expectedRepository: webbinPilotBinding.repository,
+          defaultBranch,
+          expectedRepository,
         },
         kind: input.kind,
         scope: binding,
@@ -388,12 +453,24 @@ const candidateMaterial = async (
         .slice(-4),
     };
   }
+  const expectedRepository = isWebbinPilot
+    ? webbinPilotBinding.repository
+    : input.expectedRepository;
+  const expectedProductionBranch = isWebbinPilot
+    ? webbinPilotBinding.productionBranch
+    : (input.expectedProductionBranch ?? 'main');
+  if (expectedRepository === undefined) {
+    throw new DomainError(
+      'validation_error',
+      'expectedRepository is required for non-Webbin Vercel bindings.',
+    );
+  }
   return {
     configuration: {},
     connection: {
       configuration: {
-        expectedProductionBranch: webbinPilotBinding.productionBranch,
-        expectedRepository: webbinPilotBinding.repository,
+        expectedProductionBranch,
+        expectedRepository,
         projectId: input.projectId,
         ...(input.teamId === undefined ? {} : { teamId: input.teamId }),
       },
@@ -416,6 +493,7 @@ export class IntegrationAdminService {
       createTelegramCredentialVerifier(),
       createGitHubCredentialVerifier(),
       createVercelCredentialVerifier(),
+      createOrbitypeCredentialVerifier(),
     ],
   ) {}
 
@@ -569,6 +647,9 @@ export class IntegrationAdminService {
             ...(result.errorCategory === undefined
               ? {}
               : { errorCategory: result.errorCategory }),
+            ...(result.errorDetail === undefined
+              ? {}
+              : { errorDetail: result.errorDetail }),
             outcome: result.outcome,
           };
           await recordMutation(database, {

@@ -4,6 +4,161 @@ All notable changes to product behavior, architecture, contracts, security, oper
 
 ## Unreleased
 
+### Active client profile edits (production URL)
+
+- Platform owners can PATCH enrollments in `active` / `pairing_pending` /
+  `revalidation_required` without resetting to `configuring`. Saving rematerializes
+  the frozen manifest when configuration changes (e.g. `productionDomain` →
+  `deployment.productionOrigin`). Dashboard label is **Save profile** for live
+  clients. Corrected Webbin enrollment domain `https://webbin.mx` →
+  `https://webbin.com.mx`.
+
+### Analytics dashboard page
+
+- System nav adds **Analytics** (`/analytics`) from Figma `analytics-dashboard`.
+- Live panels: approximate request totals and tool usage/failures from request
+  batches; models donut from tool-graph agent nodes; client status rows.
+- Cost, latency, budget spend, cost alerts, and model efficiency show
+  **Available soon** until `GET /api/v1/usage` (and related) exist.
+- Analytics date range (Last 24 hours / 7 / 30 days / All time) filters
+  request-derived panels by `createdAt` on loaded batches; cost panels remain
+  soon.
+
+### GitHub App binding is project-scoped
+
+- Worker resolves `github-app` via the project's active
+  `integration_connections` row (installation + repository evidence), not any
+  platform-wide active credential. Verifying a second GitHub App no longer
+  supersedes a different `appId` at platform scope.
+- Unique active credential index includes `configuration.appId` so distinct
+  GitHub Apps can both be `active` (migration `0026`).
+- Root cause of Webbin create-blog "Vercel timeout": Bistro's App enrollment
+  superseded Webbin's binding, so Webbin drafts were pushed to
+  `Bistro-Zur-Linde` while preview waited on Webbin's Vercel project.
+
+### Content locales fail-closed on generate
+
+- Blog generate receives the frozen enrollment locale contract and **rejects**
+  primary prose whose detected language is outside `contentLocales` (e.g.
+  Spanish body when Bistro is DE-only / conversation `es`). One model retry,
+  then fail. Conversation locale never authorizes publishable language.
+
+### Astro Orbitype tool manual + stack contracts
+
+- Guide: `docs/guides/astro-orbitype-tool-implementation.md` (ports, manifest
+  freeze, ops gates, Bistro failure appendix).
+- create-tool / test-tool / new-stack load per-stack contracts under
+  `.cursor/skills/create-tool/references/stacks/`.
+- Shared Telegram delete examples and delete production-origin defaults no
+  longer bake Webbin URLs; origin comes from frozen manifest (Webbin fallback
+  only for `astro_repo`).
+
+### Enrolled client production origin (ADR-0048)
+
+- Client-visible production URLs use frozen manifest
+  `deployment.productionOrigin` (from enrollment `productionDomain`), not the
+  Webbin-only constant. Worker falls back to active enrollment, then Webbin.
+- Rematerialize Bistro:
+  `pnpm --filter @binflow/tools exec tsx scripts/refresh-bistro-manifest-blog-paths.ts`.
+
+### Pull request provider id scoped per project
+
+- `pull_requests` unique index is `(project_id, provider_id)` instead of global
+  `provider_id`. GitHub PR numbers collide across repos (Webbin #21 vs Bistro
+  #21); the old index left Orbitype create-blog stuck in `PREVIEW_DEPLOYING`
+  after a READY Vercel preview when persisting the PR row.
+- Blog/project execute paths upsert by project + provider id (idempotent retry).
+
+### Astro Orbitype preview routes + Vercel Preview env
+
+- `blogPreviewRoutes` for `astro_orbitype` builds `/posts/{draftId}/{titleSlug}`
+  (Bistro CMS pages), not `/{locale}/{slug}`.
+- Enrollment runbook: Astro `PUBLIC_*` vars required for **Preview** as well as
+  Production (missing `PUBLIC_SITE_URL` caused Bistro PR builds to fail with
+  `BUILD_UTILS_SPAWN_1`).
+- Manifest `routePrefix` for Orbitype collections is `/posts`.
+
+### Orbitype Bistro posts dual-write + retry loop
+
+- `createOrbitypeBlogPublicationPort` writes Bistro-shaped `posts` rows
+  (`title`/`lead`/`status`/`sections` JSON) instead of invented columns; SQL
+  4xx maps to `provider_final` (`orbitype_draft_failed`) so BullMQ does not
+  retry schema failures forever.
+- Stale GENERATING/QUEUED recovery outbox keys are stable per request version
+  (`onConflictDoNothing`) to stop recover→retry loops.
+
+### Astro Orbitype blog path allowlist
+
+- `matchesEditablePath` treats `dir/**/*.md` as matching files directly under
+  `dir/` (and nested). `astro_orbitype` editablePaths use `blog-{locale}/*.md`.
+- Rematerialize Bistro:
+  `pnpm --filter @binflow/tools exec tsx scripts/refresh-bistro-manifest-blog-paths.ts`.
+
+### Telegram polling recovery and client failure notices
+
+- Worker keeps Telegram polling locks on a dedicated Redis connection (not the
+  BullMQ blocking connection) and promotes send-only bot runtimes to polling
+  once the lock is free, so a brief dual-worker overlap no longer leaves
+  ingress dead until restart.
+- `FAILED_FINAL` also enqueues a client Telegram notice (admin notice unchanged).
+
+### GitHub publication uses verified project binding
+
+- `createGitHubRepositoryPublicationPort` no longer rejects non-Webbin
+  `expectedRepository` / `defaultBranch`. Draft PRs target the enrolled
+  connection binding (required for `astro_orbitype` / Bistro dual-write).
+  Webbin pilot verifier rules for the Webbin repository itself are unchanged.
+
+### Create blog Orbitype dual-write (ADR-0047)
+
+- Capability `create_blog_orbitype@1` on stack `astro-orbitype`: GitHub draft PR
+  plus allowlisted Orbitype CMS draft/publish, Vercel preview, independent
+  writer nodes. Spec: `docs/specs/create-blog-orbitype.md`. Freezes
+  `create_blog_draft` / `astro_repo`. Locales from project manifest (ADR-0046).
+  Pilot customization: Bistro (`docs/customizations/bistro-create-blog-orbitype.md`).
+  Migration: `0024_create_blog_orbitype_capability.sql` — run `pnpm db:migrate`
+  before dashboard assignment.
+
+### new-stack skill and enrollment runbook
+
+- Agent skill `.cursor/skills/new-stack/`: preparation-only gate for new
+  project profiles / stacks (interview, impact, approval STOP, spec/ADR/docs,
+  readiness handoff). Does not implement product code.
+- Operator runbook `docs/ENROLLMENT.md`: enroll a client on an active stack
+  vs first client after a newly implemented stack.
+
+### Enrollment Telegram runtime hot-load
+
+- Local worker reconciles active Telegram admin/client credentials on each
+  heartbeat, not only at process start, so a newly verified client bot can
+  receive `/start <token>` and activate the enrollment without a worker
+  restart.
+- Enrollment dashboard mutations refresh and retry once on `409` stale
+  `If-Match` (version advanced by validate/pairing) instead of leaving the
+  operator on a stuck conflict.
+
+### Selectable monolingual locales (ADR-0046)
+
+- Platform content locales remain exactly English, Spanish and German.
+  Enrollments may enable any non-empty subset, including monolingual (for
+  example German-only). New translation policy `none` is required when only one
+  content locale is enabled. Webbin/`astro_repo` pilot overlay stays bilingual
+  `es`+`en` with `always_translate`. Dashboard locale fields are editable for
+  non-Webbin profiles.
+
+### Astro+Orbitype enrollment (ADR-0045)
+
+- Post-MVP profile `astro_orbitype` / stack `astro-orbitype`: dashboard
+  enrollment with Orbitype API-key verification, Telegram client pairing, and
+  activation with an empty capability catalog. Spec:
+  `docs/specs/astro-orbitype-enrollment.md`. Does not change `astro_repo` tools.
+- Implementation: selectable `projectProfile` on create enrollment; credential
+  kind `orbitype-api` with read-only `SELECT 1` verify; GitHub/Vercel bindings
+  allowed for `astro_orbitype` projects with explicit repository/branch;
+  package `@binflow/orbitype`; empty capability catalog valid for activation.
+- Fix: credential verification no longer requires GitHub/Vercel connections to
+  be the Webbin pilot keys when the bound project profile is `astro_orbitype`.
+
 ### Tool catalog stack path unification
 
 - Moved `delete_project` from mistaken `packages/tools/stacks/astro_repo/` into
@@ -22,6 +177,7 @@ All notable changes to product behavior, architecture, contracts, security, oper
 - Requests inbox cards use Figma state accents (left border + matching badge):
   completed green, in-progress blue, awaiting/revision amber, cancelled grey,
   failed rose — instead of full-card approval fills.
+- Home shows a local `dd-mm-yy` + 24-hour clock chip above **Add client**.
 
 ### new-feature agent skill (governance gate)
 

@@ -21,10 +21,12 @@ export {
   listCredentials,
   recordCredentialVerificationFailure,
   recordCredentialVerificationSuccess,
+  resolveActiveProjectGithubAppBinding,
   resolveScope,
   revokeCredential,
   storeCredentialVersion,
   type CredentialForVerification,
+  type ProjectGithubAppBinding,
   type ResolvedScope,
   type SafeConfiguration,
 } from './repository.js';

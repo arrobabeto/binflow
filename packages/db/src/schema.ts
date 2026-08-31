@@ -803,6 +803,7 @@ export const providerCredentials = pgTable(
         sql`coalesce(${table.tenantId}, 'platform')`,
         sql`coalesce(${table.projectId}, 'platform')`,
         table.kind,
+        sql`coalesce(${table.configuration}->>'appId', '')`,
       )
       .where(sql`${table.status} = 'active'`),
     uniqueIndex('provider_credentials_active_telegram_bot_unique')
@@ -1456,7 +1457,10 @@ export const pullRequests = pgTable(
     uniqueIndex('pull_requests_request_version_unique').on(
       table.requestVersionId,
     ),
-    uniqueIndex('pull_requests_provider_id_unique').on(table.providerId),
+    uniqueIndex('pull_requests_project_provider_unique').on(
+      table.projectId,
+      table.providerId,
+    ),
     foreignKey({
       columns: [table.requestVersionId, table.tenantId, table.projectId],
       foreignColumns: [

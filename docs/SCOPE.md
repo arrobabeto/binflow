@@ -7,7 +7,9 @@
 - Documentation-first TypeScript monorepo.
 - Multi-tenant-ready isolation with one active project/user per enrollment.
 - Admin dashboard with password + TOTP authentication.
-- Managed onboarding for the `astro_repo` profile.
+- Managed onboarding for the `astro_repo` profile (first MVP) and, as a
+  post-MVP expansion, the `astro_orbitype` profile (enrollment + Orbitype API
+  key; see ADR-0045).
 - PostgreSQL, Redis/BullMQ, workflow checkpoints and S3-compatible artifacts.
 - Per-client OpenAI credential; no global fallback.
 - Structured audit, model usage and cost records.
@@ -56,7 +58,9 @@
 - Automatic rollback.
 - Production VPS provisioning.
 - Validated German publication until a compatible real pilot exists.
-- Orbitype and WordPress runtime support; these are later phases.
+- WordPress runtime support as a separate later phase.
+- Orbitype content tools beyond the accepted `create_blog_orbitype` dual-write
+  create path (ADR-0047); enrollment remains ADR-0045.
 
 ## Permanent safety boundaries
 

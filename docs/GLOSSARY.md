@@ -21,8 +21,9 @@
 | Project          | One managed website and its integrations, manifest and policies.                                             |
 | Request          | A user's desired operation; it may contain multiple immutable request versions.                              |
 | Request version  | One frozen plan and artifact set; revisions create a new version and invalidate approvals.                   |
-| Stack            | Technical profile such as `astro_repo`; each tool binds to exactly one stack.                                |
+| Stack            | Catalog directory such as `astro-repo`; each tool binds to one stack. Project **profile** uses underscores (`astro_repo`, `astro_orbitype`). |
 | Tenant           | Security and data-isolation boundary for one client organization.                                            |
 | Tool (dashboard) | Synonym for a versioned capability shown in the Tools catalog, grouped by stack.                             |
 | Tool (LLM)       | Bounded read or capability-proposal schema visible to a model. Internal publication operations are not LLM tools. |
+| Orbitype         | Third-party CMS accessed via API key for `astro_orbitype` enrollments (ADR-0045). Content tools are later. |
 | Webbin           | Read-only reference and first `astro_repo` pilot; it remains a separate repository.                          |

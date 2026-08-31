@@ -8,7 +8,8 @@
 
 ## Stack / profile compatibility
 
-- Brief `identity.stack` / `identity.profile` and `migration.allowedProfiles` declare which project profiles may bind the tool (MVP: `astro_repo`).
+- Brief `identity.stack` / `identity.profile` and `migration.allowedProfiles` declare which project profiles may bind the tool.
+- Load `references/stacks/<stack>.md` before interview (created by new-stack).
 - Assignment (`PUT .../capabilities`) enforces `projects.profile ∈ allowed_profiles`.
 - Dashboard Tools assignment only lists enrollments with matching `projectProfile`.
 - Scaffolding registers the capability; operators enable it per compatible client after `pnpm db:migrate`.
@@ -30,6 +31,10 @@
 12. **Hardcoded capabilityVersion: 1** — after a catalog bump, `graphVersionForCapability` / `getTool(id, 1)` and request_versions inserts must use the definition version or omit version for latest. Symptom: `Unknown tool <id>@1` on plan confirm. See `post-ship-ops.md` §7.
 13. **Shared destructive client copy** — `renderDeleteAdminPendingNotice` / completion notices must pass `contentKind: 'blog' | 'portfolio'`; never reuse article wording for portfolio deletes.
 14. **Shared port scope creep** — never widen a shared GitHub/OpenAI/Vercel factory default for one tool (ADR-0042). Catalog sync declares `parameters.catalogScope: blog | portfolio`; `createGitHubContentCatalogPort` requires non-empty `contentKinds` via `createCapabilityCatalogPort` / `catalogContentKindsForRuntimeKind`. If semantics or side effects diverge (ingress persist vs execute ephemeral), fork `nodeKind` / `node.id` instead of editing a shared kind for one tool only.
+15. **Hardcoded client origin / paths in shared code** — never bake `webbin.com.mx`, `/articulos`, or one tenant’s CMS routes into shared Telegram guidance, delete production-origin helpers, or Vercel wait defaults. Resolve `deployment.productionOrigin` and route prefixes from the frozen manifest (ADR-0048). Webbin-only layouts belong in the `astro_repo` builder or customization markdown.
+16. **Skip stack contract** — create-tool/test-tool must load `references/stacks/<stack>.md` (emitted by new-stack). Orbitype tools also follow `docs/guides/astro-orbitype-tool-implementation.md`.
+17. **Stale Orbitype manifest** — after `editablePaths`, `routePrefix`, or `productionOrigin` changes, rematerialize and verify fields; treat rematerialize noop as failure if the field is still missing.
+18. **Orbitype CMS invent columns / retry loops** — match real CMS schema; map SQL 4xx to `provider_final`; use stable recovery outbox keys.
 
 ## Destructive checklist (ADR-0040 gate)
 

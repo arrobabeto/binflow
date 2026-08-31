@@ -3,6 +3,7 @@ import { createHash } from 'node:crypto';
 import {
   projectBudgetPolicySchema,
   projectManifestSchema,
+  webbinPilotBinding,
   type EnrollmentConfiguration,
   type GlobalProfileSummary,
   type ProjectManifest,
@@ -18,6 +19,12 @@ export const astroRepoGlobalProfile = {
   version: 'astro_repo@1',
 } as const satisfies GlobalProfileSummary;
 
+export const astroOrbitypeGlobalProfile = {
+  id: 'astro_orbitype',
+  supportedLocales: ['en', 'es', 'de'],
+  version: 'astro_orbitype@1',
+} as const satisfies GlobalProfileSummary;
+
 export const webbinBudgetDefaults = {
   maxEstimatedCostCentsPerDay: 2_000,
   maxEstimatedCostCentsPerRequest: 500,
@@ -25,6 +32,36 @@ export const webbinBudgetDefaults = {
   maxRequestsPerDay: 10,
   maxTokensPerRequest: 120_000,
 } as const;
+
+/** Normalize enrollment productionDomain to a stable origin (no trailing slash). */
+export const normalizeProductionOrigin = (value: string): string => {
+  const url = new URL(value);
+  if (url.protocol !== 'https:')
+    throw new DomainError(
+      'validation_error',
+      'Production origin must use HTTPS.',
+      { code: 'production_origin_invalid' },
+    );
+  return `https://${url.host}`;
+};
+
+export const resolveManifestProductionOrigin = (
+  configuration: EnrollmentConfiguration,
+  profile: 'astro_repo' | 'astro_orbitype',
+): string => {
+  if (
+    configuration.productionDomain !== undefined &&
+    configuration.productionDomain.trim().length > 0
+  )
+    return normalizeProductionOrigin(configuration.productionDomain);
+  if (profile === 'astro_repo')
+    return normalizeProductionOrigin(webbinPilotBinding.productionOrigin);
+  throw new DomainError(
+    'validation_error',
+    'Enrollment productionDomain is required for this profile.',
+    { code: 'production_domain_required' },
+  );
+};
 
 export type VerifiedManifestBindings = Readonly<{
   github: Readonly<{
@@ -43,6 +80,7 @@ export type VerifiedManifestBindings = Readonly<{
 export type BuildManifestInput = Readonly<{
   configuration: EnrollmentConfiguration;
   id: string;
+  profile: 'astro_repo' | 'astro_orbitype';
   projectId: string;
   projectKey: string;
   tenantKey: string;
@@ -145,14 +183,20 @@ const assertVerifiedBindings = (bindings: VerifiedManifestBindings): void => {
 export const buildProjectManifest = (
   input: BuildManifestInput,
 ): ProjectManifest => {
+  if (input.profile === 'astro_orbitype')
+    return buildAstroOrbitypeManifest(input);
   if (input.tenantKey !== 'webbin' || input.projectKey !== 'webbin')
     throw new DomainError(
       'policy_denied',
-      'Only the Webbin pilot manifest is supported in the first MVP.',
+      'Only the Webbin pilot manifest is supported for astro_repo.',
       { code: 'project_manifest_not_supported' },
     );
   assertWebbinConfiguration(input.configuration);
   assertVerifiedBindings(input.verifiedBindings);
+  const productionOrigin = resolveManifestProductionOrigin(
+    input.configuration,
+    'astro_repo',
+  );
 
   const enabledCapabilities = resolveProjectCapabilityBindings(
     input.configuration,
@@ -184,6 +228,7 @@ export const buildProjectManifest = (
     globalProfileVersion: astroRepoGlobalProfile.version,
     enabledCapabilities: [...enabledCapabilities],
     portfolioEditablePaths: [...portfolioEditablePaths],
+    productionOrigin,
     projectId: input.projectId,
     requiredContentLocales: ['es', 'en'],
     slugLocale: 'es',
@@ -305,6 +350,7 @@ export const buildProjectManifest = (
     defaultContentLocale: 'es',
     deployment: {
       previewMode: 'git_integration',
+      productionOrigin,
       projectId: input.verifiedBindings.vercel.projectId,
       protectionMode: 'vercel_auth',
       provider: 'vercel',
@@ -333,6 +379,156 @@ export const buildProjectManifest = (
     translationPolicy: 'always_translate',
     validatedAt: input.validatedAt.toISOString(),
     validationProfileId: 'webbin-astro-repo@1',
+    version: input.version,
+  });
+};
+
+const buildAstroOrbitypeManifest = (
+  input: BuildManifestInput,
+): ProjectManifest => {
+  if (
+    input.configuration.budgetPolicy === undefined ||
+    input.configuration.clientConversationLocale === undefined ||
+    input.configuration.contentLocales === undefined ||
+    input.configuration.defaultContentLocale === undefined ||
+    input.configuration.requiredLocales === undefined ||
+    input.configuration.slugLocale === undefined ||
+    input.configuration.translationPolicy === undefined
+  ) {
+    throw new DomainError(
+      'validation_error',
+      'astro_orbitype enrollment configuration is incomplete.',
+      { code: 'configuration_incomplete' },
+    );
+  }
+
+  const enabledCapabilities = resolveProjectCapabilityBindings(
+    input.configuration,
+    { allowEmpty: true },
+  );
+  const contentLocales = [...input.configuration.contentLocales];
+  const requiredContentLocales = [...input.configuration.requiredLocales];
+  if (
+    !contentLocales.includes(input.configuration.defaultContentLocale) ||
+    !contentLocales.includes(input.configuration.slugLocale) ||
+    requiredContentLocales.some((locale) => !contentLocales.includes(locale))
+  ) {
+    throw new DomainError(
+      'validation_error',
+      'astro_orbitype locale configuration is inconsistent.',
+      { code: 'locale_contract_invalid' },
+    );
+  }
+  if (
+    contentLocales.length === 1 &&
+    input.configuration.translationPolicy !== 'none'
+  ) {
+    throw new DomainError(
+      'policy_denied',
+      'Monolingual projects require translation policy none.',
+      { code: 'translation_policy_monolingual' },
+    );
+  }
+  if (
+    contentLocales.length > 1 &&
+    input.configuration.translationPolicy === 'none'
+  ) {
+    throw new DomainError(
+      'policy_denied',
+      'Multilingual projects cannot use translation policy none.',
+      { code: 'translation_policy_multilingual' },
+    );
+  }
+  const collections = Object.fromEntries(
+    contentLocales.map((locale) => [
+      locale,
+      {
+        directory: `src/content/blog-${locale}`,
+        // Bistro-style Astro+Orbitype sites render posts at /posts/{id}/{slug}.
+        routePrefix: '/posts',
+      },
+    ]),
+  );
+  const productionOrigin = resolveManifestProductionOrigin(
+    input.configuration,
+    'astro_orbitype',
+  );
+
+  const dependencyDocument = {
+    budgetPolicy: input.configuration.budgetPolicy,
+    clientConversationLocale: input.configuration.clientConversationLocale,
+    contentLocales,
+    defaultContentLocale: input.configuration.defaultContentLocale,
+    enabledCapabilities: [...enabledCapabilities],
+    globalProfileVersion: astroOrbitypeGlobalProfile.version,
+    productionOrigin,
+    projectId: input.projectId,
+    requiredContentLocales,
+    slugLocale: input.configuration.slugLocale,
+    translationPolicy: input.configuration.translationPolicy,
+    verifiedBindings: input.verifiedBindings,
+  };
+  const fingerprint = manifestFingerprint(dependencyDocument);
+  const [owner, name] = input.verifiedBindings.github.repository.split('/');
+  if (owner === undefined || name === undefined)
+    throw new DomainError(
+      'validation_error',
+      'Verified GitHub repository identity is malformed.',
+      { code: 'repository_identity_invalid' },
+    );
+
+  return projectManifestSchema.parse({
+    budgetPolicy: input.configuration.budgetPolicy,
+    content: {
+      blockedPaths: ['cms/system/**', '.github/**', 'astro.config.mjs', 'package.json'],
+      collections,
+      editablePaths: [
+        'cms/collections/**',
+        'src/content/blog-en/*.md',
+        'src/content/blog-es/*.md',
+        'src/content/blog-de/*.md',
+        'public/images/blog/*.avif',
+        'public/images/blog/*.jpg',
+      ],
+      frontmatterFields: ['title', 'titulo', 'description', 'descripcion'],
+      imageDirectory: 'public/images/blog',
+      publicationTargets: ['github', 'orbitype'],
+      source: 'orbitype',
+    },
+    contentLocales,
+    conversationLocale: input.configuration.clientConversationLocale,
+    defaultContentLocale: input.configuration.defaultContentLocale,
+    deployment: {
+      previewMode: 'git_integration',
+      productionOrigin,
+      projectId: input.verifiedBindings.vercel.projectId,
+      protectionMode: 'vercel_auth',
+      provider: 'vercel',
+      ...(input.verifiedBindings.vercel.teamId === undefined
+        ? {}
+        : { teamId: input.verifiedBindings.vercel.teamId }),
+    },
+    enabledCapabilities: [...enabledCapabilities],
+    fingerprint,
+    globalProfileVersion: astroOrbitypeGlobalProfile.version,
+    graphVersion: 'stacks/astro-orbitype@0',
+    id: input.id,
+    profile: 'astro_orbitype',
+    projectId: input.projectId,
+    repository: {
+      branchPattern: `bot/${input.projectKey}/{capability}/{request-id}-{slug}`,
+      githubInstallationId: input.verifiedBindings.github.installationId,
+      name,
+      owner,
+      productionBranch: input.verifiedBindings.github.defaultBranch,
+    },
+    requiredContentLocales,
+    rulesVersion: 'astro-orbitype-content@0',
+    slugLocale: input.configuration.slugLocale,
+    status: 'validated',
+    translationPolicy: input.configuration.translationPolicy,
+    validatedAt: input.validatedAt.toISOString(),
+    validationProfileId: 'astro-orbitype@1',
     version: input.version,
   });
 };

@@ -21,7 +21,26 @@ const kindOptions: { label: string; value: Kind }[] = [
   { label: 'Telegram client bot', value: 'telegram-client' },
   { label: 'GitHub App', value: 'github-app' },
   { label: 'Vercel', value: 'vercel' },
+  { label: 'Orbitype API', value: 'orbitype-api' },
 ];
+
+const apiErrorMessage = (error: unknown, fallback: string): string => {
+  if (
+    error !== null &&
+    typeof error === 'object' &&
+    'data' in error &&
+    error.data !== null &&
+    typeof error.data === 'object' &&
+    'error' in error.data &&
+    error.data.error !== null &&
+    typeof error.data.error === 'object' &&
+    'message' in error.data.error &&
+    typeof error.data.error.message === 'string'
+  )
+    return error.data.error.message;
+  if (error instanceof Error && error.message.length > 0) return error.message;
+  return fallback;
+};
 const { data, refresh, status } = await useFetch<{
   items: CredentialSummary[];
   nextCursor: string | null;
@@ -51,8 +70,12 @@ const form = reactive({
   alias: '',
   apiKey: '',
   appId: '',
+  baseUrl: 'https://core.orbitype.com/api/sql/v1',
   botToken: '',
   clientId: '',
+  defaultBranch: 'main',
+  expectedProductionBranch: 'main',
+  expectedRepository: '',
   expectedUsername: '',
   kind: 'openai' as Kind,
   privateKey: '',
@@ -116,6 +139,22 @@ const secretPayload = (): IntegrationCandidateInput => {
       projectKey: form.projectKey,
       tenantKey: form.tenantKey,
       webhookSecret: form.webhookSecret,
+      ...(form.tenantKey === 'webbin' && form.projectKey === 'webbin'
+        ? {}
+        : {
+            defaultBranch: form.defaultBranch,
+            expectedRepository: form.expectedRepository,
+          }),
+    };
+  }
+  if (form.kind === 'orbitype-api') {
+    return {
+      alias: form.alias,
+      apiKey: form.apiKey,
+      baseUrl: form.baseUrl,
+      kind: form.kind,
+      projectKey: form.projectKey,
+      tenantKey: form.tenantKey,
     };
   }
   return {
@@ -126,6 +165,12 @@ const secretPayload = (): IntegrationCandidateInput => {
     ...(form.teamId.trim() === '' ? {} : { teamId: form.teamId }),
     tenantKey: form.tenantKey,
     token: form.token,
+    ...(form.tenantKey === 'webbin' && form.projectKey === 'webbin'
+      ? {}
+      : {
+          expectedProductionBranch: form.expectedProductionBranch,
+          expectedRepository: form.expectedRepository,
+        }),
   };
 };
 
@@ -165,10 +210,10 @@ const createCandidate = async () => {
       'Credential candidate saved. Verify it before it becomes active.';
     await refresh();
   } catch (error) {
-    errorMessage.value =
-      error instanceof Error
-        ? error.message
-        : 'The credential candidate could not be saved.';
+    errorMessage.value = apiErrorMessage(
+      error,
+      'The credential candidate could not be saved.',
+    );
   } finally {
     clearSecrets();
     saving.value = false;
@@ -183,6 +228,7 @@ const verifyCredential = async (credential: CredentialSummary) => {
     const result = await $fetch<{
       credential: CredentialSummary;
       errorCategory?: string;
+      errorDetail?: string;
       outcome: 'success' | 'failed';
     }>(`/api/v1/admin/integrations/${credential.id}/verify`, {
       body: {},
@@ -195,11 +241,13 @@ const verifyCredential = async (credential: CredentialSummary) => {
     successMessage.value =
       result.outcome === 'success'
         ? `${credential.alias} is verified and active.`
-        : `Verification failed: ${result.errorCategory ?? 'provider error'}.`;
+        : `Verification failed: ${result.errorDetail ?? result.errorCategory ?? 'provider error'}`;
     await refresh();
   } catch (error) {
-    errorMessage.value =
-      error instanceof Error ? error.message : 'Verification could not run.';
+    errorMessage.value = apiErrorMessage(
+      error,
+      'Verification could not run.',
+    );
   } finally {
     busyId.value = undefined;
   }
@@ -224,8 +272,10 @@ const revoke = async (credential: CredentialSummary) => {
     successMessage.value = `${credential.alias} was revoked.`;
     await refresh();
   } catch (error) {
-    errorMessage.value =
-      error instanceof Error ? error.message : 'Revocation could not complete.';
+    errorMessage.value = apiErrorMessage(
+      error,
+      'Revocation could not complete.',
+    );
   } finally {
     busyId.value = undefined;
   }
@@ -397,7 +447,11 @@ const revoke = async (credential: CredentialSummary) => {
               <UInput v-model="form.tenantKey" class="w-full" required />
             </UFormField>
             <UFormField
-              v-if="form.kind === 'github-app' || form.kind === 'vercel'"
+              v-if="
+                form.kind === 'github-app' ||
+                form.kind === 'vercel' ||
+                form.kind === 'orbitype-api'
+              "
               label="Project key"
               required
             >
@@ -442,6 +496,25 @@ const revoke = async (credential: CredentialSummary) => {
               <UFormField label="Client ID" required>
                 <UInput v-model="form.clientId" class="w-full" required />
               </UFormField>
+              <UFormField
+                v-if="!(form.tenantKey === 'webbin' && form.projectKey === 'webbin')"
+                label="Expected repository (owner/name)"
+                required
+              >
+                <UInput
+                  v-model="form.expectedRepository"
+                  placeholder="owner/repo"
+                  class="w-full"
+                  required
+                />
+              </UFormField>
+              <UFormField
+                v-if="!(form.tenantKey === 'webbin' && form.projectKey === 'webbin')"
+                label="Default branch"
+                required
+              >
+                <UInput v-model="form.defaultBranch" class="w-full" required />
+              </UFormField>
               <UFormField label="Private key (.pem)" required>
                 <input
                   :key="fileInputKey"
@@ -475,6 +548,42 @@ const revoke = async (credential: CredentialSummary) => {
               </UFormField>
               <UFormField label="Team ID (optional)">
                 <UInput v-model="form.teamId" class="w-full" />
+              </UFormField>
+              <UFormField
+                v-if="!(form.tenantKey === 'webbin' && form.projectKey === 'webbin')"
+                label="Expected repository (owner/name)"
+                required
+              >
+                <UInput
+                  v-model="form.expectedRepository"
+                  placeholder="owner/repo"
+                  class="w-full"
+                  required
+                />
+              </UFormField>
+              <UFormField
+                v-if="!(form.tenantKey === 'webbin' && form.projectKey === 'webbin')"
+                label="Production branch"
+                required
+              >
+                <UInput
+                  v-model="form.expectedProductionBranch"
+                  class="w-full"
+                  required
+                />
+              </UFormField>
+            </template>
+            <template v-if="form.kind === 'orbitype-api'">
+              <UFormField label="SQL API base URL" required>
+                <UInput v-model="form.baseUrl" class="w-full" required />
+              </UFormField>
+              <UFormField label="API key" required>
+                <UInput
+                  v-model="form.apiKey"
+                  type="password"
+                  class="w-full"
+                  required
+                />
               </UFormField>
             </template>
             <UButton type="submit" :loading="saving">Save candidate</UButton>

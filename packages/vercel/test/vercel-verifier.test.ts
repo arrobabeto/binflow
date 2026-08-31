@@ -211,7 +211,7 @@ describe('Vercel credential verifier', () => {
       verifier.verify(
         createInput({
           expectedProductionBranch: 'develop',
-          expectedRepository: 'arrobabeto/other',
+          expectedRepository: 'arrobabeto/webbin',
           projectId: 'prj_webbin',
           teamId: 'team_binflow',
         }),
@@ -693,5 +693,49 @@ describe('production hostname selection', () => {
     expect(selectClientProductionOrigin('https://webbin.com.mx/')).toBe(
       'https://webbin.com.mx',
     );
+  });
+
+  it('builds production route URLs from an enrolled client origin', async () => {
+    const base = createInput();
+    const fetch = vi.fn<typeof globalThis.fetch>(async (input) => {
+      const url = new URL(String(input));
+      if (url.pathname.endsWith('/domains')) {
+        return new Response(JSON.stringify({ domains: [] }), { status: 200 });
+      }
+      return new Response(
+        JSON.stringify({
+          deployments: [
+            {
+              createdAt: 1_787_000_000_000,
+              meta: { githubCommitSha: 'merge-sha' },
+              name: 'bistro',
+              readyState: 'READY',
+              target: 'production',
+              uid: 'production-bistro',
+              url: 'bistro-prod.vercel.app',
+            },
+          ],
+        }),
+      );
+    });
+    const port = createVercelDeploymentPort({
+      credential: { ...base.credential, status: 'active' },
+      fetch,
+      masterKey: base.masterKey,
+      pollIntervalMs: 1,
+      productionOrigin: 'https://www.bistrozurlinde.ch/',
+      timeoutMs: 100,
+    });
+    await expect(
+      port.waitForProduction({
+        mergeCommitSha: 'merge-sha',
+        routes: ['/posts/Gbw787/saisonale-men-karte'],
+      }),
+    ).resolves.toMatchObject({
+      urls: {
+        '/posts/Gbw787/saisonale-men-karte':
+          'https://www.bistrozurlinde.ch/posts/Gbw787/saisonale-men-karte',
+      },
+    });
   });
 });

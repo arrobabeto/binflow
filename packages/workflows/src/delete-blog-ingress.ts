@@ -5,7 +5,7 @@ import {
 } from '@binflow/contracts';
 import {
   composeBlogArticleUrl,
-  defaultDeleteBlogProductionOrigin,
+  resolveDeleteBlogProductionOrigin,
   parseSlugFromBlogUrl,
   resolveDeleteTarget,
   type CatalogItem,
@@ -63,7 +63,7 @@ export const resolveDeleteBlogTargetForPlan = (
   closedFacts: Record<string, unknown>,
 ): ReturnType<typeof resolveDeleteTarget> =>
   resolveDeleteTarget(catalog, manifest, {
-    productionOrigin: defaultDeleteBlogProductionOrigin(),
+    productionOrigin: resolveDeleteBlogProductionOrigin(manifest),
     ...(typeof closedFacts.targetTitle === 'string'
       ? { targetTitle: closedFacts.targetTitle }
       : {}),
@@ -185,4 +185,4 @@ export const previewDeleteBlogUrl = (
   manifest: ProjectManifest,
   slug: string,
 ): string =>
-  composeBlogArticleUrl(defaultDeleteBlogProductionOrigin(), manifest, slug);
+  composeBlogArticleUrl(resolveDeleteBlogProductionOrigin(manifest), manifest, slug);

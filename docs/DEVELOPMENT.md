@@ -15,7 +15,9 @@
 A change is ready for implementation when:
 
 - Goal, user and success criteria are documented (use
-  [new-feature](../.cursor/skills/new-feature/SKILL.md) for non-trivial features).
+  [new-feature](../.cursor/skills/new-feature/SKILL.md) for non-trivial features;
+  [new-stack](../.cursor/skills/new-stack/SKILL.md) for new project profiles /
+  stacks — preparation only, with a readiness handoff).
 - In/out-of-scope behavior is explicit.
 - Public contracts and state transitions are defined.
 - Security, tenancy, retention and approval impact is reviewed.
@@ -46,7 +48,8 @@ Documentation may not be deferred to a follow-up issue or PR.
 | Skill | Role |
 |-------|------|
 | [`.cursor/skills/new-feature/`](../.cursor/skills/new-feature/SKILL.md) | Documentation-first **governance gate**: classify feature, impact vs docs/ADRs/tools, STOP for rule changes, write specs/ADRs/changelog, hand off. No product code. |
-| [`.cursor/skills/create-tool/`](../.cursor/skills/create-tool/SKILL.md) | New **capability** pipeline (brief → scaffold → implement → post-ship). Run after new-feature when stack/ADR/SCOPE may change. |
+| [`.cursor/skills/new-stack/`](../.cursor/skills/new-stack/SKILL.md) | **Stack/profile preparation**: interview, impact, approval STOP, spec/ADR/docs, readiness handoff for a later impl session. No product code. |
+| [`.cursor/skills/create-tool/`](../.cursor/skills/create-tool/SKILL.md) | New **capability** pipeline (brief → scaffold → implement → post-ship). Run after new-stack/new-feature when profile/ADR/SCOPE may change. |
 | [`.cursor/skills/test-tool/`](../.cursor/skills/test-tool/SKILL.md) | Post-ship client-realistic audit |
 | [`.cursor/skills/edit-node-config/`](../.cursor/skills/edit-node-config/SKILL.md) | Edit declarative node config |
 

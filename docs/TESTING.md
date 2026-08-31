@@ -35,7 +35,7 @@
   path policy, true AVIF validation, budget ceilings and approval invalidation.
 - Budget, retention, idempotency and pairing-token rules.
 - Global-profile narrowing, Webbin ES/EN/source/slug invariants and rejection of
-  German or `ask_each_action` for the pilot.
+  German, monolingual `none`, or `ask_each_action` for the pilot.
 - Secret-envelope round trip and authentication failure.
 - KEK path/length/permission validation and non-echoed CLI input enforcement.
 - GitHub PEM import rejects repository-local, non-regular, oversized or non-`0600` files.
@@ -117,6 +117,14 @@
 
 - Telegram event → identity → request/outbox/queue.
 - Dashboard onboarding → validation → activation → pairing.
+- `astro_orbitype` enrollment: Orbitype API-key verify is required; activation
+  may succeed with an empty capability catalog (ADR-0045).
+- `create_blog_orbitype` dual-write (ADR-0047): GitHub draft then Orbitype CMS
+  draft, Vercel preview URLs at `/posts/{draftId}/{titleSlug}`, merge_github
+  then publish_orbitype; assignment only for `astro_orbitype` projects (Bistro
+  pilot). Preview Astro `PUBLIC_*` env must include Production **and** Preview.
+  Persisting preview evidence must tolerate GitHub PR numbers that already
+  exist on another project's `pull_requests` row (unique is per `project_id`).
 - Plan confirmation → graph resume.
 - Catalog sync → similarity decision.
 - Graph → fake GitHub PR → fake deployment → approval → merge.

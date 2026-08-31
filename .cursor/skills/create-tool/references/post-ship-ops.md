@@ -58,12 +58,19 @@ rematerialize or manual dashboard assignment.
 
 ## 5. Manifest rematerialize
 
-When `editablePaths` or portfolio paths change in
-[`packages/manifests`](../../../packages/manifests/src/index.ts):
+When `editablePaths`, portfolio paths, `routePrefix`, or `productionOrigin`
+change in [`packages/manifests`](../../../packages/manifests/src/index.ts):
 
 - Fingerprint changes → enrolled projects need a bumped manifest.
-- Use or adapt scripts under `packages/tools/scripts/refresh-webbin-manifest-*.ts`.
+- Use or adapt scripts under `packages/tools/scripts/refresh-*-manifest-*.ts`
+  (Webbin: `refresh-webbin-manifest-*.ts`; Bistro Orbitype:
+  `refresh-bistro-manifest-blog-paths.ts`).
 - Copy locale/budget/bindings from superseded manifest version.
+- After rematerialize, **verify** the new document actually contains the
+  changed fields (noop is a failure if `productionOrigin` / paths still wrong).
+- First live publish: Telegram production URL host must equal enrollment
+  `productionDomain` (ADR-0048) — never a hardcoded Webbin host for non-Webbin
+  clients.
 
 ## 6. Pilot customization (Webbin)
 

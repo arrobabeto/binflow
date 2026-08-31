@@ -12,10 +12,14 @@ changes, or when validating a client customization upload.
 1. Read `docs/README.md`, the tool spec (`docs/specs/<tool>.md`), and
    [`docs/TESTING.md`](../../../docs/TESTING.md). Include ADR-0042 when the
    tool syncs a content catalog (`catalog_sync` / shared GitHub port).
-2. Read [`references/discovery-checklist.md`](references/discovery-checklist.md)
+2. Infer or ask for **`stack`** (from `tool.yaml` / brief). Load
+   [`../create-tool/references/stacks/<stack>.md`](../create-tool/references/stacks/README.md).
+   For `astro-orbitype`, also use
+   [`docs/guides/astro-orbitype-tool-implementation.md`](../../../docs/guides/astro-orbitype-tool-implementation.md).
+3. Read [`references/discovery-checklist.md`](references/discovery-checklist.md)
    before generating scenarios.
-3. Do **not** edit the attached plan file.
-4. Do **not** auto-modify product code unless the user asks for fixes after the audit.
+4. Do **not** edit the attached plan file.
+5. Do **not** auto-modify product code unless the user asks for fixes after the audit.
 
 ## Invocation parameters (required before Phase 1)
 
@@ -23,9 +27,10 @@ Ask or infer these before running:
 
 | Parameter | Values | Default |
 |-----------|--------|---------|
-| **`toolId`** | `create_blog_draft`, `delete_blog_draft`, `create_project_astro`, … | required |
+| **`toolId`** | `create_blog_draft`, `delete_blog_draft`, `create_project_astro`, `create_blog_orbitype`, … | required |
+| **`stack`** | `astro-repo`, `astro-orbitype`, … | infer from tool.yaml; required |
 | **`auditMode`** | `base` \| `customized` | `base` |
-| **`clientKey`** | e.g. `webbin` | required if `auditMode=customized` |
+| **`clientKey`** | e.g. `webbin`, `bistro` | required if `auditMode=customized` |
 | **`locale`** | `es` \| `en` \| `de` | `es` |
 | **`depth`** | `smoke` \| `standard` \| `deep` | `standard` |
 | **`environment`** | `offline` \| `local-live` | `local-live` if stack available; else `offline` |
@@ -130,10 +135,14 @@ uses them as baseline and adds qualitative client-realistic judgment.
 - Replace Bugbot, security review, or conformance suite.
 - Judge customization changes that widen deletion scope, paths, or approvals (ADR-0030).
 - Expose repo paths, SHAs, or raw UUIDs in client-facing audit copy examples.
+- Pass audit if Telegram production button host ≠ enrolled `productionDomain`
+  (ADR-0048) or preview routes ignore the stack contract.
+- Skip loading the stack contract under `create-tool/references/stacks/`.
 - Edit the attached plan file.
 
 ## References
 
+- [`../create-tool/references/stacks/`](../create-tool/references/stacks/README.md) — per-stack contracts
 - [`references/discovery-checklist.md`](references/discovery-checklist.md)
 - [`references/scenario-generators.md`](references/scenario-generators.md)
 - [`references/verification-rubric.md`](references/verification-rubric.md)
@@ -144,3 +153,4 @@ uses them as baseline and adds qualitative client-realistic judgment.
 - [`../create-tool/references/graph-by-mutation.md`](../create-tool/references/graph-by-mutation.md)
 - [`../create-tool/references/layers.md`](../create-tool/references/layers.md)
 - [`../create-tool/references/post-ship-ops.md`](../create-tool/references/post-ship-ops.md)
+- [`docs/guides/astro-orbitype-tool-implementation.md`](../../../docs/guides/astro-orbitype-tool-implementation.md)

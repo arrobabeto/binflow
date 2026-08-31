@@ -1,5 +1,11 @@
 import { DomainError } from '@binflow/domain';
 import type { BlogGenerationPort, CategoryDecision } from '@binflow/blog';
+import {
+  assertGeneratedBundleMatchesContentLocales,
+  buildBlogGenerateLocaleInstructions,
+  isMonolingualContentContract,
+  parseGeneratedBlogBundleForLocaleContract,
+} from '@binflow/blog';
 import type { ProjectGenerationPort } from '@binflow/projects';
 import {
   adaptedGeneratedBlogBundleSchema,
@@ -554,6 +560,7 @@ export const createOpenAIBlogGenerationPort = (
       category,
       customizationSection,
       editorial,
+      localeContract,
       request,
     }) {
       return withClient(async (client) => {
@@ -576,15 +583,36 @@ export const createOpenAIBlogGenerationPort = (
             title: item.title,
           })),
         );
-        const requestPayload = `${requestText(request, category, composed.userRules)}\nConfigFingerprint:${composed.fingerprint}\nCurrent catalog summary:\n${catalogSummary}`;
-        const parseBundle = (parsed: unknown) => {
-          const result = adaptedGeneratedBlogBundleSchema.safeParse(parsed);
-          if (!result.success)
+        const localeInstructions =
+          localeContract === undefined
+            ? ''
+            : `\n\n${buildBlogGenerateLocaleInstructions(localeContract)}`;
+        const requestPayload = `${requestText(request, category, composed.userRules)}\nConfigFingerprint:${composed.fingerprint}\nCurrent catalog summary:\n${catalogSummary}${
+          localeContract === undefined
+            ? ''
+            : `\nLocaleContract:${JSON.stringify(localeContract)}`
+        }`;
+        const monolingual =
+          localeContract !== undefined &&
+          isMonolingualContentContract(localeContract);
+        const parseBundle = (parsed: unknown): GeneratedBlogBundle => {
+          let bundle: GeneratedBlogBundle;
+          try {
+            bundle = parseGeneratedBlogBundleForLocaleContract(
+              parsed,
+              localeContract,
+            );
+          } catch (error) {
+            if (monolingual) throw error;
             throw new DomainError(
               'provider_retryable',
               'English article fields copied the Spanish source.',
+              { code: 'english_copies_spanish' },
             );
-          return result.data;
+          }
+          if (localeContract !== undefined)
+            assertGeneratedBundleMatchesContentLocales(bundle, localeContract);
+          return bundle;
         };
         const run = async (system: string) => {
           const startedAt = Date.now();
@@ -625,16 +653,46 @@ export const createOpenAIBlogGenerationPort = (
           });
           return response.output_parsed;
         };
-        const system = composed.system;
-        const first = adaptedGeneratedBlogBundleSchema.safeParse(
-          await run(system),
-        );
-        if (first.success) return first.data;
-        return parseBundle(
-          await run(
-            `${system}\n\nRetry: write a distinct English titulo, seoTitulo and headings; do not reuse the Spanish title or H2/H3 text.`,
-          ),
-        );
+        const system = `${composed.system}${localeInstructions}`;
+        try {
+          return parseBundle(await run(system));
+        } catch (error) {
+          const code =
+            error instanceof DomainError ? error.metadata.code : undefined;
+          const localeMismatch =
+            code === 'content_locale_mismatch' ||
+            code === 'content_locale_conversation_bleed' ||
+            code === 'content_locale_unverified';
+          const englishCopy = code === 'english_copies_spanish';
+          if (
+            error instanceof DomainError &&
+            error.category === 'provider_retryable' &&
+            localeMismatch
+          ) {
+            const expected =
+              localeContract?.defaultContentLocale ??
+              localeContract?.contentLocales[0] ??
+              'de';
+            return parseBundle(
+              await run(
+                `${system}\n\nRetry HARD: rewrite the primary article entirely in ${expected}. Schema "es" fields must contain ${expected} prose only. Conversation language must not appear in titulo/body. Keep "en" as a short distinct English synopsis.`,
+              ),
+            );
+          }
+          if (
+            error instanceof DomainError &&
+            error.category === 'provider_retryable' &&
+            englishCopy &&
+            !monolingual
+          ) {
+            return parseBundle(
+              await run(
+                `${system}\n\nRetry: write a distinct English titulo, seoTitulo and headings; do not reuse the Spanish title or H2/H3 text.`,
+              ),
+            );
+          }
+          throw error;
+        }
       });
     },
     async generateImage(prompt) {

@@ -1,0 +1,6 @@
+kind: effect
+label: Create Orbitype CMS draft
+nodeKind: publication.create_orbitype_draft@1
+acceptsClientCustomization: false
+permissions:
+  - orbitype:content:write

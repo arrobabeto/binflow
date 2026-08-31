@@ -364,4 +364,120 @@ describe('GitHub repository publication port', () => {
     ).resolves.toBeUndefined();
     expect(statusCalls).toEqual([]);
   });
+
+  it('publishes against the verified connection repository, not only Webbin', async () => {
+    const { credential, masterKey } = createCredential();
+    credential.connection = {
+      configuration: {
+        defaultBranch: 'main',
+        expectedRepository: 'arrobabeto/bistro',
+      },
+      id: 'connection-bistro',
+      projectId: 'project-bistro',
+      tenantId: 'tenant-bistro',
+    };
+    const seen: string[] = [];
+    const fetch = vi.fn<typeof globalThis.fetch>(async (input, init) => {
+      const url = new URL(input instanceof Request ? input.url : String(input));
+      const method =
+        init?.method ?? (input instanceof Request ? input.method : 'GET');
+      seen.push(`${method} ${url.pathname}`);
+      const json = (value: unknown, status = 200) =>
+        new Response(JSON.stringify(value), {
+          headers: { 'content-type': 'application/json' },
+          status,
+        });
+      if (
+        method === 'POST' &&
+        url.pathname === '/app/installations/456/access_tokens'
+      ) {
+        return json({
+          expires_at: '2099-01-01T00:00:00Z',
+          permissions: publicationPermissions,
+          repositories: [{ full_name: 'arrobabeto/bistro', id: 789 }],
+          repository_ids: [789],
+          token: 'fixture-publication-token',
+        });
+      }
+      if (
+        method === 'GET' &&
+        url.pathname === '/repos/arrobabeto/bistro/pulls'
+      ) {
+        return json([]);
+      }
+      if (method === 'GET' && url.pathname.includes('/git/ref/heads')) {
+        return json({ object: { sha: 'base-sha-bistro-mainaaaaaaaaaaaaaa' } });
+      }
+      if (
+        method === 'POST' &&
+        url.pathname === '/repos/arrobabeto/bistro/git/refs'
+      ) {
+        return json({ ref: 'refs/heads/bot/bistro/create-blog/req-slug' });
+      }
+      if (
+        method === 'GET' &&
+        url.pathname.includes('/repos/arrobabeto/bistro/contents/')
+      ) {
+        return json({ message: 'Not Found' }, 404);
+      }
+      if (
+        method === 'PUT' &&
+        url.pathname.includes('/repos/arrobabeto/bistro/contents/')
+      ) {
+        return json({ commit: { sha: 'head-sha-bistroaaaaaaaaaaaaaaaaaaaa' } });
+      }
+      if (
+        method === 'POST' &&
+        url.pathname === '/repos/arrobabeto/bistro/pulls'
+      ) {
+        const body = JSON.parse(String(init?.body ?? '{}')) as {
+          base?: string;
+        };
+        expect(body.base).toBe('main');
+        return json({
+          head: { sha: 'head-sha-bistroaaaaaaaaaaaaaaaaaaaa' },
+          html_url: 'https://github.com/arrobabeto/bistro/pull/1',
+          number: 1,
+          state: 'open',
+        });
+      }
+      if (method === 'DELETE' && url.pathname === '/installation/token') {
+        return new Response(null, { status: 204 });
+      }
+      return json({ message: `Unexpected ${method} ${url.pathname}` }, 500);
+    });
+    const port = createGitHubRepositoryPublicationPort({
+      apiBaseUrl: 'https://github.test',
+      credential,
+      fetch,
+      installationId: '456',
+      masterKey,
+      repositoryId: '789',
+    });
+
+    await expect(
+      port.createDraft({
+        branch: 'bot/bistro/create-blog/req-slug',
+        files: [
+          {
+            bytes: new Uint8Array([1]),
+            mime: 'text/markdown',
+            path: 'src/content/blog-de/hello.md',
+            sha256: 'a'.repeat(64),
+          },
+        ],
+        requestId: 'req-bistro',
+        slug: 'hello',
+      }),
+    ).resolves.toMatchObject({
+      headCommitSha: 'head-sha-bistroaaaaaaaaaaaaaaaaaaaa',
+      pullRequestId: '1',
+    });
+    expect(seen.some((entry) => entry.includes('/repos/arrobabeto/bistro/'))).toBe(
+      true,
+    );
+    expect(seen.some((entry) => entry.includes('/repos/arrobabeto/webbin/'))).toBe(
+      false,
+    );
+  });
 });

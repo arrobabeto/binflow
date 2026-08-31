@@ -1,0 +1,13 @@
+command: /create_blog
+description: Creates a blog article for astro_orbitype projects with dual-write
+  to GitHub (Vercel preview) and Orbitype CMS. Locales and translation policy
+  come from the project manifest. Independent writer nodes allow disabling
+  GitHub later.
+displayName: Create blog
+executorId: workflow.create_blog_orbitype@1
+graphVersion: stacks/astro-orbitype/create-blog@1
+id: create_blog_orbitype
+profile: astro_orbitype
+requiresPreview: true
+riskClass: medium
+version: 1
