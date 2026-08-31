@@ -126,6 +126,8 @@ export const createEditTextRequest = async (input: Readonly<{
   database: ScopedDatabase;
   hasCapability: HasCapabilityFn;
   identity: ResolvedIdentity;
+  initialQuery?: string;
+  loadPages?: EditTextPagesLoader;
   reply: ReplyFn;
 }>): Promise<TelegramReply> => {
   if (
@@ -194,7 +196,11 @@ export const createEditTextRequest = async (input: Readonly<{
         label: localeLabel(locale),
         token: await input.createAction(
           input.database,
-          { id: requestId, projectId: input.identity.projectId, tenantId: input.identity.tenantId },
+          {
+            id: requestId,
+            projectId: input.identity.projectId,
+            tenantId: input.identity.tenantId,
+          },
           requestVersionId,
           input.identity.userId,
           `pick_text_locale:${locale}`,
@@ -207,6 +213,32 @@ export const createEditTextRequest = async (input: Readonly<{
       requestId,
       actionTokens,
     );
+  }
+
+  const initialQuery = input.initialQuery?.trim() ?? '';
+  if (initialQuery.length > 0 && input.loadPages !== undefined) {
+    const [fullRequest] = await input.database
+      .select()
+      .from(schema.requests)
+      .where(eq(schema.requests.id, requestId))
+      .limit(1);
+    const [version] = await input.database
+      .select()
+      .from(schema.requestVersions)
+      .where(eq(schema.requestVersions.id, requestVersionId))
+      .limit(1);
+    if (fullRequest !== undefined && version !== undefined) {
+      return continueEditTextCollection({
+        createAction: input.createAction,
+        database: input.database,
+        identity: input.identity,
+        loadPages: input.loadPages,
+        reply: input.reply,
+        request: fullRequest,
+        text: initialQuery,
+        version,
+      });
+    }
   }
 
   return input.reply(

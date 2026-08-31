@@ -29,7 +29,7 @@ export type OrbitypeTextPagesPort = Readonly<{
 
 export type TextEditPatchArtifact = Readonly<{
   candidate: TextEditCandidate;
-  githubPath?: string;
+  githubPath: string;
   newValue: string;
   previewRoute: string;
 }>;
@@ -53,6 +53,10 @@ const CMS_MIRROR_CANDIDATE_PATHS = (slug: string): readonly string[] =>
     `cms/collections/pages/${slug}.json`,
     `cms/collections/page-${slug}.json`,
   ]);
+
+/** Always-writable dual-write path when no existing CMS mirror contains the text. */
+export const fallbackTextEditGithubPath = (slug: string): string =>
+  `cms/collections/pages/${slug}.json`;
 
 const sleep = (milliseconds: number): Promise<void> =>
   new Promise((resolve) => {
@@ -149,6 +153,114 @@ const patchGithubMirrorFile = (
   return content.replace(oldValue, newValue);
 };
 
+export type TextEditGithubDraftFile = Readonly<{
+  bytes: Uint8Array;
+  mime: 'text/plain';
+  path: string;
+  sha256: string;
+}>;
+
+/**
+ * Build the GitHub draft file set for a text edit. Always returns ≥1 file so
+ * createDraft never receives an empty files array (isolated to edit_text).
+ */
+export const buildTextEditGithubDraftFiles = async (input: Readonly<{
+  defaultBranchRef: string;
+  editablePaths: readonly string[];
+  newValue: string;
+  page: OrbitypePageSnapshot;
+  patchedSections: unknown;
+  repository: RepositoryPublicationPort;
+  resolved: TextEditCandidate;
+}>): Promise<Readonly<{ files: readonly TextEditGithubDraftFile[]; path: string }>> => {
+  const githubPath = await resolveGithubMirrorPath(
+    input.repository,
+    input.defaultBranchRef,
+    input.resolved.pageSlug,
+    input.resolved.currentValue,
+    input.editablePaths,
+  );
+  if (githubPath !== undefined) {
+    const existing = await input.repository.readFileAtRef({
+      path: githubPath,
+      ref: input.defaultBranchRef,
+    });
+    if (existing === null)
+      throw new DomainError(
+        'validation_error',
+        'GitHub CMS mirror file is missing.',
+        { code: 'github_pr_failed' },
+      );
+    const updated = patchGithubMirrorFile(
+      new TextDecoder().decode(existing),
+      input.resolved.currentValue,
+      input.newValue,
+    );
+    const bytes = new TextEncoder().encode(updated);
+    return {
+      files: [
+        {
+          bytes,
+          mime: 'text/plain',
+          path: githubPath,
+          sha256: createHash('sha256').update(bytes).digest('hex'),
+        },
+      ],
+      path: githubPath,
+    };
+  }
+
+  const fallbackPath = fallbackTextEditGithubPath(input.resolved.pageSlug);
+  assertEditableCmsPath(fallbackPath, input.editablePaths);
+  const existingFallback = await input.repository.readFileAtRef({
+    path: fallbackPath,
+    ref: input.defaultBranchRef,
+  });
+  let payload: string;
+  if (existingFallback !== null) {
+    const current = new TextDecoder().decode(existingFallback);
+    payload = current.includes(input.resolved.currentValue)
+      ? patchGithubMirrorFile(
+          current,
+          input.resolved.currentValue,
+          input.newValue,
+        )
+      : JSON.stringify(
+          {
+            id: input.page.id,
+            sections: input.patchedSections,
+            slug: input.page.slug,
+            title: input.page.title,
+          },
+          null,
+          2,
+        );
+  } else {
+    payload = JSON.stringify(
+      {
+        id: input.page.id,
+        sections: input.patchedSections,
+        slug: input.page.slug,
+        title: input.page.title,
+      },
+      null,
+      2,
+    );
+  }
+  const bytes = new TextEncoder().encode(payload);
+  return {
+    files: [
+      {
+        bytes,
+        mime: 'text/plain',
+        path: fallbackPath,
+        sha256: createHash('sha256').update(bytes).digest('hex'),
+      },
+    ],
+    path: fallbackPath,
+  };
+};
+
 export class EditTextExecutor {
   public constructor(
     private readonly repository: RepositoryPublicationPort,
@@ -215,43 +327,15 @@ export class EditTextExecutor {
       newValue: input.newValue,
       sectionIndex: resolved.sectionIndex,
     });
-    const githubPath = await resolveGithubMirrorPath(
-      this.repository,
-      input.defaultBranchRef,
-      resolved.pageSlug,
-      resolved.currentValue,
-      input.manifest.content.editablePaths,
-    );
-    const     githubFiles: Array<{
-      bytes: Uint8Array;
-      mime: 'text/plain';
-      path: string;
-      sha256: string;
-    }> = [];
-    if (githubPath !== undefined) {
-      const existing = await this.repository.readFileAtRef({
-        path: githubPath,
-        ref: input.defaultBranchRef,
-      });
-      if (existing === null)
-        throw new DomainError(
-          'validation_error',
-          'GitHub CMS mirror file is missing.',
-          { code: 'github_pr_failed' },
-        );
-      const updated = patchGithubMirrorFile(
-        new TextDecoder().decode(existing),
-        resolved.currentValue,
-        input.newValue,
-      );
-      const bytes = new TextEncoder().encode(updated);
-      githubFiles.push({
-        bytes,
-      mime: 'text/plain',
-        path: githubPath,
-        sha256: createHash('sha256').update(bytes).digest('hex'),
-      });
-    }
+    const githubDraft = await buildTextEditGithubDraftFiles({
+      defaultBranchRef: input.defaultBranchRef,
+      editablePaths: input.manifest.content.editablePaths,
+      newValue: input.newValue,
+      page,
+      patchedSections,
+      repository: this.repository,
+      resolved,
+    });
 
     await input.onStage?.('open_text_edit_pr');
     const branch = input.manifest.repository.branchPattern
@@ -260,7 +344,7 @@ export class EditTextExecutor {
       .replace('{slug}', resolved.pageSlug);
     const publication = await this.repository.createDraft({
       branch,
-      ...(githubFiles.length === 0 ? {} : { files: githubFiles }),
+      files: [...githubDraft.files],
       requestId: input.requestId,
       slug: resolved.pageSlug,
     });
@@ -297,7 +381,7 @@ export class EditTextExecutor {
       deployment,
       patch: {
         candidate: resolved,
-        ...(githubPath === undefined ? {} : { githubPath }),
+        githubPath: githubDraft.path,
         newValue: input.newValue,
         previewRoute,
       },
@@ -366,7 +450,7 @@ export class EditTextExecutor {
       publication: {
         baseCommitSha: input.expectedHeadSha,
         branch: '',
-        files: input.patch.githubPath === undefined ? [] : [input.patch.githubPath],
+        files: [input.patch.githubPath],
         headCommitSha: merged.mergeCommitSha,
         pullRequestId: input.pullRequestId,
         pullRequestUrl: '',
