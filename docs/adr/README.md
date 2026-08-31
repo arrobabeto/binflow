@@ -57,5 +57,6 @@ ADRs preserve why durable decisions exist. Accepted ADRs are binding until a lat
 | [0049](0049-update-menu-orbitype.md)                                 | Update menu PDF for Astro+Orbitype restaurant sites            | Proposed |
 | [0050](0050-admin-telegram-approval-actions.md)                      | Admin Telegram Approve/Reject for AWAITING_ADMIN_APPROVAL      | Accepted |
 | [0051](0051-edit-text-orbitype.md)                                   | Edit page text for Astro + Orbitype (literal copy, preview)    | Proposed |
+| [0052](0052-edit-image-orbitype.md)                                  | Edit site image for Astro + Orbitype (allowlisted slots)       | Proposed |
 
 Use [0000-template.md](0000-template.md) for new decisions.

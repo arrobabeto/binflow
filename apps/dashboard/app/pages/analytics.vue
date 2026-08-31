@@ -13,6 +13,7 @@ import {
   analyticsRangeDetail,
   buildClientCostRows,
   buildToolUsageRows,
+  fetchAllRequestSummaries,
   filterRequestsByDateRange,
   formatPercent,
   type AnalyticsDateRange,
@@ -21,7 +22,9 @@ import {
   formatApproximateCount,
   type ApproximateCount,
 } from '../lib/overview-metrics';
-import { requestListSearchParams } from '../lib/request-inbox';
+import { analyticsRequestListSearchParams } from '../lib/request-inbox';
+
+const requestFetch = useRequestFetch();
 
 const { data: tools } = await useFetch<ToolCatalogResponse>('/api/v1/tools');
 const { data: enrollments } = await useFetch<{
@@ -29,23 +32,20 @@ const { data: enrollments } = await useFetch<{
   nextCursor: string | null;
 }>('/api/v1/admin/enrollments');
 
-const approvalUrl = `/api/v1/requests?${requestListSearchParams({
-  limit: 50,
-  needsAdminApproval: true,
-})}`;
-const otherUrl = `/api/v1/requests?${requestListSearchParams({
-  limit: 50,
-  needsAdminApproval: false,
-})}`;
-
-const { data: approvalPage } = await useFetch<{
-  items: RequestSummary[];
-  nextCursor: string | null;
-}>(approvalUrl);
-const { data: otherPage } = await useFetch<{
-  items: RequestSummary[];
-  nextCursor: string | null;
-}>(otherUrl);
+const {
+  data: requestCatalog,
+  status: requestsStatus,
+  error: requestsError,
+} = await useAsyncData('analytics-all-requests', () =>
+  fetchAllRequestSummaries(async ({ cursor, limit }) =>
+    requestFetch<{ items: RequestSummary[]; nextCursor: string | null }>(
+      `/api/v1/requests?${analyticsRequestListSearchParams({
+        ...(cursor === undefined ? {} : { cursor }),
+        limit,
+      })}`,
+    ),
+  ),
+);
 
 const dateRange = ref<AnalyticsDateRange>('7d');
 const dateRangeItems = [
@@ -55,23 +55,17 @@ const dateRangeItems = [
   { label: 'All time', value: 'all' },
 ] as const;
 
-const loadedRequests = computed(() => [
-  ...(approvalPage.value?.items ?? []),
-  ...(otherPage.value?.items ?? []),
-]);
+const loadedRequests = computed(() => requestCatalog.value?.items ?? []);
+const requestsTruncated = computed(
+  () => requestCatalog.value?.truncated === true,
+);
 
 const rangedRequests = computed(() =>
   filterRequestsByDateRange(loadedRequests.value, dateRange.value),
 );
 
-const requestsApproximate = computed(
-  () =>
-    Boolean(approvalPage.value?.nextCursor) ||
-    Boolean(otherPage.value?.nextCursor),
-);
-
 const totalRequests = computed((): ApproximateCount => ({
-  approximate: requestsApproximate.value,
+  approximate: requestsTruncated.value,
   value: rangedRequests.value.length,
 }));
 
@@ -99,7 +93,7 @@ const { data: graphs, status: graphsStatus } = await useAsyncData(
     if (items.length === 0) return [] as ToolGraphResponse[];
     return Promise.all(
       items.map((tool) =>
-        $fetch<ToolGraphResponse>(`/api/v1/tools/${tool.id}/graph`),
+        requestFetch<ToolGraphResponse>(`/api/v1/tools/${tool.id}/graph`),
       ),
     );
   },
@@ -134,18 +128,33 @@ const modelSlices = computed(() =>
       </template>
     </PageHeader>
     <p class="mb-6 -mt-2 text-xs text-muted">
-      Request metrics use {{ rangeDetail.toLowerCase() }} from loaded batches.
-      Cost panels stay Available soon.
+      Request metrics use {{ rangeDetail.toLowerCase() }} (exact count from the
+      full request list, filtered by created time). Cost panels stay Available
+      soon.
+    </p>
+    <UAlert
+      v-if="requestsError"
+      class="mb-6"
+      color="error"
+      title="Could not load requests for analytics"
+      :description="String(requestsError)"
+    />
+    <p v-else-if="requestsStatus === 'pending'" class="mb-6 text-sm text-muted">
+      Loading all requests for exact range totals…
     </p>
 
     <div class="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
       <AnalyticsKpiCard label="Total API Spend" soon />
       <AnalyticsKpiCard
         label="Total Requests"
-        :value="formatApproximateCount(totalRequests)"
+        :value="
+          requestsStatus === 'pending'
+            ? '…'
+            : formatApproximateCount(totalRequests)
+        "
         :detail="
           totalRequests.approximate
-            ? `${rangeDetail} · recent batches may be incomplete`
+            ? `${rangeDetail} · catalog truncated at page cap`
             : rangeDetail
         "
       />
@@ -157,12 +166,12 @@ const modelSlices = computed(() =>
       <AnalyticsDonutCard
         title="Tool Usage"
         :slices="usageSlices"
-        empty-message="No requests in the current batches."
+        empty-message="No requests in the selected range."
       />
       <AnalyticsDonutCard
         title="Tool Failures"
         :slices="failureSlices"
-        empty-message="No failed requests in the current batches."
+        empty-message="No failed requests in the selected range."
       />
     </div>
 
@@ -187,7 +196,7 @@ const modelSlices = computed(() =>
             <tbody>
               <tr v-if="usageRows.length === 0">
                 <td colspan="5" class="py-6 text-muted">
-                  No tool calls in the current request batches.
+                  No tool calls in the selected range.
                 </td>
               </tr>
               <tr

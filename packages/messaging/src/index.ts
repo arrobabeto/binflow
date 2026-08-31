@@ -20,6 +20,7 @@ import {
   Card,
   CardText,
   Chat,
+  Image,
   isCardElement,
   LinkButton,
   type AdapterPostableMessage,
@@ -86,11 +87,18 @@ export type TelegramPreviewLink = Readonly<{ label: string; url: string }>;
 const actionButtonStyle = (
   action: TelegramReply['actionTokens'][number]['action'],
 ): 'primary' | 'danger' | 'default' => {
-  if (action === 'cancel' || action === 'cancel_revision') return 'danger';
+  if (
+    action === 'cancel' ||
+    action === 'cancel_revision' ||
+    action === 'reject_image_target'
+  )
+    return 'danger';
   if (
     action === 'confirm_plan' ||
     action === 'approve_preview' ||
-    action === 'confirm_revision_plan'
+    action === 'confirm_revision_plan' ||
+    action === 'confirm_image_plan' ||
+    action === 'confirm_text_plan'
   )
     return 'primary';
   return 'default';
@@ -154,9 +162,17 @@ export const renderClientTelegramReply = (
   reply: TelegramReply,
   links: readonly TelegramPreviewLink[] = [],
 ): AdapterPostableMessage => {
-  if (reply.actionTokens.length === 0 && links.length === 0) return reply.text;
+  if (
+    reply.actionTokens.length === 0 &&
+    links.length === 0 &&
+    reply.photoUrl === undefined
+  )
+    return reply.text;
   return Card({
     children: [
+      ...(reply.photoUrl === undefined
+        ? []
+        : [Image({ alt: 'Current image', url: reply.photoUrl })]),
       CardText(reply.text),
       ...(links.length === 0
         ? []
@@ -602,6 +618,53 @@ export type PersistInboundDocument = (input: Readonly<{
   mime: string;
 }>) => Promise<string>;
 
+const normalizeInboundMime = (mime: string | undefined): string =>
+  (mime ?? '').toLowerCase().split(';')[0]?.trim() ?? '';
+
+const imageExtensionFromName = (name: string | undefined): string | null => {
+  const lower = name?.toLowerCase() ?? '';
+  if (lower.endsWith('.jpg') || lower.endsWith('.jpeg')) return 'image/jpeg';
+  if (lower.endsWith('.png')) return 'image/png';
+  if (lower.endsWith('.webp')) return 'image/webp';
+  return null;
+};
+
+/**
+ * Telegram photos are `type: image`. Images sent "as file" arrive as
+ * `type: file`/`document` with an image MIME or extension — still treat as
+ * inbound images (edit_image / portfolio covers), not as menu PDFs.
+ */
+export const isInboundImageAttachment = (
+  attachment: Readonly<{
+    mimeType?: string;
+    name?: string;
+    type: string;
+  }>,
+): boolean => {
+  if (attachment.type === 'image') return true;
+  if (attachment.type !== 'document' && attachment.type !== 'file') return false;
+  const mime = normalizeInboundMime(attachment.mimeType);
+  if (ALLOWED_IMAGE_MIMES.has(mime)) return true;
+  if (mime === 'application/octet-stream')
+    return imageExtensionFromName(attachment.name) !== null;
+  return false;
+};
+
+const resolveInboundImageMime = (
+  attachment: Readonly<{
+    mimeType?: string;
+    name?: string;
+    type: string;
+  }>,
+): string => {
+  const mime = normalizeInboundMime(attachment.mimeType);
+  if (ALLOWED_IMAGE_MIMES.has(mime))
+    return mime === 'image/jpg' ? 'image/jpeg' : mime;
+  const fromName = imageExtensionFromName(attachment.name);
+  if (fromName !== null) return fromName;
+  return attachment.type === 'image' ? 'image/jpeg' : mime;
+};
+
 const isMenuPdfAttachment = (
   attachment: Readonly<{
     mimeType?: string;
@@ -609,8 +672,9 @@ const isMenuPdfAttachment = (
     type: string;
   }>,
 ): boolean => {
+  if (isInboundImageAttachment(attachment)) return false;
   if (attachment.type !== 'document' && attachment.type !== 'file') return false;
-  const mime = (attachment.mimeType ?? 'application/pdf').toLowerCase();
+  const mime = normalizeInboundMime(attachment.mimeType) || 'application/pdf';
   if (ALLOWED_DOCUMENT_MIMES.has(mime)) return true;
   const name = attachment.name?.toLowerCase() ?? '';
   return (
@@ -683,21 +747,22 @@ const extractInboundImageArtifactKey = async (
       data?: Buffer | Blob;
       fetchData?: () => Promise<Buffer>;
       mimeType?: string;
+      name?: string;
       type: string;
     }>;
   }>,
   persistInboundImage: PersistInboundImage | undefined,
 ): Promise<string | undefined> => {
   if (persistInboundImage === undefined) return undefined;
-  const image = message.attachments.find(
-    (attachment) => attachment.type === 'image',
+  const image = message.attachments.find((attachment) =>
+    isInboundImageAttachment(attachment),
   );
   if (image === undefined) return undefined;
-  const mime = (image.mimeType ?? 'image/jpeg').toLowerCase();
+  const mime = resolveInboundImageMime(image);
   if (!ALLOWED_IMAGE_MIMES.has(mime))
     throw new DomainError(
       'validation_error',
-      'Only JPEG, PNG or WebP hero screenshots are accepted.',
+      'Only JPEG, PNG or WebP images are accepted.',
       { code: 'attachment_mime_denied' },
     );
   const raw =
@@ -717,7 +782,7 @@ const extractInboundImageArtifactKey = async (
   if (bytes.byteLength === 0 || bytes.byteLength > MAX_INBOUND_IMAGE_BYTES)
     throw new DomainError(
       'validation_error',
-      'Hero screenshot exceeds the allowed size.',
+      'Image attachment exceeds the allowed size.',
       { code: 'attachment_too_large' },
     );
   return persistInboundImage({ bytes, mime });
@@ -787,12 +852,12 @@ const registerTelegramIngressHandlers = (
     if (ingress === null) {
       const hasUnsupportedAttachment = message.attachments.some(
         (attachment) =>
-          attachment.type !== 'image' &&
+          !isInboundImageAttachment(attachment) &&
           !isMenuPdfAttachment(attachment),
       );
       if (hasUnsupportedAttachment) {
         await thread.post(
-          'Only PDF menu documents are accepted for this request.',
+          'This attachment type is not supported. Send a JPEG, PNG or WebP photo (or a PDF for menu updates).',
         );
         return;
       }

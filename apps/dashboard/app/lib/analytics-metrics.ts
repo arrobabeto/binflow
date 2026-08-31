@@ -66,7 +66,41 @@ export const analyticsRangeDetail = (range: AnalyticsDateRange): string => {
   if (range === '24h') return 'Last 24 hours';
   if (range === '7d') return 'Last 7 days (UTC)';
   if (range === '30d') return 'Last 30 days (UTC)';
-  return 'All loaded batches';
+  return 'All requests';
+};
+
+export const ANALYTICS_REQUEST_PAGE_LIMIT = 50 as const;
+export const ANALYTICS_REQUEST_MAX_PAGES = 200 as const;
+
+export type AnalyticsRequestPage = Readonly<{
+  items: readonly RequestSummary[];
+  nextCursor: string | null;
+}>;
+
+/**
+ * Walks opaque request-list cursors until exhausted (or max pages) so Analytics
+ * can filter by createdAt with exact counts instead of a single 50-item batch.
+ */
+export const fetchAllRequestSummaries = async (
+  fetchPage: (input: {
+    cursor?: string;
+    limit: typeof ANALYTICS_REQUEST_PAGE_LIMIT;
+  }) => Promise<AnalyticsRequestPage>,
+): Promise<{ items: RequestSummary[]; truncated: boolean }> => {
+  const items: RequestSummary[] = [];
+  let cursor: string | undefined;
+  for (let page = 0; page < ANALYTICS_REQUEST_MAX_PAGES; page += 1) {
+    const result = await fetchPage({
+      ...(cursor === undefined ? {} : { cursor }),
+      limit: ANALYTICS_REQUEST_PAGE_LIMIT,
+    });
+    items.push(...result.items);
+    if (result.nextCursor === null || result.nextCursor === '') {
+      return { items, truncated: false };
+    }
+    cursor = result.nextCursor;
+  }
+  return { items, truncated: true };
 };
 
 export const DONUT_COLORS = [

@@ -1,0 +1,232 @@
+identity:
+  id: edit_image
+  version: 1
+  stack: astro-orbitype
+  toolDir: edit-image
+  graphVersionSuffix: '@1'
+  displayName: Edit site image
+  command: /edit_image
+  description: >
+    Lets astro_orbitype clients replace one allowlisted image per request on
+    marketing pages or blog posts (including blog cover/hero). Denies page heroes
+    and nav/footer logos. Preview applies temporary Orbitype patch with absolute
+    preview asset URL after Vercel is ready; cancel/reject restores snapshot.
+    Multilingual: one asset patches every contentLocale. Collection shows the
+    current image photo for target confirm before replacement. Client preview
+    approve/cancel; admin receives preview link before merge.
+  profile: astro_orbitype
+  executorId: workflow.edit_image@1
+  riskClass: medium
+  requiresPreview: true
+  mutationClass: update
+  approvalPolicyId: astro-orbitype-image-edit@1
+
+specTitle: Edit site image (Astro + Orbitype) — capability specification
+
+migration:
+  inputSchemaId: edit_image.input@1
+  outputSchemaId: edit_image.output@1
+  allowedProfiles:
+    - astro_orbitype
+  requiredPermissions:
+    - github:metadata:read
+    - github:contents:write
+    - github:pull_requests:write
+    - github:checks:read
+    - github:statuses:read
+    - vercel:deployments:read
+    - orbitype:content:read
+    - orbitype:content:write
+  timeoutSeconds: 1800
+  retryPolicy:
+    maxAttempts: 3
+    retryableErrors:
+      - provider_retryable
+      - deployment_pending
+  budget:
+    maxEstimatedCostCents: 50
+    maxModelCalls: 1
+    maxTokens: 1000
+
+nodes:
+  - sortPrefix: '01'
+    id: sync_editable_images
+    kind: effect
+    nodeKind: images.sync_editable_images@1
+    label: Sync editable image corpus
+    acceptsClientCustomization: false
+    parameters:
+      catalogScope: pages_and_posts
+    permissions:
+      - orbitype:content:read
+      - github:metadata:read
+  - sortPrefix: '02'
+    id: validate_image_edit
+    kind: compute
+    nodeKind: images.validate_edit@1
+    label: Validate target, denylist, and replacement asset
+    acceptsClientCustomization: false
+  - sortPrefix: '03'
+    id: render_image_patch
+    kind: compute
+    nodeKind: images.render_patch@1
+    label: Build Orbitype and GitHub image patches
+    acceptsClientCustomization: false
+  - sortPrefix: '04'
+    id: open_image_edit_pr
+    kind: effect
+    nodeKind: images.open_edit_pr@1
+    label: Open image edit pull request
+    acceptsClientCustomization: false
+    permissions:
+      - github:contents:write
+      - github:pull_requests:write
+  - sortPrefix: '05'
+    id: wait_preview
+    kind: effect
+    nodeKind: deployment.wait_preview@1
+    label: Wait for Vercel preview
+    acceptsClientCustomization: false
+    permissions:
+      - vercel:deployments:read
+  - sortPrefix: '06'
+    id: apply_orbitype_preview
+    kind: effect
+    nodeKind: images.apply_orbitype_preview@1
+    label: Apply temporary Orbitype preview patch
+    acceptsClientCustomization: false
+    permissions:
+      - orbitype:content:write
+  - sortPrefix: '07'
+    id: awaiting_client_approval
+    kind: interrupt
+    nodeKind: workflow.awaiting_client_approval@1
+    label: Awaiting client preview approval
+    acceptsClientCustomization: false
+    actor: client
+    ttlHours: 72
+  - sortPrefix: '08'
+    id: awaiting_admin_approval
+    kind: interrupt
+    nodeKind: workflow.awaiting_admin_approval@1
+    label: Awaiting admin publication approval
+    acceptsClientCustomization: false
+    actor: admin
+    ttlHours: 72
+  - sortPrefix: '09'
+    id: merge_github
+    kind: effect
+    nodeKind: publication.merge_github@1
+    label: Merge GitHub PR
+    acceptsClientCustomization: false
+    permissions:
+      - github:pull_requests:write
+      - github:contents:write
+  - sortPrefix: '10'
+    id: publish_orbitype_content
+    kind: effect
+    nodeKind: images.publish_orbitype_content@1
+    label: Publish Orbitype pages and posts
+    acceptsClientCustomization: false
+    permissions:
+      - orbitype:content:write
+  - sortPrefix: '11'
+    id: verify_production
+    kind: effect
+    nodeKind: images.verify_production@1
+    label: Verify production image
+    acceptsClientCustomization: false
+    permissions:
+      - vercel:deployments:read
+  - sortPrefix: '12'
+    id: completed
+    kind: compute
+    nodeKind: workflow.completed@1
+    label: Completed
+    acceptsClientCustomization: false
+
+edges:
+  - from: sync_editable_images
+    to: validate_image_edit
+  - from: validate_image_edit
+    to: render_image_patch
+  - from: render_image_patch
+    to: open_image_edit_pr
+  - from: open_image_edit_pr
+    to: wait_preview
+  - from: wait_preview
+    to: apply_orbitype_preview
+  - from: apply_orbitype_preview
+    to: awaiting_client_approval
+  - from: awaiting_client_approval
+    to: awaiting_admin_approval
+  - from: awaiting_admin_approval
+    to: merge_github
+  - from: merge_github
+    to: publish_orbitype_content
+  - from: publish_orbitype_content
+    to: verify_production
+  - from: verify_production
+    to: completed
+
+contentSchemaFields: []
+
+customizableNodeIds: []
+
+layerAssignments:
+  - layer: code
+    behavior: >
+      Allowlisted images on pages (non-page-hero) and blogs including cover/hero.
+      Deny page SectionHero and nav/footer logos. Multilingual all-locale patch.
+      Preview applies temporary Orbitype patch (absolute preview URL); restore on
+      cancel/reject. Deterministic discovery; confirm_target photo; replacement
+      attachment or URL.
+  - layer: manifest
+    behavior: >
+      contentLocales for all-locale fan-out; editablePaths; productionOrigin;
+      publicationTargets github+orbitype.
+  - layer: customization
+    behavior: >
+      Optional collection hints only. No paths, models, or approval overrides.
+
+typedErrors:
+  - code: image_target_not_found
+    when: Search finds no allowlisted image for the query.
+  - code: image_target_ambiguous
+    when: Query matches more than one allowlisted slot.
+  - code: image_field_denied
+    when: Resolved slot is page hero, nav/footer logo, or other denylist match.
+  - code: image_replacement_missing
+    when: Client confirms plan without a replacement attachment or URL.
+  - code: image_replacement_invalid
+    when: Replacement URL or attachment fails MIME, size, or fetch validation.
+  - code: image_target_stale
+    when: Current public path no longer matches at execute time.
+  - code: orbitype_content_patch_failed
+    when: Orbitype rejects the pages or posts patch (4xx).
+  - code: github_pr_failed
+    when: Image edit PR cannot be opened or updated.
+  - code: preview_not_ready
+    when: Vercel preview does not become ready for the PR head.
+  - code: production_image_mismatch
+    when: Production does not serve the approved new image after publish.
+
+verification:
+  scenarios:
+    - Multilingual project skips locale question; execute patches all contentLocales for the slot.
+    - Denylist blocks page heroes and nav/footer logos; blog cover/hero remains editable.
+    - Ambiguous query returns numbered disambiguation, not auto-pick.
+    - confirm_target posts current image photo, includes the absolute image URL
+      in confirm text, plus Confirm / Not this one / Cancel before replacement.
+    - Not this one returns to target search without closing the request.
+    - Plan confirm states all-locale update when contentLocales.length > 1.
+    - Replacement accepts Telegram photo or HTTPS URL; one image per request.
+    - Preview temporarily patches Orbitype with absolute preview asset URL;
+      cancel/reject restores snapshot via restore_orbitype_preview.
+    - Preview shows changed image on enrolled routes; client Approve or Cancel only.
+    - Admin admin_approval_required card includes Vercel preview URL button.
+    - After client preview approval, admin approval is required before merge.
+    - NL ingress de/es/en edit-image phrases dispatch to edit_image.
+    - verify_production polls until new image URL is visible on production.
+  fixtures:
+    - docs/customizations/bistro-edit-image.md

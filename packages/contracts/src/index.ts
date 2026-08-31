@@ -964,6 +964,56 @@ export const editTextInputSchema = z.discriminatedUnion('mode', [
     .strict(),
 ]);
 
+export const imageEditCandidateSchema = z
+  .object({
+    currentPath: z.string().trim().min(1).max(500),
+    field: z.string().trim().min(1).max(80),
+    key: z.string().trim().min(1).max(200),
+    kind: z.enum(['page', 'blog']),
+    label: z.string().trim().min(1).max(200),
+    pageOrPostId: z.string().trim().min(1).max(80),
+    pageOrPostSlug: z.string().trim().min(1).max(120),
+    pageOrPostTitle: z.string().trim().min(1).max(200),
+    sectionIndex: z.number().int(), // allow -1 for blog cover
+    component: z.string().trim().max(80).nullable(),
+  })
+  .strict();
+
+export const editImageInputSchema = z.discriminatedUnion('mode', [
+  z
+    .object({
+      collectionComplete: z.boolean().default(false),
+      collectionStep: z
+        .enum([
+          'await_target',
+          'disambiguate',
+          'confirm_target',
+          'await_replacement',
+          'ready',
+        ])
+        .default('await_target'),
+      discoveredTargets: z.array(imageEditCandidateSchema).max(40).default([]),
+      messages: z.array(z.string().trim().max(10_000)).max(40).default([]),
+      mode: z.literal('collect'),
+      projectId: z.string().min(1),
+      replacementArtifactKey: z.string().trim().min(1).max(500).optional(),
+      replacementMime: z.string().trim().min(1).max(80).optional(),
+      replacementSourceUrl: z.string().url().optional(),
+      targetKey: z.string().trim().min(1).max(200).optional(),
+    })
+    .strict(),
+  z
+    .object({
+      mode: z.literal('execute'),
+      projectId: z.string().min(1),
+      targetKey: z.string().trim().min(1).max(200),
+      replacementArtifactKey: z.string().trim().min(1).max(500),
+      replacementMime: z.string().trim().min(1).max(80),
+      replacementSourceUrl: z.string().url().optional(),
+    })
+    .strict(),
+]);
+
 export const updateMenuInputSchema = z.discriminatedUnion('mode', [
   z
     .object({
@@ -1000,6 +1050,7 @@ export const capabilityInputSchema = z.union([
   deleteBlogDraftInputSchema,
   deleteProjectAstroInputSchema,
   editTextInputSchema,
+  editImageInputSchema,
   updateMenuInputSchema,
 ]);
 
@@ -1173,6 +1224,8 @@ export type DeleteBlogDraftInput = z.infer<typeof deleteBlogDraftInputSchema>;
 export type UpdateMenuInput = z.infer<typeof updateMenuInputSchema>;
 export type EditTextInput = z.infer<typeof editTextInputSchema>;
 export type TextEditCandidate = z.infer<typeof textEditCandidateSchema>;
+export type EditImageInput = z.infer<typeof editImageInputSchema>;
+export type ImageEditCandidate = z.infer<typeof imageEditCandidateSchema>;
 export type DeleteProjectAstroInput = z.infer<typeof deleteProjectAstroInputSchema>;
 export type CreateProjectAstroInput = z.infer<typeof createProjectAstroInputSchema>;
 /** @deprecated Use CreateProjectAstroInput */
@@ -1228,6 +1281,7 @@ export const capabilityIdSchema = z.enum([
   'create_project_draft',
   'delete_blog_draft',
   'delete_project_astro',
+  'edit_image',
   'edit_text',
   'update_menu',
 ]);
@@ -1750,6 +1804,10 @@ export const telegramReplySchema = z
               'confirm_text_target',
               'pick_text_locale',
               'pick_text_target',
+              'pick_image_target',
+              'confirm_image_target',
+              'reject_image_target',
+              'confirm_image_plan',
               'approve_preview',
               'request_revision',
               'confirm_revision_plan',
@@ -1768,6 +1826,7 @@ export const telegramReplySchema = z
       .default([]),
     duplicate: z.boolean().default(false),
     locale: supportedLocaleSchema,
+    photoUrl: z.string().url().optional(),
     requestId: z.string().min(1).nullable(),
     text: z.string().min(1),
   })
@@ -1782,6 +1841,7 @@ export const workflowResumeSignalSchema = z
         'apply_revision',
         'publish',
         'reconcile',
+        'restore_orbitype_preview',
       ])
       .default('execute'),
     requestId: z.string().min(1),

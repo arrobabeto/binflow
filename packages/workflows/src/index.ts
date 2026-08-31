@@ -108,11 +108,25 @@ import {
   createEditTextRequest,
   type EditTextPagesLoader,
 } from './edit-text-collection.js';
+import {
+  continueEditImageCollection,
+  continueEditImageCollectionWithAttachment,
+  consumeEditImagePlanConfirm,
+  consumeEditImageTargetConfirm,
+  consumeEditImageTargetPick,
+  consumeEditImageTargetReject,
+  createEditImageRequest,
+  type EditImageContentLoader,
+  type PersistReplacementImage,
+} from './edit-image-collection.js';
 
 export * from './blog-runtime.js';
 export * from './delete-blog-catalog.js';
 export * from './delete-blog-runtime.js';
 export * from './delete-project-runtime.js';
+export * from './edit-image-collection.js';
+export * from './edit-image-ingress.js';
+export * from './image-runtime.js';
 export * from './menu-runtime.js';
 export * from './project-runtime.js';
 export * from './text-runtime.js';
@@ -121,10 +135,12 @@ export {
   capabilityIngressRoutes,
   collectionCapabilityIds,
   deleteProjectNaturalLanguage,
+  editImageNaturalLanguage,
   editTextNaturalLanguage,
   matchesNaturalProject,
   updateMenuNaturalLanguage,
 } from './capability-ingress.js';
+export type { EditImageContentLoader } from './edit-image-collection.js';
 export type { EditTextPagesLoader } from './edit-text-collection.js';
 export type { UpdateMenuPagesLoader } from './update-menu-collection.js';
 export {
@@ -196,6 +212,8 @@ const copy = {
       'Vorschau genehmigt. Die neue Kategorie wartet jetzt auf die Admin-Freigabe.',
     adminPendingTextEdit:
       'Vorschau genehmigt. Die Textänderung wartet jetzt auf die Admin-Freigabe.',
+    adminPendingImageEdit:
+      'Vorschau genehmigt. Die Bildänderung wartet jetzt auf die Admin-Freigabe.',
     revisionPrompt:
       'Revision angefordert. Sende dein Feedback als nächste Nachricht (oder /revise <Text>).',
     revisionQueued:
@@ -255,6 +273,8 @@ const copy = {
       'Preview approved. The new category is now waiting for admin approval.',
     adminPendingTextEdit:
       'Preview approved. The text change is now waiting for admin approval.',
+    adminPendingImageEdit:
+      'Preview approved. The image change is now waiting for admin approval.',
     revisionPrompt:
       'Revision requested. Send your feedback as the next message (or /revise <text>).',
     revisionQueued: 'Feedback saved. Preparing the change plan.',
@@ -318,6 +338,8 @@ const copy = {
       'Preview aprobado. La categoría nueva ahora espera aprobación del admin.',
     adminPendingTextEdit:
       'Preview aprobado. El cambio de texto ahora espera aprobación del admin.',
+    adminPendingImageEdit:
+      'Preview aprobado. El cambio de imagen ahora espera aprobación del admin.',
     revisionPrompt:
       'Revisión solicitada. Envía tu cambio como el siguiente mensaje (o /revise <texto>).',
     revisionQueued: 'Comentarios guardados. Preparando el plan de cambio.',
@@ -467,6 +489,8 @@ export class WorkflowService {
     private readonly deleteBlogCatalogLoader?: DeleteBlogCatalogLoader,
     private readonly deleteProjectCatalogLoader?: DeleteProjectCatalogLoader,
     private readonly updateMenuPagesLoader?: UpdateMenuPagesLoader,
+    private readonly editImageContentLoader?: EditImageContentLoader,
+    private readonly persistReplacementImage?: PersistReplacementImage,
   ) {}
 
   public async handleTelegramUpdate(
@@ -1884,6 +1908,50 @@ export class WorkflowService {
           text: text.trim(),
           version: await this.currentRequestVersion(database, latestCollecting),
         });
+      if (latestCollecting.capabilityId === 'edit_image') {
+        const version = await this.currentRequestVersion(
+          database,
+          latestCollecting,
+        );
+        if (imageArtifactKey !== undefined)
+          return continueEditImageCollectionWithAttachment({
+            createAction: (db, request, requestVersionId, userId, action) =>
+              this.createAction(db, request, requestVersionId, userId, action),
+            database,
+            identity,
+            imageArtifactKey,
+            loadContent: (args) =>
+              this.loadEditImageContent(
+                args.database,
+                args.manifest,
+                args.projectId,
+                args.tenantId,
+              ),
+            reply: this.reply.bind(this),
+            request: latestCollecting,
+            version,
+          });
+        return continueEditImageCollection({
+          createAction: (db, request, requestVersionId, userId, action) =>
+            this.createAction(db, request, requestVersionId, userId, action),
+          database,
+          identity,
+          loadContent: (args) =>
+            this.loadEditImageContent(
+              args.database,
+              args.manifest,
+              args.projectId,
+              args.tenantId,
+            ),
+          ...(this.persistReplacementImage === undefined
+            ? {}
+            : { persistReplacementImage: this.persistReplacementImage }),
+          reply: this.reply.bind(this),
+          request: latestCollecting,
+          text: text.trim(),
+          version,
+        });
+      }
       if (latestCollecting.capabilityId === 'delete_blog_draft')
         return this.continueDeleteBlogCollection(
           database,
@@ -1925,6 +1993,9 @@ export class WorkflowService {
     const editTextRoute = capabilityIngressRoutes.find(
       (route) => route.handlerKind === 'edit_text',
     );
+    const editImageRoute = capabilityIngressRoutes.find(
+      (route) => route.handlerKind === 'edit_image',
+    );
     const deleteBlogCommand =
       deleteBlogRoute === undefined
         ? null
@@ -1949,6 +2020,10 @@ export class WorkflowService {
       editTextRoute === undefined
         ? null
         : editTextRoute.commandPattern.exec(text);
+    const editImageCommand =
+      editImageRoute === undefined
+        ? null
+        : editImageRoute.commandPattern.exec(text);
     const naturalDeleteBlog =
       deleteBlogRoute?.naturalLanguage?.(text) ?? false;
     const naturalDeleteProject =
@@ -1961,6 +2036,8 @@ export class WorkflowService {
       updateMenuRoute?.naturalLanguage?.(text) ?? false;
     const naturalEditText =
       editTextRoute?.naturalLanguage?.(text) ?? false;
+    const naturalEditImage =
+      editImageRoute?.naturalLanguage?.(text) ?? false;
     const deleteBlogEnabled =
       deleteBlogRoute === undefined
         ? false
@@ -2001,6 +2078,37 @@ export class WorkflowService {
             identity.projectId,
             editTextRoute.capabilityId,
           );
+    const editImageEnabled =
+      editImageRoute === undefined
+        ? false
+        : await this.hasCapability(
+            database,
+            identity.projectId,
+            editImageRoute.capabilityId,
+          );
+
+    if (editImageCommand !== null) {
+      return createEditImageRequest({
+        createAction: (db, request, requestVersionId, userId, action) =>
+          this.createAction(db, request, requestVersionId, userId, action),
+        database,
+        hasCapability: this.hasCapability.bind(this),
+        identity,
+        ...(editImageCommand[1]?.trim()
+          ? {
+              initialQuery: editImageCommand[1].trim(),
+              loadContent: (args) =>
+                this.loadEditImageContent(
+                  args.database,
+                  args.manifest,
+                  args.projectId,
+                  args.tenantId,
+                ),
+            }
+          : {}),
+        reply: this.reply.bind(this),
+      });
+    }
 
     if (editTextCommand !== null) {
       return createEditTextRequest({
@@ -2037,6 +2145,32 @@ export class WorkflowService {
     }
 
     if (
+      editImageEnabled &&
+      naturalEditImage &&
+      blogCommand === null &&
+      deleteBlogCommand === null &&
+      deleteProjectCommand === null &&
+      updateMenuCommand === null &&
+      editTextCommand === null &&
+      editImageCommand === null &&
+      !naturalDeleteBlog &&
+      !naturalDeleteProject &&
+      !naturalBlog &&
+      !naturalProject &&
+      !naturalUpdateMenu &&
+      !naturalEditText
+    ) {
+      return createEditImageRequest({
+        createAction: (db, request, requestVersionId, userId, action) =>
+          this.createAction(db, request, requestVersionId, userId, action),
+        database,
+        hasCapability: this.hasCapability.bind(this),
+        identity,
+        reply: this.reply.bind(this),
+      });
+    }
+
+    if (
       editTextEnabled &&
       naturalEditText &&
       blogCommand === null &&
@@ -2044,11 +2178,13 @@ export class WorkflowService {
       deleteProjectCommand === null &&
       updateMenuCommand === null &&
       editTextCommand === null &&
+      editImageCommand === null &&
       !naturalDeleteBlog &&
       !naturalDeleteProject &&
       !naturalBlog &&
       !naturalProject &&
-      !naturalUpdateMenu
+      !naturalUpdateMenu &&
+      !naturalEditImage
     ) {
       return createEditTextRequest({
         createAction: (db, request, requestVersionId, userId, action) =>
@@ -2636,6 +2772,28 @@ export class WorkflowService {
     tenantId: string,
   ) {
     return this.loadUpdateMenuPages(database, manifest, projectId, tenantId);
+  }
+
+  private async loadEditImageContent(
+    database: ScopedDatabase,
+    manifest: (typeof schema.projectManifestVersions.$inferSelect)['document'],
+    projectId: string,
+    tenantId: string,
+  ) {
+    if (this.editImageContentLoader !== undefined)
+      return this.editImageContentLoader({
+        database,
+        manifest,
+        projectId,
+        tenantId,
+      });
+    const pages = await this.loadUpdateMenuPages(
+      database,
+      manifest,
+      projectId,
+      tenantId,
+    );
+    return { pages, posts: [] as const };
   }
 
   private async loadUpdateMenuCtaKeywords(
@@ -4030,6 +4188,11 @@ export class WorkflowService {
     if (action.action === 'cancel') {
       if ((TERMINAL_STATES as readonly string[]).includes(request.state))
         throw new DomainError('conflict_error', 'Request is already terminal.');
+      const shouldRestoreOrbitypePreview =
+        (request.capabilityId === 'edit_image' ||
+          request.capabilityId === 'edit_text') &&
+        (request.state === 'AWAITING_CLIENT_APPROVAL' ||
+          request.state === 'AWAITING_ADMIN_APPROVAL');
       await database
         .update(schema.requests)
         .set({
@@ -4038,6 +4201,14 @@ export class WorkflowService {
           version: request.version + 1,
         })
         .where(eq(schema.requests.id, request.id));
+      if (shouldRestoreOrbitypePreview)
+        await this.enqueueResume(
+          database,
+          request,
+          currentVersion.id,
+          'restore_orbitype_preview',
+          request.version + 1,
+        );
       await this.recordRequestEvent(
         database,
         request,
@@ -4105,6 +4276,75 @@ export class WorkflowService {
           'Request is not waiting for text plan confirmation.',
         );
       return consumeEditTextPlanConfirm({
+        database,
+        graphVersion: await graphVersionForCapability(request.capabilityId),
+        identity,
+        onQueued: async ({ database: scoped, request: queued, requestVersionId }) => {
+          await this.enqueueResume(
+            scoped,
+            queued,
+            requestVersionId,
+            'execute',
+            1,
+          );
+        },
+        reply: this.reply.bind(this),
+        request,
+        version: currentVersion,
+      });
+    }
+    if (action.action.startsWith('pick_image_target:')) {
+      if (request.capabilityId !== 'edit_image' || request.state !== 'NEEDS_INPUT')
+        throw new DomainError(
+          'conflict_error',
+          'Request is not waiting for image target selection.',
+        );
+      return consumeEditImageTargetPick({
+        createAction: (db, req, requestVersionId, userId, actionName) =>
+          this.createAction(db, req, requestVersionId, userId, actionName),
+        database,
+        identity,
+        reply: this.reply.bind(this),
+        request,
+        targetKey: action.action.slice('pick_image_target:'.length),
+        version: currentVersion,
+      });
+    }
+    if (action.action === 'confirm_image_target') {
+      if (request.capabilityId !== 'edit_image' || request.state !== 'NEEDS_INPUT')
+        throw new DomainError(
+          'conflict_error',
+          'Request is not waiting for image target confirmation.',
+        );
+      return consumeEditImageTargetConfirm({
+        database,
+        identity,
+        reply: this.reply.bind(this),
+        request,
+        version: currentVersion,
+      });
+    }
+    if (action.action === 'reject_image_target') {
+      if (request.capabilityId !== 'edit_image' || request.state !== 'NEEDS_INPUT')
+        throw new DomainError(
+          'conflict_error',
+          'Request is not waiting for image target confirmation.',
+        );
+      return consumeEditImageTargetReject({
+        database,
+        identity,
+        reply: this.reply.bind(this),
+        request,
+        version: currentVersion,
+      });
+    }
+    if (action.action === 'confirm_image_plan') {
+      if (request.capabilityId !== 'edit_image' || request.state !== 'NEEDS_INPUT')
+        throw new DomainError(
+          'conflict_error',
+          'Request is not waiting for image plan confirmation.',
+        );
+      return consumeEditImagePlanConfirm({
         database,
         graphVersion: await graphVersionForCapability(request.capabilityId),
         identity,
@@ -4502,6 +4742,7 @@ export class WorkflowService {
       });
       const needsAdmin =
         request.capabilityId === 'edit_text' ||
+        request.capabilityId === 'edit_image' ||
         ((request.capabilityId === 'create_blog_draft' ||
           request.capabilityId === 'create_blog_orbitype') &&
           categoryKind === 'new');
@@ -4543,9 +4784,30 @@ export class WorkflowService {
           .where(eq(schema.projects.id, request.projectId))
           .limit(1);
         const adminAction =
-          request.capabilityId === 'edit_text'
-            ? 'text edit approval required'
-            : 'new blog category approval required';
+          request.capabilityId === 'edit_image'
+            ? 'image edit approval required'
+            : request.capabilityId === 'edit_text'
+              ? 'text edit approval required'
+              : 'new blog category approval required';
+        const terminal =
+          request.terminalResult !== null &&
+          typeof request.terminalResult === 'object'
+            ? (request.terminalResult as Record<string, unknown>)
+            : {};
+        const previewUrls =
+          terminal.previewUrls !== null &&
+          typeof terminal.previewUrls === 'object' &&
+          !Array.isArray(terminal.previewUrls)
+            ? (terminal.previewUrls as Record<string, unknown>)
+            : {};
+        const previewUrlRecord = Object.fromEntries(
+          Object.entries(previewUrls).filter(
+            (entry): entry is [string, string] =>
+              typeof entry[0] === 'string' &&
+              typeof entry[1] === 'string' &&
+              entry[1].startsWith('https://'),
+          ),
+        );
         await enqueueAdminApprovalRequired(database, {
           bindings: {
             artifactId: evidence.artifactId,
@@ -4565,6 +4827,10 @@ export class WorkflowService {
             'Approve → merge and publish path.',
             'Reject → request cancelled; client notified.',
           ].join('\n'),
+          ...(request.capabilityId === 'edit_image' &&
+          Object.keys(previewUrlRecord).length > 0
+            ? { previewUrls: previewUrlRecord }
+            : {}),
           projectId: request.projectId,
           requestId: request.id,
           tenantId: request.tenantId,
@@ -4578,9 +4844,11 @@ export class WorkflowService {
         'request.client_approved',
       );
       const clientPendingCopy =
-        request.capabilityId === 'edit_text'
-          ? localeCopy.adminPendingTextEdit
-          : localeCopy.adminPending;
+        request.capabilityId === 'edit_image'
+          ? localeCopy.adminPendingImageEdit
+          : request.capabilityId === 'edit_text'
+            ? localeCopy.adminPendingTextEdit
+            : localeCopy.adminPending;
       return this.reply(
         identity.locale,
         needsAdmin ? clientPendingCopy : localeCopy.previewApproved,
@@ -4930,6 +5198,17 @@ export class WorkflowService {
         2,
       );
     else {
+      if (
+        context.request.capabilityId === 'edit_image' ||
+        context.request.capabilityId === 'edit_text'
+      )
+        await this.enqueueResume(
+          database,
+          context.request,
+          context.requestVersionId,
+          'restore_orbitype_preview',
+          expectedVersion + 1,
+        );
       const locale = await this.clientConversationLocale(
         database,
         context.request,
@@ -4970,7 +5249,8 @@ export class WorkflowService {
       | 'interpret_revision'
       | 'apply_revision'
       | 'publish'
-      | 'reconcile',
+      | 'reconcile'
+      | 'restore_orbitype_preview',
     eventVersion: number,
   ): Promise<void> {
     await database.insert(schema.outboxEvents).values({
@@ -5391,12 +5671,23 @@ export class WorkflowService {
     text: string,
     requestId: string | null,
     actions: TelegramReply['actionTokens'] = [],
-    duplicate = false,
+    duplicateOrExtras:
+      | boolean
+      | Readonly<{ duplicate?: boolean; photoUrl?: string }> = false,
   ): TelegramReply {
+    const duplicate =
+      typeof duplicateOrExtras === 'boolean'
+        ? duplicateOrExtras
+        : (duplicateOrExtras.duplicate ?? false);
+    const photoUrl =
+      typeof duplicateOrExtras === 'boolean'
+        ? undefined
+        : duplicateOrExtras.photoUrl;
     return telegramReplySchema.parse({
       actionTokens: actions,
       duplicate,
       locale,
+      ...(photoUrl === undefined ? {} : { photoUrl }),
       requestId,
       text,
     });

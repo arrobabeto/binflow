@@ -6,6 +6,7 @@ export {
   discoverEditableCopy,
   fallbackTextEditGithubPath,
   resolveTextEditCandidate,
+  restoreOrbitypeTextPreview,
   searchEditableCopy,
   verifyProductionTextVisible,
   type EditTextExecuteInput,
@@ -14,5 +15,7 @@ export {
   type TextEditPreviewResult,
   type TextEditPublishResult,
   type OrbitypeTextPagesPort,
+  type OrbitypeTextPreviewState,
+  type OrbitypeTextRestoreSnapshot,
   type TextEditCandidate,
 } from './edit-text.js';

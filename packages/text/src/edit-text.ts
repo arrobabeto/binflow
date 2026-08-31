@@ -27,10 +27,22 @@ export type OrbitypeTextPagesPort = Readonly<{
   listPages(): Promise<readonly OrbitypePageSnapshot[]>;
 }>;
 
+export type OrbitypeTextRestoreSnapshot = Readonly<{
+  pageId: string;
+  sections: unknown;
+}>;
+
+export type OrbitypeTextPreviewState = Readonly<{
+  applied: true;
+  restore: OrbitypeTextRestoreSnapshot;
+  restored?: boolean;
+}>;
+
 export type TextEditPatchArtifact = Readonly<{
   candidate: TextEditCandidate;
   githubPath: string;
   newValue: string;
+  orbitypePreview?: OrbitypeTextPreviewState;
   previewRoute: string;
 }>;
 
@@ -355,11 +367,6 @@ export class EditTextExecutor {
         { code: 'github_pr_failed' },
       );
 
-    await input.onStage?.('apply_orbitype_draft');
-    await input.orbitype.applySectionPatches({
-      patches: [{ pageId: resolved.pageId, sections: patchedSections }],
-    });
-
     const previewRoute = `/${resolved.pageSlug}`;
     await input.onStage?.('wait_preview');
     let deployment: Awaited<ReturnType<DeploymentPort['waitForPreview']>>;
@@ -377,12 +384,54 @@ export class EditTextExecutor {
       );
     }
 
+    // Temporary live CMS patch so runtime-Orbitype sites show the change.
+    const freshPages = await input.orbitype.listPages();
+    const freshPage = freshPages.find((entry) => entry.id === resolved.pageId);
+    if (freshPage === undefined)
+      throw new DomainError(
+        'validation_error',
+        'Text edit page disappeared before Orbitype preview.',
+        { code: 'text_target_stale' },
+      );
+    const restore: OrbitypeTextRestoreSnapshot = {
+      pageId: freshPage.id,
+      sections: freshPage.sections,
+    };
+    const previewSections = applyTextFieldPatch(freshPage.sections, {
+      field: resolved.field,
+      locale: resolved.locale,
+      newValue: input.newValue,
+      sectionIndex: resolved.sectionIndex,
+    });
+    await input.onStage?.('apply_orbitype_preview');
+    try {
+      await input.orbitype.applySectionPatches({
+        patches: [{ pageId: resolved.pageId, sections: previewSections }],
+      });
+    } catch (error) {
+      try {
+        await restoreOrbitypeTextPreview(input.orbitype, restore);
+      } catch {
+        // Best-effort compensating restore; surface the original apply error.
+      }
+      if (error instanceof DomainError) throw error;
+      throw new DomainError(
+        'provider_final',
+        'Orbitype preview pages patch failed.',
+        { code: 'orbitype_pages_patch_failed' },
+      );
+    }
+
     return {
       deployment,
       patch: {
         candidate: resolved,
         githubPath: githubDraft.path,
         newValue: input.newValue,
+        orbitypePreview: {
+          applied: true,
+          restore,
+        },
         previewRoute,
       },
       publication,
@@ -459,6 +508,15 @@ export class EditTextExecutor {
     };
   }
 }
+
+export const restoreOrbitypeTextPreview = async (
+  orbitype: OrbitypeTextPagesPort,
+  restore: OrbitypeTextRestoreSnapshot,
+): Promise<void> => {
+  await orbitype.applySectionPatches({
+    patches: [{ pageId: restore.pageId, sections: restore.sections }],
+  });
+};
 
 export type EditTextExecuteInput = Extract<EditTextInput, { mode: 'execute' }>;
 

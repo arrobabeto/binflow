@@ -79,6 +79,20 @@ export const requestListSearchParams = (
   return params.toString();
 };
 
+/** Unfiltered request list params for Analytics (all states, cursor pages). */
+export const analyticsRequestListSearchParams = (
+  input: Readonly<{
+    cursor?: string;
+    limit: RequestInboxPageSize;
+  }>,
+): string => {
+  const params = new URLSearchParams({
+    limit: String(input.limit),
+  });
+  if (input.cursor !== undefined) params.set('cursor', input.cursor);
+  return params.toString();
+};
+
 export type RequestStateAccent =
   | 'error'
   | 'neutral'

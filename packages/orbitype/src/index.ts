@@ -512,3 +512,127 @@ RETURNING id`,
     },
   };
 };
+
+export type OrbitypePostSnapshot = Readonly<{
+  id: string;
+  img: string;
+  sections: unknown;
+  title: unknown;
+}>;
+
+export type OrbitypeImagesPort = Readonly<{
+  applyPageSectionPatches(
+    input: Readonly<{
+      patches: ReadonlyArray<
+        Readonly<{ pageId: string; sections: unknown }>
+      >;
+    }>,
+  ): Promise<void>;
+  applyPostPatches(
+    input: Readonly<{
+      patches: ReadonlyArray<
+        Readonly<{
+          postId: string;
+          img?: string;
+          sections?: unknown;
+        }>
+      >;
+    }>,
+  ): Promise<void>;
+  listPages(): Promise<readonly OrbitypePageSnapshot[]>;
+  listPosts(): Promise<readonly OrbitypePostSnapshot[]>;
+}>;
+
+export const createOrbitypeImagesPort = (
+  options: Readonly<{
+    apiKey: string;
+    baseUrl: string;
+    fetch?: typeof globalThis.fetch;
+    pagesTable?: string;
+    postsTable?: string;
+  }>,
+): OrbitypeImagesPort => {
+  const fetch = options.fetch ?? globalThis.fetch;
+  const pagesTable = options.pagesTable ?? 'pages';
+  const postsTable = options.postsTable ?? 'posts';
+  if (!/^[a-z][a-z0-9_]*$/u.test(pagesTable))
+    throw new DomainError(
+      'validation_error',
+      'Orbitype pages table name is invalid.',
+    );
+  if (!/^[a-z][a-z0-9_]*$/u.test(postsTable))
+    throw new DomainError(
+      'validation_error',
+      'Orbitype posts table name is invalid.',
+    );
+
+  const pagesPort = createOrbitypeMenuPagesPort({
+    apiKey: options.apiKey,
+    baseUrl: options.baseUrl,
+    fetch,
+    pagesTable,
+  });
+
+  return {
+    listPages: () => pagesPort.listPages(),
+    async applyPageSectionPatches(input) {
+      await pagesPort.applySectionPatches(input);
+    },
+    async listPosts() {
+      const rows = await postSql({
+        apiKey: options.apiKey,
+        baseUrl: options.baseUrl,
+        bindings: {},
+        fetch,
+        operation: 'mutate',
+        sql: `SELECT id, title, img, sections FROM ${postsTable} ORDER BY id ASC`,
+      });
+      if (!Array.isArray(rows))
+        throw new DomainError(
+          'provider_final',
+          'Orbitype posts query returned an unexpected shape.',
+          { code: 'orbitype_content_patch_failed' },
+        );
+      return rows.flatMap((row) => {
+        if (row === null || typeof row !== 'object' || Array.isArray(row))
+          return [];
+        const record = row as Record<string, unknown>;
+        if (typeof record.id !== 'string') return [];
+        return [
+          {
+            id: record.id,
+            img: typeof record.img === 'string' ? record.img : '',
+            sections: record.sections,
+            title: record.title,
+          },
+        ];
+      });
+    },
+    async applyPostPatches(input) {
+      for (const patch of input.patches) {
+        const sets: string[] = ['updated_at = NOW()'];
+        const bindings: Record<string, unknown> = { id: patch.postId };
+        if (patch.img !== undefined) {
+          sets.unshift('img = :img');
+          bindings.img = patch.img;
+        }
+        if (patch.sections !== undefined) {
+          sets.unshift('sections = CAST(:sections AS json)');
+          bindings.sections = JSON.stringify(patch.sections);
+        }
+        if (sets.length === 1) continue;
+        await postSql({
+          apiKey: options.apiKey,
+          baseUrl: options.baseUrl,
+          bindings,
+          fetch,
+          operation: 'mutate',
+          sql: `UPDATE ${postsTable}
+SET ${sets.join(', ')}
+WHERE id = :id
+RETURNING id`,
+        });
+      }
+    },
+  };
+};

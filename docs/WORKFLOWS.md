@@ -246,6 +246,48 @@ Automated tests: `packages/menu/test/update-menu.test.ts`,
 `packages/workflows/test/update-menu-ingress.test.ts`,
 `packages/workflows/test/capability-conformance.test.ts`.
 
+## Text edit (`edit_text`, astro_orbitype)
+
+Graph: sync editable copy → validate → render patch → open text PR → wait
+preview → apply Orbitype preview (snapshot + temp patch) → client approval →
+admin approval → merge → publish Orbitype pages → verify production →
+completed.
+
+- Collection: optional locale (multilingual) → target substring → disambiguation
+  → confirm target → replacement text → plan confirm.
+- Literal old→new patch only (no LLM rewrite); denylist H1/CTA/nav/footer.
+- **Preview writes Orbitype temporarily** so CMS-backed sites show the change;
+  snapshot restored on client cancel / admin reject (`restore_orbitype_preview`).
+- Runtime kind `edit_text`; catalog scope `pages`.
+
+Automated tests: `packages/text/test/`,
+`packages/workflows/test/edit-text-ingress.test.ts`,
+`packages/workflows/test/capability-conformance.test.ts`.
+
+## Image edit (`edit_image`, astro_orbitype)
+
+Graph: sync editable images → validate → render patch → open image PR → wait
+preview → apply Orbitype preview (snapshot + absolute preview asset URL) →
+client approval → admin approval → merge → publish Orbitype pages/posts
+(relative path) → verify production → completed.
+
+- Collection (no locale pick): target search → numbered disambiguation →
+  confirm with **current image photo** (or reject and search again) →
+  replacement (Telegram photo or HTTPS URL) → plan confirm.
+- Multilingual: one asset patches every `contentLocales` for the slot.
+- Allowlist: page section images (not page heroes / logos) and blog images
+  including cover/hero (`SectionPostHero` / `posts.img`).
+- **Preview writes Orbitype temporarily** with absolute Vercel preview asset
+  URL (avoids live 404 on PR-only relative paths). Cancel/reject restores
+  snapshot via `restore_orbitype_preview`. Post-merge publish uses relative path.
+- Dual-write assets: `public/images/blog/edit-*` plus CMS mirrors.
+- Admin `admin_approval_required` notice includes Vercel preview URL(s).
+- Runtime kind `edit_image`; catalog scope `pages` (posts via Orbitype port).
+
+Automated tests: `packages/images/test/`,
+`packages/workflows/test/edit-image-ingress.test.ts`,
+`packages/workflows/test/capability-conformance.test.ts`.
+
 ## Publication
 
 Before merge:

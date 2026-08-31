@@ -11,7 +11,7 @@ Mutation class: `update`
 
 ## 1. Three layers
 
-- **code** — Allowlisted editable copy paths (paragraphs and non-H1 section titles only). Denylist H1, button labels, link text, nav, and footer menus. Exact substring match corpus from Orbitype pages plus GitHub mirror paths. One replacement per request per locale. Literal oldValue→newValue patch with no LLM mutation. Collection: optional locale pick, target disambiguation, confirm_target, await_replacement, plan confirm. Preview approve/cancel only (no revision). Admin approval required before merge.
+- **code** — Allowlisted editable copy paths (paragraphs and non-H1 section titles only). Denylist H1, button labels, link text, nav, and footer menus. Exact substring match corpus from Orbitype pages plus GitHub mirror paths. One replacement per request per locale. Literal oldValue→newValue patch with no LLM mutation. Collection: optional locale pick, target disambiguation, confirm_target, await_replacement, plan confirm. Preview: GitHub PR → Vercel wait → temporary Orbitype pages patch (snapshot first). Preview approve/cancel only (no revision). Cancel/admin reject restore snapshot via `restore_orbitype_preview`. Admin approval before merge; `publish_orbitype_pages` re-applies after merge.
 - **manifest** — contentLocales for locale gate and corpus labels; editablePaths for GitHub page copy files; deployment.productionOrigin; publicationTargets github+orbitype.
 - **customization** — Optional editorial hints for collection prompts only. No paths, models, permissions, or approval overrides.
 
@@ -33,8 +33,8 @@ Define Zod input union modes in `packages/contracts/src/index.ts`.
 | `validate_text_edit` | `text.validate_edit@1` | compute |
 | `render_text_patch` | `text.render_patch@1` | compute |
 | `open_text_edit_pr` | `text.open_edit_pr@1` | effect |
-| `apply_orbitype_draft` | `text.apply_orbitype_draft@1` | effect |
 | `wait_preview` | `deployment.wait_preview@1` | effect |
+| `apply_orbitype_preview` | `text.apply_orbitype_preview@1` | effect |
 | `awaiting_client_approval` | `workflow.awaiting_client_approval@1` | interrupt |
 | `awaiting_admin_approval` | `workflow.awaiting_admin_approval@1` | interrupt |
 | `merge_github` | `publication.merge_github@1` | effect |
@@ -73,8 +73,10 @@ Document plan confirm and admin notice shapes per `client-facing-copy.md`.
 - Ambiguous substring returns numbered disambiguation, not auto-pick.
 - confirm_target then plan confirm show exact old and new strings only.
 - Execute performs literal replacement without LLM paraphrase.
-- Preview shows changed copy on enrolled origin routes; client Approve or Cancel only.
-- After client preview approval, admin approval is required before merge.
+- Preview temporarily patches Orbitype so CMS-backed sites show the new copy;
+  client Approve or Cancel only. Cancel / admin reject restore the snapshot.
+- After client preview approval, admin approval is required before merge;
+  `publish_orbitype_pages` runs after merge.
 - One field replacement per request; second change needs a new request.
 - NL ingress de/es/en edit-text phrases dispatch to edit_text.
 - verify_production polls until new text is visible on production.
