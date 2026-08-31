@@ -262,6 +262,8 @@ describe('project manifest', () => {
       'src/content/blog-de/*.md',
       'public/images/blog/*.avif',
       'public/images/blog/*.jpg',
+      'public/images/blog/*.png',
+      'public/images/blog/*.webp',
     ]);
     expect(manifest.content.publicationTargets).toEqual([
       'github',

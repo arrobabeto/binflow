@@ -175,6 +175,53 @@ describe('Telegram runtime handlers', () => {
     );
   });
 
+  it('accepts JPEG/PNG/WebP images sent as Telegram files on direct messages', async () => {
+    const fake = fakeRuntime();
+    const handleTelegramUpdate = vi.fn(async () => ({
+      actionTokens: [],
+      locale: 'en' as const,
+      requestId: null,
+      text: 'ok',
+    }));
+    const persistInboundImage = vi.fn(async () => 'inbound/telegram/file.webp');
+    const post = vi.fn(async () => undefined);
+    registerClientTelegramHandlers(fake.runtime, {
+      botId: '1000000001',
+      handler: {
+        confirmTelegramReplyDelivered: vi.fn(async () => undefined),
+        handleTelegramUpdate,
+      },
+      persistInboundImage,
+    });
+
+    await fake.direct()?.(
+      { post },
+      {
+        attachments: [
+          {
+            data: Buffer.from([0x89, 0x50, 0x4e, 0x47]),
+            mimeType: 'image/png',
+            name: 'replacement.png',
+            type: 'file',
+          },
+        ],
+        raw: rawMessage(''),
+        text: '',
+      },
+    );
+
+    expect(persistInboundImage).toHaveBeenCalledOnce();
+    expect(handleTelegramUpdate).toHaveBeenCalledWith(
+      expect.objectContaining({
+        imageArtifactKey: 'inbound/telegram/file.webp',
+        text: '',
+      }),
+    );
+    expect(post).not.toHaveBeenCalledWith(
+      expect.stringContaining('Only PDF menu documents'),
+    );
+  });
+
   it('posts plan actions as inline buttons instead of /action text', async () => {
     const fake = fakeRuntime();
     const post = vi.fn(async () => undefined);
@@ -470,6 +517,35 @@ describe('Telegram client reply rendering', () => {
     expect(JSON.stringify(notice)).not.toContain('/action');
     expect(buttonIds(notice)).toEqual([actionToken, `${actionToken}-reject`]);
     expect(linkUrls(notice)).toEqual([]);
+  });
+
+  it('posts admin approval card with optional Vercel preview URL buttons', () => {
+    const notice = renderAdminTelegramReply(
+      {
+        actionTokens: [
+          {
+            action: 'approve_publish',
+            label: 'Approve',
+            token: actionToken,
+          },
+          {
+            action: 'reject',
+            label: 'Reject',
+            token: `${actionToken}-reject`,
+          },
+        ],
+        text: 'Action: image edit approval required',
+      },
+      [
+        {
+          label: 'Open preview',
+          url: 'https://preview.example/kontakt',
+        },
+      ],
+    );
+    expect(buttonIds(notice)).toEqual([actionToken, `${actionToken}-reject`]);
+    expect(linkUrls(notice)).toEqual(['https://preview.example/kontakt']);
+    expect(JSON.stringify(notice)).toContain('image edit approval required');
   });
 
   it('routes admin callback clicks through /action ingress', async () => {

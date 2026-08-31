@@ -8,6 +8,7 @@ import {
   analyticsRangeStart,
   buildClientCostRows,
   buildToolUsageRows,
+  fetchAllRequestSummaries,
   filterRequestsByDateRange,
   formatPercent,
   sliceTotal,
@@ -83,5 +84,29 @@ describe('analytics metrics', () => {
         } as never,
       ]),
     ).toEqual([{ label: 'Webbin', state: 'active' }]);
+  });
+
+  it('pages through all request cursors for exact analytics totals', async () => {
+    const pages = [
+      {
+        items: [{ id: '1' }, { id: '2' }] as never[],
+        nextCursor: 'cursor-2',
+      },
+      {
+        items: [{ id: '3' }] as never[],
+        nextCursor: null,
+      },
+    ];
+    let calls = 0;
+    const result = await fetchAllRequestSummaries(async ({ cursor }) => {
+      const page = pages[calls]!;
+      calls += 1;
+      if (calls === 1) expect(cursor).toBeUndefined();
+      else expect(cursor).toBe('cursor-2');
+      return page;
+    });
+    expect(result.items.map((item) => item.id)).toEqual(['1', '2', '3']);
+    expect(result.truncated).toBe(false);
+    expect(calls).toBe(2);
   });
 });

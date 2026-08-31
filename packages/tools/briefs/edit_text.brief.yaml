@@ -8,10 +8,11 @@ identity:
   command: /edit_text
   description: >
     Lets astro_orbitype clients replace one allowlisted paragraph or non-H1
-    section title per request with exact literal text (no LLM rewrite). Dual-writes
-    GitHub plus Orbitype pages. Collection interviews until the target string is
-    unambiguous; client confirms target and plan, reviews Vercel preview (approve
-    or cancel only), then admin approves before production merge.
+    section title per request with exact literal text (no LLM rewrite). Preview
+    applies a temporary Orbitype patch after Vercel is ready; cancel/reject
+    restores the snapshot. Collection interviews until the target string is
+    unambiguous; client confirms target and plan, reviews preview (approve or
+    cancel only), then admin approves before production merge.
   profile: astro_orbitype
   executorId: workflow.edit_text@1
   riskClass: medium
@@ -80,14 +81,6 @@ nodes:
       - github:contents:write
       - github:pull_requests:write
   - sortPrefix: '05'
-    id: apply_orbitype_draft
-    kind: effect
-    nodeKind: text.apply_orbitype_draft@1
-    label: Apply Orbitype pages draft
-    acceptsClientCustomization: false
-    permissions:
-      - orbitype:content:write
-  - sortPrefix: '06'
     id: wait_preview
     kind: effect
     nodeKind: deployment.wait_preview@1
@@ -95,6 +88,14 @@ nodes:
     acceptsClientCustomization: false
     permissions:
       - vercel:deployments:read
+  - sortPrefix: '06'
+    id: apply_orbitype_preview
+    kind: effect
+    nodeKind: text.apply_orbitype_preview@1
+    label: Apply temporary Orbitype preview patch
+    acceptsClientCustomization: false
+    permissions:
+      - orbitype:content:write
   - sortPrefix: '07'
     id: awaiting_client_approval
     kind: interrupt
@@ -151,10 +152,10 @@ edges:
   - from: render_text_patch
     to: open_text_edit_pr
   - from: open_text_edit_pr
-    to: apply_orbitype_draft
-  - from: apply_orbitype_draft
     to: wait_preview
   - from: wait_preview
+    to: apply_orbitype_preview
+  - from: apply_orbitype_preview
     to: awaiting_client_approval
   - from: awaiting_client_approval
     to: awaiting_admin_approval
@@ -179,8 +180,9 @@ layerAssignments:
       substring match corpus from Orbitype pages plus GitHub mirror paths. One
       replacement per request per locale. Literal oldValue→newValue patch with no
       LLM mutation. Collection: optional locale pick, target disambiguation,
-      confirm_target, await_replacement, plan confirm. Preview approve/cancel only
-      (no revision). Admin approval required before merge.
+      confirm_target, await_replacement, plan confirm. Temporary Orbitype preview
+      patch after Vercel wait; restore on cancel/reject. Preview approve/cancel
+      only (no revision). Admin approval required before merge.
   - layer: manifest
     behavior: >
       contentLocales for locale gate and corpus labels; editablePaths for GitHub
@@ -220,7 +222,8 @@ verification:
     - Ambiguous substring returns numbered disambiguation, not auto-pick.
     - confirm_target then plan confirm show exact old and new strings only.
     - Execute performs literal replacement without LLM paraphrase.
-    - Preview shows changed copy on enrolled origin routes; client Approve or Cancel only.
+    - Preview temporarily patches Orbitype so CMS-backed sites show the change;
+      cancel/reject restores snapshot; client Approve or Cancel only.
     - After client preview approval, admin approval is required before merge.
     - One field replacement per request; second change needs a new request.
     - NL ingress de/es/en edit-text phrases dispatch to edit_text.

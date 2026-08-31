@@ -51,7 +51,8 @@ context-switch to the dashboard for every pending approval.
   - **Implication text** (approve → merge/publish path; reject → request
     cancelled, client notified).
   - Optional preview/PR links when policy allows (same rules as client preview
-    URLs; no secrets).
+    URLs; no secrets). For `edit_image`, admin cards include Vercel preview
+    **URL buttons** (not only pasteable text lines).
   - Inline buttons: localized **Approve** / **Reject** labels.
 - Issue hashed, single-use **admin action tokens** bound to:
   `role=admin`, request id, request version, head SHA, preview deployment id,

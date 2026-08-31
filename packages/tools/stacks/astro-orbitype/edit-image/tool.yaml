@@ -1,0 +1,18 @@
+command: /edit_image
+description: >
+  Lets astro_orbitype clients replace one allowlisted image per request on
+  marketing pages or blog posts (including blog cover/hero). Denies page heroes
+  and nav/footer logos. Preview applies a temporary Orbitype patch (absolute
+  preview asset URL) after Vercel is ready; cancel/reject restores the snapshot.
+  Post-merge publish uses the relative path. Multilingual: one asset patches
+  every contentLocale. Collection shows the current image photo for target
+  confirm before replacement. Client preview approve/cancel; admin receives
+  preview link before merge.
+displayName: Edit site image
+executorId: workflow.edit_image@1
+graphVersion: stacks/astro-orbitype/edit-image@1
+id: edit_image
+profile: astro_orbitype
+requiresPreview: true
+riskClass: medium
+version: 1

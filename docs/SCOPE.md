@@ -55,12 +55,14 @@
 - Voice, Telegram groups/channels or a shared client bot.
 - General code, CSS, dependency, infrastructure, authentication or workflow changes requested by an LLM.
 - Shell, filesystem, generic SQL, merge or publication tools exposed to the LLM.
-- Automatic rollback.
+- Automatic rollback (except compensating restore of temporary preview CMS
+  patches for `edit_image` / `edit_text` — ADR-0051 / ADR-0052).
 - Production VPS provisioning.
 - Validated German publication until a compatible real pilot exists.
 - WordPress runtime support as a separate later phase.
 - Orbitype content tools beyond the accepted `create_blog_orbitype` dual-write
-  create path (ADR-0047); enrollment remains ADR-0045.
+  create path (ADR-0047) and the accepted page/image edit capabilities
+  (ADR-0051 / ADR-0052); enrollment remains ADR-0045.
 
 ## Permanent safety boundaries
 

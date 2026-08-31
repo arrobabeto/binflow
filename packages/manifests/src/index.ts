@@ -489,6 +489,8 @@ const buildAstroOrbitypeManifest = (
         'src/content/blog-de/*.md',
         'public/images/blog/*.avif',
         'public/images/blog/*.jpg',
+        'public/images/blog/*.png',
+        'public/images/blog/*.webp',
       ],
       frontmatterFields: ['title', 'titulo', 'description', 'descripcion'],
       imageDirectory: 'public/images/blog',

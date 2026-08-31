@@ -245,6 +245,13 @@ stuck states, and customization asks. Pilot reference:
 - **`/update_menu`** (astro_orbitype) — PDF upload, menu CTA toggles, plan
   confirm without preview; see `docs/specs/update-menu.md` and
   `packages/menu/test/update-menu.test.ts`.
+- **`/edit_text`** (astro_orbitype) — substring target, disambiguation, literal
+  replacement, preview Approve/Cancel, admin before merge; see
+  `docs/specs/edit-text.md` and `packages/text/test/`.
+- **`/edit_image`** (astro_orbitype) — image target search, photo confirm /
+  reject loop, replacement via photo or HTTPS URL, all-locale patch, preview +
+  admin (with preview link); see `docs/specs/edit-image.md` and
+  `packages/images/test/`.
 - Unpaired or different-tenant identity is rejected.
 - Attachment MIME mismatch, oversized file and unsafe URL are rejected.
 - After preview **Request changes**, free-text feedback queues

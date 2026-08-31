@@ -134,6 +134,7 @@ export async function enqueueAdminApprovalRequired(
     clock: Clock;
     eventVersion: number;
     message: string;
+    previewUrls?: Readonly<Record<string, string>>;
     projectId: string;
     requestId: string;
     tenantId: string;
@@ -167,6 +168,17 @@ export async function enqueueAdminApprovalRequired(
       token: rejectToken,
     },
   ];
+  const previewUrls =
+    input.previewUrls === undefined
+      ? undefined
+      : Object.fromEntries(
+          Object.entries(input.previewUrls).filter(
+            (entry): entry is [string, string] =>
+              typeof entry[0] === 'string' &&
+              typeof entry[1] === 'string' &&
+              entry[1].startsWith('https://'),
+          ),
+        );
   await database.insert(schema.outboxEvents).values({
     aggregateId: input.requestId,
     aggregateType: 'request',
@@ -178,6 +190,9 @@ export async function enqueueAdminApprovalRequired(
       actionTokens,
       message: input.message,
       notificationType: 'admin_approval_required',
+      ...(previewUrls !== undefined && Object.keys(previewUrls).length > 0
+        ? { previewUrls }
+        : {}),
       requestId: input.requestId,
     },
     projectId: input.projectId,

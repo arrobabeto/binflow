@@ -31,6 +31,8 @@ const TARGET_PATHS = [
   'src/content/blog-de/*.md',
   'public/images/blog/*.avif',
   'public/images/blog/*.jpg',
+  'public/images/blog/*.png',
+  'public/images/blog/*.webp',
 ] as const;
 
 const normalizeOrigin = (value: string): string => {

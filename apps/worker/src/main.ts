@@ -13,9 +13,11 @@ import { createOpenAIBlogGenerationPort, createOpenAIProjectGenerationPort } fro
 import { S3ArtifactStore } from '@binflow/artifacts';
 import { BlogExecutor, DeleteBlogExecutor, orbitypeBlogPublicationStages, type ContentCatalogPort } from '@binflow/blog';
 import { UpdateMenuExecutor } from '@binflow/menu';
+import { EditImageExecutor } from '@binflow/images';
 import { EditTextExecutor } from '@binflow/text';
 import {
   createOrbitypeBlogPublicationPort,
+  createOrbitypeImagesPort,
   createOrbitypeMenuPagesPort,
 } from '@binflow/orbitype';
 import { DeleteProjectExecutor, ProjectExecutor, type RepositoryPublicationPort as ProjectRepositoryPort } from '@binflow/projects';
@@ -47,6 +49,7 @@ import {
   renderPreviewReadyNotice,
   renderPublicationCompleteNotice,
   renderRevisionPlanNotice,
+  previewUrlButtons,
   type TelegramRuntime,
 } from '@binflow/messaging';
 import {
@@ -59,6 +62,7 @@ import {
   BlogWorkflowRuntime,
   DeleteBlogWorkflowRuntime,
   DeleteProjectWorkflowRuntime,
+  ImageWorkflowRuntime,
   MenuWorkflowRuntime,
   ProjectWorkflowRuntime,
   TextWorkflowRuntime,
@@ -72,6 +76,7 @@ import {
   catalogContentKindsForRuntimeKind,
   type DeleteBlogCatalogLoader,
   type DeleteProjectCatalogLoader,
+  type EditImageContentLoader,
   type UpdateMenuPagesLoader,
 } from '@binflow/workflows';
 
@@ -285,23 +290,80 @@ const loadUpdateMenuPages: UpdateMenuPagesLoader = async ({
   }
 };
 
-const workflowService = new WorkflowService(
-  database,
-  systemClock,
-  loadDeleteBlogCatalog,
-  loadDeleteProjectCatalog,
-  loadUpdateMenuPages,
-);
-const connection = new Redis(redisUrl, { maxRetriesPerRequest: null });
-// BullMQ Worker blocks on `connection`; keep polling-lock commands on a
-// dedicated Redis client so renew/acquire cannot stall behind BRPOP.
-const telegramLockRedis = new Redis(redisUrl, { maxRetriesPerRequest: null });
-const telegramPollingLock = new TelegramPollingLock(
-  telegramLockRedis,
-  `${process.pid}@${hostname()}`,
-  15_000,
-);
-const queue = new Queue('binflow-workflows', { connection });
+const loadEditImageContent: EditImageContentLoader = async ({
+  database: scoped,
+  projectId,
+}) => {
+  const masterKey = await loadRuntimeMasterKeyFile(defaultMasterKeyPath());
+  try {
+    const [orbitypeRow] = await scoped
+      .select()
+      .from(schema.providerCredentials)
+      .where(
+        and(
+          eq(schema.providerCredentials.projectId, projectId),
+          eq(schema.providerCredentials.kind, 'orbitype-api'),
+          eq(schema.providerCredentials.status, 'active'),
+        ),
+      )
+      .limit(1);
+    if (orbitypeRow === undefined)
+      throw new DomainError(
+        'credential_unavailable',
+        'Orbitype credential is unavailable for image edit.',
+      );
+    const orbitype = await getCredentialForVerification(scoped, orbitypeRow.id);
+    if (orbitype === undefined)
+      throw new DomainError(
+        'credential_unavailable',
+        'Orbitype credential material is unavailable.',
+      );
+    const configuration = orbitype.configuration as {
+      baseUrl?: unknown;
+      pagesTable?: unknown;
+      postsTable?: unknown;
+    };
+    if (typeof configuration.baseUrl !== 'string')
+      throw new DomainError(
+        'validation_error',
+        'Orbitype base URL is missing.',
+      );
+    const plaintext = decryptSecret(
+      orbitype.envelope,
+      masterKey,
+      orbitype.secretContext,
+    );
+    try {
+      const secret = JSON.parse(plaintext.toString('utf8')) as {
+        apiKey?: unknown;
+      };
+      if (typeof secret.apiKey !== 'string')
+        throw new DomainError(
+          'validation_error',
+          'Orbitype API key is missing.',
+        );
+      const port = createOrbitypeImagesPort({
+        apiKey: secret.apiKey,
+        baseUrl: configuration.baseUrl,
+        ...(typeof configuration.pagesTable === 'string'
+          ? { pagesTable: configuration.pagesTable }
+          : {}),
+        ...(typeof configuration.postsTable === 'string'
+          ? { postsTable: configuration.postsTable }
+          : {}),
+      });
+      const [pages, posts] = await Promise.all([
+        port.listPages(),
+        port.listPosts(),
+      ]);
+      return { pages, posts };
+    } finally {
+      plaintext.fill(0);
+    }
+  } finally {
+    masterKey.fill(0);
+  }
+};
 
 const s3AccessKeyId = await readConfiguredValue(
   'S3_ACCESS_KEY_ID',
@@ -321,6 +383,39 @@ const artifactStore = new S3ArtifactStore(
     secretAccessKey: s3SecretAccessKey,
   },
 );
+
+const persistReplacementImage = async ({
+  bytes,
+  mime,
+}: Readonly<{ bytes: Uint8Array; mime: string }>): Promise<string> => {
+  const extension =
+    mime === 'image/png' ? 'png' : mime === 'image/webp' ? 'webp' : 'jpg';
+  const key = `inbound/telegram/${uuidv7()}.${extension}`;
+  const sha256 = createHash('sha256').update(Buffer.from(bytes)).digest('hex');
+  await artifactStore.put({ bytes, key, mime, sha256 });
+  return key;
+};
+
+const workflowService = new WorkflowService(
+  database,
+  systemClock,
+  loadDeleteBlogCatalog,
+  loadDeleteProjectCatalog,
+  loadUpdateMenuPages,
+  loadEditImageContent,
+  persistReplacementImage,
+);
+const connection = new Redis(redisUrl, { maxRetriesPerRequest: null });
+// BullMQ Worker blocks on `connection`; keep polling-lock commands on a
+// dedicated Redis client so renew/acquire cannot stall behind BRPOP.
+const telegramLockRedis = new Redis(redisUrl, { maxRetriesPerRequest: null });
+const telegramPollingLock = new TelegramPollingLock(
+  telegramLockRedis,
+  `${process.pid}@${hostname()}`,
+  15_000,
+);
+const queue = new Queue('binflow-workflows', { connection });
+
 const clientTelegramRuntimes = new Map<string, TelegramRuntime>();
 const adminTelegramRuntimes = new Map<string, TelegramRuntime>();
 
@@ -658,7 +753,58 @@ const processWorkflowJob = async (name: string, data: unknown) => {
         : { productionOrigin: context.productionOrigin }),
     });
     const runtime =
-      capabilityRuntime.kind === 'edit_text'
+      capabilityRuntime.kind === 'edit_image'
+        ? (() => {
+            if (context.orbitype === undefined)
+              throw new DomainError(
+                'validation_error',
+                'Orbitype credential is required for edit_image.',
+              );
+            const configuration = context.orbitype.configuration as {
+              baseUrl?: unknown;
+              pagesTable?: unknown;
+              postsTable?: unknown;
+            };
+            if (typeof configuration.baseUrl !== 'string')
+              throw new DomainError(
+                'validation_error',
+                'Orbitype base URL is missing.',
+              );
+            const plaintext = decryptSecret(
+              context.orbitype.envelope,
+              masterKey,
+              context.orbitype.secretContext,
+            );
+            try {
+              const secret = JSON.parse(plaintext.toString('utf8')) as {
+                apiKey?: unknown;
+              };
+              if (typeof secret.apiKey !== 'string')
+                throw new DomainError(
+                  'validation_error',
+                  'Orbitype API key is missing.',
+                );
+              const orbitypeImages = createOrbitypeImagesPort({
+                apiKey: secret.apiKey,
+                baseUrl: configuration.baseUrl,
+                ...(typeof configuration.pagesTable === 'string'
+                  ? { pagesTable: configuration.pagesTable }
+                  : {}),
+                ...(typeof configuration.postsTable === 'string'
+                  ? { postsTable: configuration.postsTable }
+                  : {}),
+              });
+              return new ImageWorkflowRuntime(
+                database,
+                artifactStore,
+                new EditImageExecutor(repository, deployments),
+                orbitypeImages,
+              );
+            } finally {
+              plaintext.fill(0);
+            }
+          })()
+        : capabilityRuntime.kind === 'edit_text'
         ? (() => {
             if (context.orbitype === undefined)
               throw new DomainError(
@@ -901,6 +1047,23 @@ const processWorkflowJob = async (name: string, data: unknown) => {
             urls: textResult.result.deployment.urls,
           }),
         );
+      } else if (capabilityRuntime.kind === 'edit_image') {
+        const imageResult = await (runtime as ImageWorkflowRuntime).execute(
+          signal,
+        );
+        await notifyClient(
+          signal.requestId,
+          renderPreviewReadyNotice({
+            includeRevision: false,
+            locale,
+            title: imageResult.result.patch.candidate.pageOrPostTitle,
+            tokens: {
+              approve: imageResult.actions.approve,
+              cancel: imageResult.actions.cancel,
+            },
+            urls: imageResult.result.deployment.urls,
+          }),
+        );
       } else {
         const result = await (
           runtime as BlogWorkflowRuntime | ProjectWorkflowRuntime
@@ -981,6 +1144,15 @@ const processWorkflowJob = async (name: string, data: unknown) => {
             urls: result.urls,
           }),
         );
+      } else if (capabilityRuntime.kind === 'edit_image') {
+        const result = await (runtime as ImageWorkflowRuntime).publish(signal);
+        await notifyClient(
+          signal.requestId,
+          renderPublicationCompleteNotice({
+            locale,
+            urls: result.urls,
+          }),
+        );
       } else {
         const result = await (
           runtime as BlogWorkflowRuntime | ProjectWorkflowRuntime
@@ -991,6 +1163,16 @@ const processWorkflowJob = async (name: string, data: unknown) => {
             locale,
             urls: result.urls,
           }),
+        );
+      }
+    } else if (signal.reason === 'restore_orbitype_preview') {
+      if (capabilityRuntime.kind === 'edit_image') {
+        await (runtime as ImageWorkflowRuntime).restorePreview(signal);
+      } else if (capabilityRuntime.kind === 'edit_text') {
+        await (runtime as TextWorkflowRuntime).restorePreview(signal);
+      } else {
+        throw new Error(
+          'restore_orbitype_preview is only supported for edit_image and edit_text.',
         );
       }
     } else {
@@ -1578,19 +1760,28 @@ const dispatchAdminNotifications = async (): Promise<void> => {
             token: string;
           }>;
           message?: unknown;
+          previewUrls?: Readonly<Record<string, string>>;
         };
         const message = payload.message;
         if (typeof message !== 'string') continue;
         const claimed = await claimPendingOutboxEvent(scoped, event.id);
         if (claimed === undefined) continue;
         try {
+          const previewLinks =
+            payload.previewUrls === undefined
+              ? []
+              : previewUrlButtons(payload.previewUrls, 'en').slice(0, 3);
           const body =
-            payload.actionTokens !== undefined &&
-            payload.actionTokens.length > 0
-              ? renderAdminTelegramReply({
-                  actionTokens: payload.actionTokens,
-                  text: message,
-                })
+            (payload.actionTokens !== undefined &&
+              payload.actionTokens.length > 0) ||
+            previewLinks.length > 0
+              ? renderAdminTelegramReply(
+                  {
+                    actionTokens: payload.actionTokens ?? [],
+                    text: message,
+                  },
+                  previewLinks,
+                )
               : message;
           await runtime.adapter.postMessage(
             `telegram:${target.chatId}`,

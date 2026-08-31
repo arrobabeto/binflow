@@ -1,0 +1,6 @@
+kind: effect
+label: Apply temporary Orbitype preview patch
+nodeKind: images.apply_orbitype_preview@1
+acceptsClientCustomization: false
+permissions:
+  - orbitype:content:write

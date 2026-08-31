@@ -1,0 +1,4 @@
+kind: compute
+label: Build Orbitype and GitHub image patches
+nodeKind: images.render_patch@1
+acceptsClientCustomization: false

@@ -4,12 +4,48 @@ All notable changes to product behavior, architecture, contracts, security, oper
 
 ## Unreleased
 
+### Edit site image (`edit_image`, astro_orbitype)
+
+- New capability **`edit_image@1`** (ADR-0052): replace one allowlisted page or
+  blog image slot per request (deny page heroes / logos; allow blog cover/hero);
+  dual-write GitHub plus Orbitype; Vercel preview with client **Approve/Cancel
+  only**; admin approval before merge (preview URL in admin notice).
+- Multilingual: no locale pick; one asset patches all `contentLocales`.
+- Collection: target search → confirm (current photo) → replacement
+  (Telegram photo or HTTPS URL) → plan confirm.
+- Replacement HTTPS URLs: no credentials, blocked localhost/private hosts, no
+  redirects, MIME (JPEG/PNG/WebP) and size caps before artifact store.
+- Telegram images sent as files (`type: file`/`document`) are accepted as
+  inbound photos for `edit_image` / covers; unsupported-attachment copy is no
+  longer the menu-PDF-only message.
+- Replacement files write under manifest `imageDirectory`
+  (`public/images/blog/edit-*.{avif,jpg,png,webp}`); Orbitype editablePaths
+  include png/webp. Bistro rematerialize:
+  `packages/tools/scripts/add-bistro-edit-image-binding.ts`.
+- Preview temporarily patches Orbitype after Vercel is ready so CMS-backed
+  sites show the change; image CMS uses the **absolute preview asset URL**,
+  then post-merge publish rewrites the **relative** path. Snapshot restored on
+  client cancel / admin reject via `restore_orbitype_preview` (ADR-0052).
+- Spec documents blog `imageDirectory` paths (not `public/images/edits/**`).
+- Admin `admin_approval_required` for `edit_image` includes Vercel preview URL
+  buttons on the admin card (outbox `previewUrls` → Chat SDK LinkButtons).
+- Target confirm (`¿Cambiar esta imagen…?`) includes the absolute current image
+  URL under the label so the client can open and verify the asset visually.
+- Packages: `@binflow/images`; additive runtime/ingress/worker wiring — no
+  changes to existing tool graphs or executors.
+- Migration `0029_edit_image_capability.sql`; graph
+  `stacks/astro-orbitype/edit-image@1`.
+- Spec: `docs/specs/edit-image.md`.
+
 ### Edit page text (`edit_text`, astro_orbitype)
 
 - New capability **`edit_text@1`** (ADR-0051): literal replacement of one
   allowlisted paragraph or non-H1 section title per request; dual-write GitHub
   `cms/collections/**` mirror plus Orbitype `pages.sections`; Vercel preview with
   client **Approve/Cancel only**; admin approval before merge.
+- Preview temporarily patches Orbitype after Vercel is ready so CMS-backed
+  sites show the change; snapshot restored on client cancel / admin reject via
+  `restore_orbitype_preview` (ADR-0051).
 - Packages: `@binflow/text`; additive runtime/ingress/worker wiring — no
   changes to existing tool graphs or executors.
 - GitHub draft always includes ≥1 file under `cms/collections/**` (patch existing
@@ -68,9 +104,11 @@ All notable changes to product behavior, architecture, contracts, security, oper
   batches; models donut from tool-graph agent nodes; client status rows.
 - Cost, latency, budget spend, cost alerts, and model efficiency show
   **Available soon** until `GET /api/v1/usage` (and related) exist.
+- Analytics loads the full request list via cursor pagination (not a single
+  50-item page) so range filters report exact totals for request-derived
+  panels; `50+` only appears if the safety page cap truncates.
 - Analytics date range (Last 24 hours / 7 / 30 days / All time) filters
-  request-derived panels by `createdAt` on loaded batches; cost panels remain
-  soon.
+  request-derived panels by `createdAt`; cost panels remain soon.
 
 ### GitHub App binding is project-scoped
 

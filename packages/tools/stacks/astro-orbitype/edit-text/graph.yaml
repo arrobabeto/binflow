@@ -6,10 +6,10 @@ edges:
   - from: render_text_patch
     to: open_text_edit_pr
   - from: open_text_edit_pr
-    to: apply_orbitype_draft
-  - from: apply_orbitype_draft
     to: wait_preview
   - from: wait_preview
+    to: apply_orbitype_preview
+  - from: apply_orbitype_preview
     to: awaiting_client_approval
   - from: awaiting_client_approval
     to: awaiting_admin_approval
@@ -26,8 +26,8 @@ nodes:
   - id: validate_text_edit
   - id: render_text_patch
   - id: open_text_edit_pr
-  - id: apply_orbitype_draft
   - id: wait_preview
+  - id: apply_orbitype_preview
   - id: awaiting_client_approval
   - id: awaiting_admin_approval
   - id: merge_github

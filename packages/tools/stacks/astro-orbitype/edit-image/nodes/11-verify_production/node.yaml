@@ -1,0 +1,6 @@
+kind: effect
+label: Verify production image
+nodeKind: images.verify_production@1
+acceptsClientCustomization: false
+permissions:
+  - vercel:deployments:read

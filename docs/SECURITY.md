@@ -60,6 +60,8 @@ provider secrets.
 | Duplicate publication            | Idempotency keys, graph checkpoints, merge/publication reconciliation                                               |
 | Malicious attachment             | MIME sniffing, size limits, malware scan, safe parser, no macro execution                                           |
 | SSRF                             | URL parser, DNS/IP validation, protocol/port rules, redirect revalidation, egress policy                            |
+| `edit_image` replacement URL     | HTTPS only; block localhost/private literal hosts; no redirects; MIME + size caps before artifact persist           |
+| `edit_image` / `edit_text` preview CMS | Temporary live Orbitype patch after snapshot; absolute preview asset URL for images; restore on cancel/reject (ADR-0051/0052) |
 | Public confidential preview      | Vercel protection/share link policy and revocation                                                                  |
 | Compromised worker               | Non-root container, minimal mounted secrets, no Docker socket, scoped egress                                        |
 | Model cost abuse                 | Per-tenant budgets, call/token caps, rate limits and admin alerts                                                   |

@@ -12,6 +12,10 @@ and non-H1 section titles) with exact literal text. The change must dual-write
 GitHub CMS mirrors and Orbitype `pages.sections`, show a Vercel preview, and
 require client preview approval plus admin publication approval before merge.
 
+Bistro Astro apps read Orbitype at runtime (including on Vercel preview
+deployments). A GitHub-only preview therefore does not show the proposed copy.
+Orbitype has no separate draft environment for page section updates.
+
 Existing capabilities must remain unchanged: `update_menu` continues to patch
 menu PDFs and CTA hrefs only; blog and delete tools keep their graphs and
 approval policies.
@@ -22,34 +26,43 @@ approval policies.
    `astro_orbitype` with executor `workflow.edit_text@1`.
 2. Collection interviews for locale (when multilingual), target substring,
    disambiguation, target confirm, replacement text, and plan confirm.
-3. Execute graph opens a GitHub PR, applies an Orbitype pages draft, waits for
-   preview, then interrupts for client approve/cancel (no revision) and admin
-   approval before merge/publish/verify.
-4. Implement discovery and patching in isolated package `@binflow/text`; wire
-   runtime, ingress, and worker branches additively without modifying existing
-   tool executors.
-5. Policy `astro-orbitype-text-edit@1` requires `client` + `admin` approvals and
+3. Execute graph: open GitHub PR → wait Vercel preview → **temporary
+   Orbitype pages patch** (after snapshot) → client approve/cancel → admin
+   approval → merge → `publish_orbitype_pages` (idempotent final patch) →
+   verify.
+4. **Temporary live CMS mutation:** because the site serves Orbitype live,
+   preview applies the new text to published rows so the client can review the
+   real change. Before apply, persist a restore snapshot in the patch artifact.
+5. **Compensating restore:** on client cancel, admin reject, or failure after
+   the temporary write, resume reason `restore_orbitype_preview` rewrites the
+   snapshot. This is not general automatic rollback (SCOPE carve-out).
+6. Implement discovery and patching in `@binflow/text`; wire runtime/ingress
+   additively.
+7. Policy `astro-orbitype-text-edit@1` requires `client` + `admin` approvals and
    preview.
 
 ## Consequences
 
-- Positive: literal copy edits with preview and dual-write on Orbitype stacks.
+- Positive: client sees the proposed copy on the live-backed preview surface.
+- Negative: during the approval window the production site shows the proposed
+  text until approve+merge finalizes or cancel/reject restores.
 - Negative: GitHub mirror resolution depends on slug-based paths under
-  `cms/collections/**`; sites with non-standard export layouts need manifest or
-  customization follow-up.
+  `cms/collections/**`.
 - Operational: migrate before dashboard assignment; rematerialize manifests only
-  when `editablePaths` change (already includes `cms/collections/**` for Bistro).
+  when `editablePaths` change.
 
 ## Alternatives considered
 
-- Reuse `update_menu` graph — rejected; different mutation surface and preview
-  requirements.
-- LLM paraphrase — rejected; user requires literal replacement only.
-- Client-only approval — rejected; admin gate required before production merge.
+- GitHub-only preview (no Orbitype until merge) — rejected for Bistro; preview
+  still reads CMS and hides the change.
+- True Orbitype page drafts — unavailable on the pilot (no draft env for
+  pages).
+- LLM paraphrase — rejected; literal replacement only.
+- Client-only approval — rejected; admin gate required before merge.
 
 ## Verification
 
-- Package tests for editable copy discovery and literal patch application.
-- Conformance: catalog, policies, contracts, migration, and runtime registry.
-- Ingress tests for action labels and NL routing.
-- Manual pilot on Bistro after dashboard assignment and manifest binding.
+- Package tests for discovery, literal patch, snapshot restore.
+- Cancel / admin reject enqueue `restore_orbitype_preview`.
+- Conformance: catalog, policies, contracts, runtime registry.
+- Manual pilot on Bistro.

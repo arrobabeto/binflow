@@ -148,17 +148,17 @@ dollars, vendors, or tool names.
 | Panel | Status | Source |
 |---|---|---|
 | Total API Spend | Soon | Future `GET /api/v1/usage` |
-| Total Requests | Live (approx) | Recent request list batches |
+| Total Requests | Live (exact) | Full cursor walk of `GET /api/v1/requests`, then filter by `createdAt` for the selected range |
 | Avg Cost/Request | Soon | Usage |
 | Avg Latency | Soon | Usage / model_calls |
-| Tool Usage / Failures donuts | Live (approx) | `capabilityId` + state from request batches; labels from tools catalog |
-| Tool usage table | Hybrid | Live counts/rates from batches; Avg Execution Time soon |
+| Tool Usage / Failures donuts | Live (exact) | Same full request catalog + range filter; labels from tools catalog |
+| Tool usage table | Hybrid | Exact counts/rates from ranged catalog; Avg Execution Time soon |
 | API Cost Over Time | Soon | Usage time-series |
 | Requests by Model | Live | Agent-node `model` fields across tool graphs |
 | Cost by Client | Hybrid | Live client + enrollment state; budget/spend soon |
 | Recent Cost Alerts | Soon | Budget alerts |
 | Model Efficiency Index | Soon | Pricing scores |
-| Date range control | Live for request-derived panels | Filters loaded request batches by `createdAt`: Last 24 hours (rolling), Last 7 / 30 days (UTC calendar), or All time. Does not invent usage spend series |
+| Date range control | Live for request-derived panels | Filters the full request catalog by `createdAt`: Last 24 hours (rolling), Last 7 / 30 days (UTC calendar), or All time. Exact totals (no `50+`) unless the page-cap safety limit truncates |
 
 ## Clients and projects
 

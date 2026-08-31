@@ -12,6 +12,7 @@ import {
 import {
   EditTextExecutor,
   resolveTextEditCandidate,
+  restoreOrbitypeTextPreview,
   type OrbitypeTextPagesPort,
   type TextEditPatchArtifact,
 } from '@binflow/text';
@@ -41,10 +42,11 @@ const stageRequestState = (node: string): string => {
     case 'validate_text_edit':
     case 'render_text_patch':
     case 'open_text_edit_pr':
-    case 'apply_orbitype_draft':
       return 'GENERATING';
     case 'wait_preview':
       return 'PREVIEW_DEPLOYING';
+    case 'apply_orbitype_preview':
+      return 'GENERATING';
     case 'awaiting_client_approval':
       return 'AWAITING_CLIENT_APPROVAL';
     case 'awaiting_admin_approval':
@@ -331,6 +333,129 @@ export class TextWorkflowRuntime {
         publication: preview.publication,
       },
     };
+  }
+
+  public async restorePreview(raw: WorkflowResumeSignal): Promise<void> {
+    const signal = workflowResumeSignalSchema.parse(raw);
+    const context = await withSystemTenantScope(
+      this.database,
+      {
+        operation: 'edit_text.restore_preview.load',
+        tenantId: signal.tenantId,
+      },
+      async (database) => {
+        const [row] = await database
+          .select({
+            artifact: schema.artifacts,
+            request: schema.requests,
+          })
+          .from(schema.requests)
+          .innerJoin(
+            schema.artifacts,
+            and(
+              eq(schema.artifacts.requestVersionId, signal.requestVersionId),
+              eq(schema.artifacts.kind, 'text_edit_patch'),
+            ),
+          )
+          .where(eq(schema.requests.id, signal.requestId))
+          .limit(1);
+        return row;
+      },
+    );
+    if (context === undefined) return;
+
+    const patchObject = await this.artifacts.get(context.artifact.storageKey);
+    if (patchObject === undefined) return;
+    const patch = JSON.parse(
+      new TextDecoder().decode(patchObject),
+    ) as TextEditPatchArtifact;
+    const preview = patch.orbitypePreview;
+    if (preview === undefined || preview.restored === true) return;
+    if (preview.applied !== true) return;
+
+    try {
+      await restoreOrbitypeTextPreview(this.orbitype, preview.restore);
+    } catch (error) {
+      await withSystemTenantScope(
+        this.database,
+        {
+          operation: 'edit_text.restore_preview.fail',
+          tenantId: signal.tenantId,
+        },
+        async (database) => {
+          const terminal =
+            context.request.terminalResult !== null &&
+            typeof context.request.terminalResult === 'object' &&
+            !Array.isArray(context.request.terminalResult)
+              ? (context.request.terminalResult as Record<string, unknown>)
+              : {};
+          await database
+            .update(schema.requests)
+            .set({
+              terminalResult: {
+                ...terminal,
+                orbitypeRestoreFailed: true,
+                orbitypeRestoreError:
+                  error instanceof Error ? error.message : 'restore failed',
+              },
+              updatedAt: this.clock.now(),
+              version: context.request.version + 1,
+            })
+            .where(eq(schema.requests.id, context.request.id));
+        },
+      );
+      return;
+    }
+
+    const restoredPatch: TextEditPatchArtifact = {
+      ...patch,
+      orbitypePreview: { ...preview, restored: true },
+    };
+    const restoredBytes = new TextEncoder().encode(
+      JSON.stringify(restoredPatch),
+    );
+    const restoredDigest = createHash('sha256')
+      .update(restoredBytes)
+      .digest('hex');
+    await this.artifacts.put({
+      bytes: restoredBytes,
+      key: context.artifact.storageKey,
+      mime: 'application/json',
+      sha256: restoredDigest,
+    });
+    await withSystemTenantScope(
+      this.database,
+      {
+        operation: 'edit_text.restore_preview.persist',
+        tenantId: signal.tenantId,
+      },
+      async (database) => {
+        const terminal =
+          context.request.terminalResult !== null &&
+          typeof context.request.terminalResult === 'object' &&
+          !Array.isArray(context.request.terminalResult)
+            ? (context.request.terminalResult as Record<string, unknown>)
+            : {};
+        await database
+          .update(schema.artifacts)
+          .set({
+            bytes: restoredBytes.byteLength,
+            sha256: restoredDigest,
+          })
+          .where(eq(schema.artifacts.id, context.artifact.id));
+        await database
+          .update(schema.requests)
+          .set({
+            terminalResult: {
+              ...terminal,
+              orbitypePreviewRestored: true,
+            },
+            updatedAt: this.clock.now(),
+            version: context.request.version + 1,
+          })
+          .where(eq(schema.requests.id, context.request.id));
+      },
+    );
   }
 
   public async publish(raw: WorkflowResumeSignal): Promise<

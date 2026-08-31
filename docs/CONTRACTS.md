@@ -404,6 +404,45 @@ type EditTextInput =
     };
 ```
 
+## `edit_image`
+
+Telegram command: `/edit_image`.
+
+See `docs/specs/edit-image.md` and ADR-0052. Profile `astro_orbitype` only.
+Input schema: `editImageInputSchema` (`collect` | `execute` modes). Reply actions:
+`pick_image_target`, `confirm_image_target`, `reject_image_target`,
+`confirm_image_plan`. Optional `photoUrl` on `TelegramReply` for current-image
+preview during target confirm. Preview actions: `approve_preview`, `cancel` only
+(no revision). Admin always required after client approve.
+
+```ts
+type EditImageInput =
+  | {
+      mode: 'collect';
+      projectId: string;
+      collectionStep:
+        | 'await_target'
+        | 'disambiguate'
+        | 'confirm_target'
+        | 'await_replacement'
+        | 'ready';
+      targetKey?: string;
+      replacementArtifactKey?: string;
+      replacementMime?: string;
+      replacementSourceUrl?: string;
+      discoveredTargets: ImageEditCandidate[];
+      /* … */
+    }
+  | {
+      mode: 'execute';
+      projectId: string;
+      targetKey: string;
+      replacementArtifactKey: string;
+      replacementMime: string;
+      replacementSourceUrl?: string;
+    };
+```
+
 ```ts
 type CreateProjectAstroInput =
   | {
@@ -631,9 +670,10 @@ client tapped a button or typed the fallback command. Visible Telegram copy
 never includes the `/action` form.
 
 Publication resume signals use the same stable request/request-version
-identity as generation and add a code-owned reason: `execute`, `publish` or
-`reconcile`. Queue payloads contain no provider credential, generated body or
-attachment bytes.
+identity as generation and add a code-owned reason: `execute`, `publish`,
+`reconcile`, or `restore_orbitype_preview` (compensating restore of temporary
+preview CMS patches for `edit_image` / `edit_text`). Queue payloads contain no
+provider credential, generated body or attachment bytes.
 
 ## Generated rationale and model call
 

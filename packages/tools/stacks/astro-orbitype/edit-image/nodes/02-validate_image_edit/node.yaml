@@ -1,0 +1,4 @@
+kind: compute
+label: Validate target, denylist, and replacement asset
+nodeKind: images.validate_edit@1
+acceptsClientCustomization: false
