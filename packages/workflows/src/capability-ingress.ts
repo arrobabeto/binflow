@@ -4,7 +4,8 @@ export type CapabilityIngressHandlerKind =
   | 'blog'
   | 'delete_blog'
   | 'delete_project'
-  | 'project';
+  | 'project'
+  | 'update_menu';
 
 export type CapabilityIngressRoute = Readonly<{
   capabilityId: string;
@@ -55,6 +56,11 @@ export const matchesNaturalProject = (text: string): boolean => {
 export const deleteProjectNaturalLanguage = (text: string): boolean =>
   deleteBlogVerbPattern.test(text) && matchesNaturalProject(text);
 
+export const updateMenuNaturalLanguage = (text: string): boolean =>
+  /\b(actualiz\w*\s+men[uú]|subir\s+(?:la\s+)?carta|menu\s+pdf|update\s+menu|upload\s+menu|speisekarte\s+aktualisieren|men[uü]\s+hochladen)\b/iu.test(
+    text,
+  );
+
 const handlerKindForExecutor = (
   executorId: string,
 ): CapabilityIngressHandlerKind => {
@@ -66,6 +72,7 @@ const handlerKindForExecutor = (
     return 'blog';
   if (executorId === 'workflow.delete_blog@1') return 'delete_blog';
   if (executorId === 'workflow.delete_project@1') return 'delete_project';
+  if (executorId === 'workflow.update_menu@1') return 'update_menu';
   throw new Error(`Unsupported ingress executor ${executorId}.`);
 };
 
@@ -80,6 +87,7 @@ const naturalLanguageForCapability = (
   if (capabilityId === 'delete_blog_draft') return deleteBlogNaturalLanguage;
   if (capabilityId === 'delete_project_astro') return deleteProjectNaturalLanguage;
   if (capabilityId === 'create_project_astro') return matchesNaturalProject;
+  if (capabilityId === 'update_menu') return updateMenuNaturalLanguage;
   return undefined;
 };
 
@@ -101,5 +109,10 @@ export const capabilityIngressRoutes: readonly CapabilityIngressRoute[] =
   );
 
 export const collectionCapabilityIds = Object.freeze(
-  new Set(['create_project_astro', 'delete_blog_draft', 'delete_project_astro']),
+  new Set([
+    'create_project_astro',
+    'delete_blog_draft',
+    'delete_project_astro',
+    'update_menu',
+  ]),
 );

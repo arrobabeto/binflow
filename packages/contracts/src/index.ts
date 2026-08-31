@@ -895,11 +895,59 @@ export const deleteProjectAstroInputSchema = z.discriminatedUnion('mode', [
     .strict(),
 ]);
 
+export const menuCtaCandidateSchema = z
+  .object({
+    currentHref: z.string().trim().min(1).max(500),
+    field: z.enum(['ctaHref', 'ctaSecondaryHref']),
+    key: z.string().trim().min(1).max(120),
+    label: z.string().trim().min(1).max(200),
+    pageId: z.string().trim().min(1).max(80),
+    pageSlug: z.string().trim().min(1).max(120),
+    pageTitle: z.string().trim().min(1).max(200),
+    sectionIndex: z.number().int().nonnegative(),
+  })
+  .strict();
+
+const updateMenuSharedSchema = {
+  projectId: z.string().min(1),
+} as const;
+
+export const updateMenuInputSchema = z.discriminatedUnion('mode', [
+  z
+    .object({
+      collectionComplete: z.boolean().default(false),
+      collectionStep: z
+        .enum(['await_pdf', 'select_ctas', 'ready'])
+        .default('await_pdf'),
+      discoveredCtas: z.array(menuCtaCandidateSchema).max(40).default([]),
+      menuPdfPublicPath: z.string().trim().min(1).max(200).optional(),
+      messages: z.array(z.string().trim().max(10_000)).max(40).default([]),
+      mode: z.literal('collect'),
+      pdfArtifactKey: z.string().trim().min(1).max(500).optional(),
+      pdfFileName: z.string().trim().min(1).max(200).optional(),
+      projectId: z.string().min(1),
+      selectedCtaKeys: z.array(z.string().trim().min(1).max(120)).max(40).default([]),
+    })
+    .strict(),
+  z
+    .object({
+      ...updateMenuSharedSchema,
+      menuPdfPublicPath: z.string().trim().min(1).max(200),
+      menuPdfPublicUrl: z.string().url(),
+      mode: z.literal('execute'),
+      pdfArtifactKey: z.string().trim().min(1).max(500),
+      pdfFileName: z.string().trim().min(1).max(200),
+      selectedCtaKeys: z.array(z.string().trim().min(1).max(120)).min(1).max(40),
+    })
+    .strict(),
+]);
+
 export const capabilityInputSchema = z.union([
   createBlogDraftInputSchema,
   createProjectAstroInputSchema,
   deleteBlogDraftInputSchema,
   deleteProjectAstroInputSchema,
+  updateMenuInputSchema,
 ]);
 
 export const capabilityCatalogItemSchema = z
@@ -1069,6 +1117,7 @@ export type CapabilityBinding = z.infer<typeof capabilityBindingSchema>;
 export type SourceReference = z.infer<typeof sourceReferenceSchema>;
 export type CreateBlogDraftInput = z.infer<typeof createBlogDraftInputSchema>;
 export type DeleteBlogDraftInput = z.infer<typeof deleteBlogDraftInputSchema>;
+export type UpdateMenuInput = z.infer<typeof updateMenuInputSchema>;
 export type DeleteProjectAstroInput = z.infer<typeof deleteProjectAstroInputSchema>;
 export type CreateProjectAstroInput = z.infer<typeof createProjectAstroInputSchema>;
 /** @deprecated Use CreateProjectAstroInput */
@@ -1124,6 +1173,7 @@ export const capabilityIdSchema = z.enum([
   'create_project_draft',
   'delete_blog_draft',
   'delete_project_astro',
+  'update_menu',
 ]);
 
 export const requestSummarySchema = z
@@ -1595,6 +1645,13 @@ export const telegramIngressSchema = z
   .object({
     botId: z.string().regex(/^\d+$/),
     chatId: z.string().regex(/^-?\d+$/),
+    documentArtifactKey: z
+      .string()
+      .trim()
+      .min(1)
+      .max(500)
+      .regex(/^[a-z0-9][a-z0-9/_\-.]{1,500}$/u)
+      .optional(),
     externalUserId: z.string().regex(/^\d+$/),
     imageArtifactKey: z
       .string()
@@ -1609,10 +1666,15 @@ export const telegramIngressSchema = z
   })
   .strict()
   .superRefine((value, ctx) => {
-    if (value.text.trim().length === 0 && value.imageArtifactKey === undefined) {
+    if (
+      value.text.trim().length === 0 &&
+      value.imageArtifactKey === undefined &&
+      value.documentArtifactKey === undefined
+    ) {
       ctx.addIssue({
         code: 'custom',
-        message: 'Telegram ingress requires text or an image attachment.',
+        message:
+          'Telegram ingress requires text, an image attachment, or a document attachment.',
         path: ['text'],
       });
     }
@@ -1627,11 +1689,13 @@ export const telegramReplySchema = z
             action: z.enum([
               'confirm_plan',
               'confirm_delete_target',
+              'confirm_menu_selection',
               'approve_preview',
               'request_revision',
               'confirm_revision_plan',
               'adjust_revision_plan',
               'cancel_revision',
+              'toggle_menu_cta',
               'cancel',
             ]),
             label: z.string().min(1),

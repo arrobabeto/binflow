@@ -242,6 +242,9 @@ stuck states, and customization asks. Pilot reference:
   both match.
 - `/delete_blog` — same destructive pattern for blog articles (see
   `docs/specs/delete-blog-draft.md`).
+- **`/update_menu`** (astro_orbitype) — PDF upload, menu CTA toggles, plan
+  confirm without preview; see `docs/specs/update-menu.md` and
+  `packages/menu/test/update-menu.test.ts`.
 - Unpaired or different-tenant identity is rejected.
 - Attachment MIME mismatch, oversized file and unsafe URL are rejected.
 - After preview **Request changes**, free-text feedback queues

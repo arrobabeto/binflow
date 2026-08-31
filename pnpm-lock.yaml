@@ -201,6 +201,9 @@ importers:
       '@binflow/github':
         specifier: workspace:*
         version: link:../../packages/github
+      '@binflow/menu':
+        specifier: workspace:*
+        version: link:../../packages/menu
       '@binflow/messaging':
         specifier: workspace:*
         version: link:../../packages/messaging
@@ -487,6 +490,22 @@ importers:
         specifier: 24.13.3
         version: 24.13.3
 
+  packages/menu:
+    dependencies:
+      '@binflow/blog':
+        specifier: workspace:*
+        version: link:../blog
+      '@binflow/contracts':
+        specifier: workspace:*
+        version: link:../contracts
+      '@binflow/domain':
+        specifier: workspace:*
+        version: link:../domain
+    devDependencies:
+      '@types/node':
+        specifier: 24.13.3
+        version: 24.13.3
+
   packages/messaging:
     dependencies:
       '@binflow/contracts':
@@ -682,6 +701,12 @@ importers:
       '@binflow/domain':
         specifier: workspace:*
         version: link:../domain
+      '@binflow/menu':
+        specifier: workspace:*
+        version: link:../menu
+      '@binflow/orbitype':
+        specifier: workspace:*
+        version: link:../orbitype
       '@binflow/policies':
         specifier: workspace:*
         version: link:../policies

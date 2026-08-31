@@ -1,0 +1,4 @@
+kind: compute
+label: Validate PDF and selected CTAs
+nodeKind: menu.validate_update@1
+acceptsClientCustomization: false

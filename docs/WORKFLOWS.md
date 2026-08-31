@@ -226,6 +226,24 @@ Automated tests: `packages/blog/test/delete-blog.test.ts`,
 Manual scenario ids (test-tool): DEL-PROJECT-01 (URL delete), DEL-PROJECT-02
 (title + URL confirm), DEL-PROJECT-03 (already deleted → `project_not_found`).
 
+## Menu update (`update_menu`, astro_orbitype)
+
+Graph: sync pages → validate → render artifacts → open menu PR → apply Orbitype
+draft → merge GitHub → publish Orbitype pages → verify production → completed.
+No `wait_preview` or client preview approval; **`AWAITING_PLAN_CONFIRMATION`**
+is the sole client gate (`confirm_plan`).
+
+- Telegram collection: PDF upload → multi-select menu CTAs → plan summary with
+  public PDF URL → execute on confirm.
+- Dual-write: versioned `public/documents/menu-{date}-{suffix}.pdf` on GitHub
+  plus `pages.sections` href patches on Orbitype.
+- Runtime kind `update_menu`; catalog sync scope `pages` with empty
+  `contentKinds` (Orbitype list, not GitHub tree walk).
+
+Automated tests: `packages/menu/test/update-menu.test.ts`,
+`packages/workflows/test/update-menu-ingress.test.ts`,
+`packages/workflows/test/capability-conformance.test.ts`.
+
 ## Publication
 
 Before merge:

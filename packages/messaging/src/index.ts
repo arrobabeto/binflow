@@ -476,12 +476,20 @@ const telegramIngress = (
   botId: string,
   raw: TelegramMessage,
   text: string,
-  imageArtifactKey?: string,
+  attachments: Readonly<{
+    documentArtifactKey?: string;
+    imageArtifactKey?: string;
+  }> = {},
 ): TelegramIngress | null => {
   const externalUserId = raw.from?.id;
   if (externalUserId === undefined) return null;
   const trimmed = text.trim();
-  if (trimmed.length === 0 && imageArtifactKey === undefined) return null;
+  if (
+    trimmed.length === 0 &&
+    attachments.imageArtifactKey === undefined &&
+    attachments.documentArtifactKey === undefined
+  )
+    return null;
   return {
     botId,
     chatId: String(raw.chat.id),
@@ -489,7 +497,12 @@ const telegramIngress = (
     receivedAt: new Date(raw.date * 1000).toISOString(),
     text: trimmed,
     updateId: String(raw.message_id),
-    ...(imageArtifactKey === undefined ? {} : { imageArtifactKey }),
+    ...(attachments.documentArtifactKey === undefined
+      ? {}
+      : { documentArtifactKey: attachments.documentArtifactKey }),
+    ...(attachments.imageArtifactKey === undefined
+      ? {}
+      : { imageArtifactKey: attachments.imageArtifactKey }),
   };
 };
 
@@ -514,12 +527,89 @@ const commandText = (command: string, argumentsText: string): string =>
   argumentsText.length === 0 ? command : `${command} ${argumentsText}`;
 
 const MAX_INBOUND_IMAGE_BYTES = 8_000_000;
+const MAX_INBOUND_DOCUMENT_BYTES = 10_485_760;
+const ALLOWED_DOCUMENT_MIMES = new Set(['application/pdf']);
 const ALLOWED_IMAGE_MIMES = new Set([
   'image/jpeg',
   'image/jpg',
   'image/png',
   'image/webp',
 ]);
+
+export type PersistInboundDocument = (input: Readonly<{
+  bytes: Uint8Array;
+  mime: string;
+}>) => Promise<string>;
+
+const isMenuPdfAttachment = (
+  attachment: Readonly<{
+    mimeType?: string;
+    name?: string;
+    type: string;
+  }>,
+): boolean => {
+  if (attachment.type !== 'document' && attachment.type !== 'file') return false;
+  const mime = (attachment.mimeType ?? 'application/pdf').toLowerCase();
+  if (ALLOWED_DOCUMENT_MIMES.has(mime)) return true;
+  const name = attachment.name?.toLowerCase() ?? '';
+  return (
+    mime === 'application/octet-stream' &&
+    (name.endsWith('.pdf') || name.includes('.pdf'))
+  );
+};
+
+const extractInboundDocumentArtifactKey = async (
+  message: Readonly<{
+    attachments: ReadonlyArray<{
+      data?: Buffer | Blob;
+      fetchData?: () => Promise<Buffer>;
+      mimeType?: string;
+      name?: string;
+      type: string;
+    }>;
+  }>,
+  persistInboundDocument: PersistInboundDocument | undefined,
+): Promise<string | undefined> => {
+  if (persistInboundDocument === undefined) return undefined;
+  const document = message.attachments.find((attachment) =>
+    isMenuPdfAttachment(attachment),
+  );
+  if (document === undefined) return undefined;
+  const mime = (document.mimeType ?? 'application/pdf').toLowerCase();
+  if (
+    !ALLOWED_DOCUMENT_MIMES.has(mime) &&
+    !(
+      mime === 'application/octet-stream' &&
+      (document.name?.toLowerCase().endsWith('.pdf') ?? false)
+    )
+  )
+    throw new DomainError(
+      'validation_error',
+      'Only PDF menu documents are accepted.',
+      { code: 'attachment_mime_denied' },
+    );
+  const raw =
+    document.data !== undefined
+      ? document.data
+      : document.fetchData !== undefined
+        ? await document.fetchData()
+        : undefined;
+  if (raw === undefined)
+    throw new DomainError(
+      'provider_final',
+      'Telegram document attachment could not be downloaded.',
+    );
+  const bytes = Buffer.isBuffer(raw)
+    ? new Uint8Array(raw)
+    : new Uint8Array(await (raw as Blob).arrayBuffer());
+  if (bytes.byteLength === 0 || bytes.byteLength > MAX_INBOUND_DOCUMENT_BYTES)
+    throw new DomainError(
+      'validation_error',
+      'Menu PDF exceeds the allowed size.',
+      { code: 'attachment_too_large' },
+    );
+  return persistInboundDocument({ bytes, mime });
+};
 
 export type PersistInboundImage = (input: Readonly<{
   bytes: Uint8Array;
@@ -578,6 +668,7 @@ const registerTelegramIngressHandlers = (
     afterReplyDelivered?: (update: TelegramIngress) => Promise<void>;
     botId: string;
     handler: (update: TelegramIngress) => Promise<TelegramReply>;
+    persistInboundDocument?: PersistInboundDocument;
     persistInboundImage?: PersistInboundImage;
     render: (reply: TelegramReply) => AdapterPostableMessage;
   }>,
@@ -597,66 +688,90 @@ const registerTelegramIngressHandlers = (
 
   runtime.chat.onDirectMessage(async (thread, message) => {
     let imageArtifactKey: string | undefined;
+    let documentArtifactKey: string | undefined;
     try {
       imageArtifactKey = await extractInboundImageArtifactKey(
         message,
         input.persistInboundImage,
       );
-    } catch (error) {
-      const text =
-        error instanceof DomainError
-          ? error.message
-          : 'The image attachment was rejected.';
-      await thread.post(text);
-      return;
-    }
-    await dispatch(
-      telegramIngress(
-        input.botId,
-        message.raw as TelegramMessage,
-        message.text,
-        imageArtifactKey,
-      ),
-      thread,
-    );
-  });
-  runtime.chat.onSlashCommand(async (event) => {
-    let imageArtifactKey: string | undefined;
-    try {
-      imageArtifactKey = await extractInboundImageArtifactKey(
-        {
-          attachments:
-            (
-              event as {
-                attachments?: ReadonlyArray<{
-                  data?: Buffer | Blob;
-                  fetchData?: () => Promise<Buffer>;
-                  mimeType?: string;
-                  type: string;
-                }>;
-              }
-            ).attachments ??
-            (
-              event as {
-                message?: {
-                  attachments?: ReadonlyArray<{
-                    data?: Buffer | Blob;
-                    fetchData?: () => Promise<Buffer>;
-                    mimeType?: string;
-                    type: string;
-                  }>;
-                };
-              }
-            ).message?.attachments ??
-            [],
-        },
-        input.persistInboundImage,
+      documentArtifactKey = await extractInboundDocumentArtifactKey(
+        message,
+        input.persistInboundDocument,
       );
     } catch (error) {
       const text =
         error instanceof DomainError
           ? error.message
-          : 'The image attachment was rejected.';
+          : 'The attachment was rejected.';
+      await thread.post(text);
+      return;
+    }
+    const ingress = telegramIngress(
+      input.botId,
+      message.raw as TelegramMessage,
+      message.text,
+      {
+        ...(documentArtifactKey === undefined ? {} : { documentArtifactKey }),
+        ...(imageArtifactKey === undefined ? {} : { imageArtifactKey }),
+      },
+    );
+    if (ingress === null) {
+      const hasUnsupportedAttachment = message.attachments.some(
+        (attachment) =>
+          attachment.type !== 'image' &&
+          !isMenuPdfAttachment(attachment),
+      );
+      if (hasUnsupportedAttachment) {
+        await thread.post(
+          'Only PDF menu documents are accepted for this request.',
+        );
+        return;
+      }
+      return;
+    }
+    await dispatch(ingress, thread);
+  });
+  runtime.chat.onSlashCommand(async (event) => {
+    let imageArtifactKey: string | undefined;
+    let documentArtifactKey: string | undefined;
+    const attachments =
+      (
+        event as {
+          attachments?: ReadonlyArray<{
+            data?: Buffer | Blob;
+            fetchData?: () => Promise<Buffer>;
+            mimeType?: string;
+            type: string;
+          }>;
+        }
+      ).attachments ??
+      (
+        event as {
+          message?: {
+            attachments?: ReadonlyArray<{
+              data?: Buffer | Blob;
+              fetchData?: () => Promise<Buffer>;
+              mimeType?: string;
+              type: string;
+            }>;
+          };
+        }
+      ).message?.attachments ??
+      [];
+    try {
+      imageArtifactKey = await extractInboundImageArtifactKey(
+        { attachments },
+        input.persistInboundImage,
+      );
+      documentArtifactKey = await extractInboundDocumentArtifactKey(
+        { attachments },
+        input.persistInboundDocument,
+      );
+    } catch (error) {
+      const text =
+        error instanceof DomainError
+          ? error.message
+          : 'The attachment was rejected.';
       await event.channel.post(text);
       return;
     }
@@ -665,7 +780,10 @@ const registerTelegramIngressHandlers = (
         input.botId,
         event.raw as TelegramMessage,
         commandText(event.command, event.text),
-        imageArtifactKey,
+        {
+          ...(documentArtifactKey === undefined ? {} : { documentArtifactKey }),
+          ...(imageArtifactKey === undefined ? {} : { imageArtifactKey }),
+        },
       ),
       event.channel,
     );
@@ -678,6 +796,7 @@ export const registerClientTelegramHandlers = (
   input: Readonly<{
     botId: string;
     handler: TelegramIngressHandler;
+    persistInboundDocument?: PersistInboundDocument;
     persistInboundImage?: PersistInboundImage;
   }>,
 ): void => {
@@ -686,6 +805,9 @@ export const registerClientTelegramHandlers = (
       input.handler.confirmTelegramReplyDelivered(update),
     botId: input.botId,
     handler: (update) => input.handler.handleTelegramUpdate(update),
+    ...(input.persistInboundDocument === undefined
+      ? {}
+      : { persistInboundDocument: input.persistInboundDocument }),
     ...(input.persistInboundImage === undefined
       ? {}
       : { persistInboundImage: input.persistInboundImage }),

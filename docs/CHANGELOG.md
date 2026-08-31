@@ -4,6 +4,26 @@ All notable changes to product behavior, architecture, contracts, security, oper
 
 ## Unreleased
 
+### Update menu verify polling
+
+- `verify_production` polls the public menu PDF URL for up to 120s after merge
+  so Vercel/CDN propagation does not false-fail an otherwise successful update.
+
+### Update menu (`update_menu`, astro_orbitype)
+
+- New capability **`update_menu@1`** for enrolled **`astro_orbitype`** sites
+  (ADR-0049): Telegram PDF upload (max 10 MB), menu-semantics CTA discovery
+  across all Orbitype pages, multi-select button toggles, plan-confirm-only
+  approval, dual-write versioned PDF to GitHub plus `ctaHref` /
+  `ctaSecondaryHref` patches on `pages.sections`, production verification
+  without Vercel preview.
+- Packages: `@binflow/menu`, Orbitype menu pages port, worker/menu workflow
+  runtime, Telegram document ingress (`documentArtifactKey`).
+- Migration `0027_update_menu_capability.sql`; graph
+  `stacks/astro-orbitype/update-menu@1`.
+- Bistro customization: `docs/customizations/bistro-update-menu.md`; manifest
+  refresh script adds `public/documents/*.pdf` editable path.
+
 ### Active client profile edits (production URL)
 
 - Platform owners can PATCH enrollments in `active` / `pairing_pending` /

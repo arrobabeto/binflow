@@ -11,8 +11,12 @@ import { v7 as uuidv7 } from 'uuid';
 import { workflowResumeSignalSchema } from '@binflow/contracts';
 import { createOpenAIBlogGenerationPort, createOpenAIProjectGenerationPort } from '@binflow/ai';
 import { S3ArtifactStore } from '@binflow/artifacts';
-import { BlogExecutor, DeleteBlogExecutor, orbitypeBlogPublicationStages } from '@binflow/blog';
-import { createOrbitypeBlogPublicationPort } from '@binflow/orbitype';
+import { BlogExecutor, DeleteBlogExecutor, orbitypeBlogPublicationStages, type ContentCatalogPort } from '@binflow/blog';
+import { UpdateMenuExecutor } from '@binflow/menu';
+import {
+  createOrbitypeBlogPublicationPort,
+  createOrbitypeMenuPagesPort,
+} from '@binflow/orbitype';
 import { DeleteProjectExecutor, ProjectExecutor, type RepositoryPublicationPort as ProjectRepositoryPort } from '@binflow/projects';
 import {
   createDatabase,
@@ -53,6 +57,7 @@ import {
   BlogWorkflowRuntime,
   DeleteBlogWorkflowRuntime,
   DeleteProjectWorkflowRuntime,
+  MenuWorkflowRuntime,
   ProjectWorkflowRuntime,
   WorkflowService,
   filterBlogCatalogItems,
@@ -64,6 +69,7 @@ import {
   catalogContentKindsForRuntimeKind,
   type DeleteBlogCatalogLoader,
   type DeleteProjectCatalogLoader,
+  type UpdateMenuPagesLoader,
 } from '@binflow/workflows';
 
 const deleteNoticeContentKind = (
@@ -88,11 +94,19 @@ type CatalogPortCredentials = Readonly<{
 const createCapabilityCatalogPort = (
   capabilityKind: ReturnType<typeof resolveCapabilityRuntime>['kind'],
   credentials: CatalogPortCredentials,
-) =>
-  createGitHubContentCatalogPort({
+): ContentCatalogPort => {
+  const contentKinds = catalogContentKindsForRuntimeKind(capabilityKind);
+  if (contentKinds.length === 0)
+    return {
+      async sync() {
+        return { items: [], revision: 'noop' };
+      },
+    };
+  return createGitHubContentCatalogPort({
     ...credentials,
-    contentKinds: catalogContentKindsForRuntimeKind(capabilityKind),
+    contentKinds,
   });
+};
 
 const logger = pino({ level: process.env.LOG_LEVEL ?? 'info' });
 
@@ -201,11 +215,79 @@ const loadDeleteProjectCatalog: DeleteProjectCatalogLoader = async ({
   }
 };
 
+const loadUpdateMenuPages: UpdateMenuPagesLoader = async ({
+  database: scoped,
+  projectId,
+}) => {
+  const masterKey = await loadRuntimeMasterKeyFile(defaultMasterKeyPath());
+  try {
+    const [orbitypeRow] = await scoped
+      .select({ id: schema.providerCredentials.id })
+      .from(schema.providerCredentials)
+      .where(
+        and(
+          eq(schema.providerCredentials.projectId, projectId),
+          eq(schema.providerCredentials.kind, 'orbitype-api'),
+          eq(schema.providerCredentials.status, 'active'),
+        ),
+      )
+      .limit(1);
+    if (orbitypeRow === undefined)
+      throw new DomainError(
+        'credential_unavailable',
+        'Orbitype credential is unavailable for menu update.',
+      );
+    const orbitype = await getCredentialForVerification(scoped, orbitypeRow.id);
+    if (orbitype === undefined)
+      throw new DomainError(
+        'credential_unavailable',
+        'Orbitype credential material is unavailable.',
+      );
+    const configuration = orbitype.configuration as {
+      baseUrl?: unknown;
+      pagesTable?: unknown;
+    };
+    if (typeof configuration.baseUrl !== 'string')
+      throw new DomainError(
+        'validation_error',
+        'Orbitype base URL is missing.',
+      );
+    const plaintext = decryptSecret(
+      orbitype.envelope,
+      masterKey,
+      orbitype.secretContext,
+    );
+    try {
+      const secret = JSON.parse(plaintext.toString('utf8')) as {
+        apiKey?: unknown;
+      };
+      if (typeof secret.apiKey !== 'string')
+        throw new DomainError(
+          'validation_error',
+          'Orbitype API key is missing.',
+        );
+      const port = createOrbitypeMenuPagesPort({
+        apiKey: secret.apiKey,
+        baseUrl: configuration.baseUrl,
+        ...(typeof configuration.pagesTable === 'string'
+          ? { pagesTable: configuration.pagesTable }
+          : {}),
+      });
+      return port.listPages();
+    } finally {
+      plaintext.fill(0);
+    }
+  } finally {
+    masterKey.fill(0);
+  }
+};
+
 const workflowService = new WorkflowService(
   database,
   systemClock,
   loadDeleteBlogCatalog,
   loadDeleteProjectCatalog,
+  loadUpdateMenuPages,
 );
 const connection = new Redis(redisUrl, { maxRetriesPerRequest: null });
 // BullMQ Worker blocks on `connection`; keep polling-lock commands on a
@@ -343,7 +425,8 @@ const loadExecutionContext = async (
       )
         throw new Error('Active execution credentials are incomplete.');
       if (
-        request.capabilityId === 'create_blog_orbitype' &&
+        (request.capabilityId === 'create_blog_orbitype' ||
+          request.capabilityId === 'update_menu') &&
         orbitypeRow === undefined
       )
         throw new Error('Orbitype credential is required for this capability.');
@@ -358,7 +441,8 @@ const loadExecutionContext = async (
       if (openai === undefined || github === undefined || vercel === undefined)
         throw new Error('Execution credential material is unavailable.');
       if (
-        request.capabilityId === 'create_blog_orbitype' &&
+        (request.capabilityId === 'create_blog_orbitype' ||
+          request.capabilityId === 'update_menu') &&
         orbitype === undefined
       )
         throw new Error('Orbitype credential material is unavailable.');
@@ -566,10 +650,59 @@ const processWorkflowJob = async (name: string, data: unknown) => {
     const deployments = createVercelDeploymentPort({
       credential: context.vercel,
       masterKey,
-      productionOrigin: context.productionOrigin,
+      ...(context.productionOrigin === undefined
+        ? {}
+        : { productionOrigin: context.productionOrigin }),
     });
     const runtime =
-      capabilityRuntime.kind === 'project'
+      capabilityRuntime.kind === 'update_menu'
+        ? (() => {
+            if (context.orbitype === undefined)
+              throw new DomainError(
+                'validation_error',
+                'Orbitype credential is required for update_menu.',
+              );
+            const configuration = context.orbitype.configuration as {
+              baseUrl?: unknown;
+              pagesTable?: unknown;
+            };
+            if (typeof configuration.baseUrl !== 'string')
+              throw new DomainError(
+                'validation_error',
+                'Orbitype base URL is missing.',
+              );
+            const plaintext = decryptSecret(
+              context.orbitype.envelope,
+              masterKey,
+              context.orbitype.secretContext,
+            );
+            try {
+              const secret = JSON.parse(plaintext.toString('utf8')) as {
+                apiKey?: unknown;
+              };
+              if (typeof secret.apiKey !== 'string')
+                throw new DomainError(
+                  'validation_error',
+                  'Orbitype API key is missing.',
+                );
+              const orbitypePages = createOrbitypeMenuPagesPort({
+                apiKey: secret.apiKey,
+                baseUrl: configuration.baseUrl,
+                ...(typeof configuration.pagesTable === 'string'
+                  ? { pagesTable: configuration.pagesTable }
+                  : {}),
+              });
+              return new MenuWorkflowRuntime(
+                database,
+                artifactStore,
+                new UpdateMenuExecutor(repository),
+                orbitypePages,
+              );
+            } finally {
+              plaintext.fill(0);
+            }
+          })()
+        : capabilityRuntime.kind === 'project'
         ? new ProjectWorkflowRuntime(
             database,
             artifactStore,
@@ -692,6 +825,17 @@ const processWorkflowJob = async (name: string, data: unknown) => {
             title: deleteResult.result.resolvedTitle,
           }),
         );
+      } else if (capabilityRuntime.kind === 'update_menu') {
+        const menuResult = await (runtime as MenuWorkflowRuntime).execute(signal);
+        await notifyClient(
+          signal.requestId,
+          renderPublicationCompleteNotice({
+            locale,
+            urls: {
+              menu: menuResult.result.menuPdfPublicUrl,
+            },
+          }),
+        );
       } else {
         const result = await (
           runtime as BlogWorkflowRuntime | ProjectWorkflowRuntime
@@ -761,8 +905,12 @@ const processWorkflowJob = async (name: string, data: unknown) => {
             title: deletePublished.resolvedTitle,
           }),
         );
+      } else if (capabilityRuntime.kind === 'update_menu') {
+        throw new Error('update_menu does not use publish resume.');
       } else {
-        const result = await runtime.publish(signal);
+        const result = await (
+          runtime as BlogWorkflowRuntime | ProjectWorkflowRuntime
+        ).publish(signal);
         await notifyClient(
           signal.requestId,
           renderPublicationCompleteNotice({
@@ -1581,6 +1729,14 @@ const startTelegramRuntime = async (input: Readonly<{
         registerClientTelegramHandlers(runtime, {
           botId: input.botId,
           handler: workflowService,
+          persistInboundDocument: async ({ bytes, mime }) => {
+            const key = `inbound/telegram/${uuidv7()}.pdf`;
+            const sha256 = createHash('sha256')
+              .update(Buffer.from(bytes))
+              .digest('hex');
+            await artifactStore.put({ bytes, key, mime, sha256 });
+            return key;
+          },
           persistInboundImage: async ({ bytes, mime }) => {
             const extension =
               mime === 'image/png'
