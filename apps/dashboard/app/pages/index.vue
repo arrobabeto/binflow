@@ -4,21 +4,23 @@ import type {
   Enrollment,
   HealthResponse,
   RequestSummary,
+  TicketPage,
 } from '@binflow/contracts';
 
+import { fetchAllRequestSummaries } from '../lib/analytics-metrics';
 import {
   buildAttentionItems,
   buildClientSummaries,
-  countPendingApprovals,
+  countAwaitingAdminApproval,
   countRequestsOnUtcDay,
   formatApproximateCount,
   pendingApprovalsByProject,
   requestsByProjectOnUtcDay,
-  summarizeClientMix,
   summarizeSystemHealth,
   utcTodayKey,
 } from '../lib/overview-metrics';
-import { requestListSearchParams } from '../lib/request-inbox';
+import { analyticsRequestListSearchParams } from '../lib/request-inbox';
+import { ticketListSearchParams } from '../lib/ticket-inbox';
 
 type Readiness = {
   checks: Record<string, 'ready' | 'unavailable' | 'stale' | 'misconfigured'>;
@@ -26,6 +28,7 @@ type Readiness = {
   timestamp: string;
 };
 
+const requestFetch = useRequestFetch();
 const todayKey = utcTodayKey();
 
 const { data: health } = await useFetch<HealthResponse>('/api/v1/health');
@@ -39,63 +42,78 @@ const { data: credentials } = await useFetch<{
   nextCursor: string | null;
 }>('/api/v1/admin/integrations');
 
-const approvalUrl = `/api/v1/requests?${requestListSearchParams({
-  limit: 50,
-  needsAdminApproval: true,
-})}`;
-const otherUrl = `/api/v1/requests?${requestListSearchParams({
-  limit: 50,
-  needsAdminApproval: false,
-})}`;
+const {
+  data: requestCatalog,
+  status: requestsStatus,
+  error: requestsError,
+  refresh: refreshRequests,
+} = await useAsyncData('home-all-requests', () =>
+  fetchAllRequestSummaries(async ({ cursor, limit }) =>
+    requestFetch<{ items: RequestSummary[]; nextCursor: string | null }>(
+      `/api/v1/requests?${analyticsRequestListSearchParams({
+        ...(cursor === undefined ? {} : { cursor }),
+        limit,
+      })}`,
+    ),
+  ),
+);
 
-const { data: approvalPage } = await useFetch<{
-  items: RequestSummary[];
-  nextCursor: string | null;
-}>(approvalUrl);
-const { data: otherPage } = await useFetch<{
-  items: RequestSummary[];
-  nextCursor: string | null;
-}>(otherUrl);
+const {
+  data: ticketsPage,
+  status: ticketsStatus,
+  refresh: refreshTickets,
+} = await useFetch<TicketPage>(
+  `/api/v1/admin/tickets?${ticketListSearchParams({
+    limit: 10,
+    tab: 'pending',
+  })}`,
+);
 
-const recentRequests = computed(() => [
-  ...(approvalPage.value?.items ?? []),
-  ...(otherPage.value?.items ?? []),
-]);
-
-const hasMoreRequests = computed(
-  () =>
-    Boolean(approvalPage.value?.nextCursor) ||
-    Boolean(otherPage.value?.nextCursor),
+const allRequests = computed(() => requestCatalog.value?.items ?? []);
+const requestsTruncated = computed(
+  () => requestCatalog.value?.truncated === true,
 );
 
 const systemHealth = computed(() =>
   summarizeSystemHealth(health.value, readiness.value),
 );
 
-const clientMix = computed(() =>
-  summarizeClientMix(enrollments.value?.items ?? []),
-);
-
 const pendingApprovals = computed(() =>
-  countPendingApprovals(
-    approvalPage.value?.items ?? [],
-    approvalPage.value?.nextCursor,
-  ),
+  countAwaitingAdminApproval(allRequests.value, requestsTruncated.value),
 );
 
 const requestsToday = computed(() =>
   countRequestsOnUtcDay(
-    recentRequests.value,
+    allRequests.value,
     todayKey,
-    hasMoreRequests.value,
+    requestsTruncated.value,
   ),
+);
+
+const openTickets = computed(() => ticketsPage.value?.pendingCount ?? 0);
+const totalTickets = computed(() => ticketsPage.value?.totalCount ?? 0);
+
+const systemAccent = computed(() =>
+  systemHealth.value.ready ? 'success' : 'error',
+);
+
+const pendingApprovalsAccent = computed(() =>
+  pendingApprovals.value.value > 0 ? 'warning' : 'neutral',
+);
+
+const openTicketsAccent = computed(() =>
+  openTickets.value > 0 ? 'warning' : 'neutral',
 );
 
 const clientCards = computed(() =>
   buildClientSummaries(
     enrollments.value?.items ?? [],
-    requestsByProjectOnUtcDay(recentRequests.value, todayKey),
-    pendingApprovalsByProject(approvalPage.value?.items ?? []),
+    requestsByProjectOnUtcDay(allRequests.value, todayKey),
+    pendingApprovalsByProject(
+      allRequests.value.filter(
+        (item) => item.state === 'AWAITING_ADMIN_APPROVAL',
+      ),
+    ),
   ),
 );
 
@@ -118,6 +136,7 @@ const openMessage = (enrollmentId: string) => {
 
 const now = ref(new Date());
 let clockTimer: ReturnType<typeof setInterval> | undefined;
+let ticketsPollTimer: ReturnType<typeof setInterval> | undefined;
 
 const pad2 = (value: number): string => String(value).padStart(2, '0');
 
@@ -131,14 +150,31 @@ const clockTime = computed(() => {
   return `${pad2(d.getHours())}:${pad2(d.getMinutes())}:${pad2(d.getSeconds())}`;
 });
 
+const metricsPending = computed(
+  () => requestsStatus.value === 'pending' && !requestCatalog.value,
+);
+
+const onVisibility = () => {
+  if (document.visibilityState !== 'visible') return;
+  void refreshTickets();
+  void refreshRequests();
+};
+
 onMounted(() => {
   clockTimer = setInterval(() => {
     now.value = new Date();
   }, 1000);
+  ticketsPollTimer = setInterval(() => {
+    void refreshTickets();
+  }, 5000);
+  document.addEventListener('visibilitychange', onVisibility);
 });
 
 onBeforeUnmount(() => {
   if (clockTimer !== undefined) globalThis.clearInterval(clockTimer);
+  if (ticketsPollTimer !== undefined)
+    globalThis.clearInterval(ticketsPollTimer);
+  document.removeEventListener('visibilitychange', onVisibility);
 });
 </script>
 
@@ -150,7 +186,8 @@ onBeforeUnmount(() => {
           Home
         </h1>
         <p class="mt-2 text-muted">
-          Client status, daily request volume, and platform readiness.
+          Client status, daily request volume, open tickets, and platform
+          readiness.
         </p>
       </template>
       <template #actions>
@@ -174,38 +211,54 @@ onBeforeUnmount(() => {
       </template>
     </PageHeader>
 
+    <UAlert
+      v-if="requestsError"
+      class="mb-6"
+      color="error"
+      variant="soft"
+      title="Could not load request metrics"
+      :description="String(requestsError)"
+    />
+
     <div class="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
       <StatusMetricCard
         label="System"
         :value="systemHealth.status"
         :detail="systemHealth.detail"
+        :accent="systemAccent"
         to="/operations"
       />
       <StatusMetricCard
         label="Requests today"
-        :value="formatApproximateCount(requestsToday)"
+        :value="
+          metricsPending ? '…' : formatApproximateCount(requestsToday)
+        "
         :detail="
           requestsToday.approximate
-            ? 'From recent request batches'
+            ? 'From full request catalog (truncated)'
             : 'Created today (UTC)'
         "
         to="/requests"
       />
       <StatusMetricCard
         label="Pending approvals"
-        :value="formatApproximateCount(pendingApprovals)"
-        detail="Awaiting admin decision"
+        :value="
+          metricsPending ? '…' : formatApproximateCount(pendingApprovals)
+        "
+        detail="All awaiting admin decision"
+        :accent="pendingApprovalsAccent"
         to="/requests"
       />
       <StatusMetricCard
-        label="Clients"
-        :value="`${clientMix.active}/${clientMix.total}`"
-        :detail="
-          clientMix.attention > 0
-            ? `${clientMix.attention} need attention`
-            : 'Active / total enrollments'
+        label="Open tickets"
+        :value="
+          ticketsStatus === 'pending' && !ticketsPage
+            ? '…'
+            : String(openTickets)
         "
-        to="/clients"
+        :detail="`${String(totalTickets)} tickets in total`"
+        :accent="openTicketsAccent"
+        to="/tickets"
       />
     </div>
 

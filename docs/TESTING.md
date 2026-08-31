@@ -223,6 +223,11 @@ stuck states, and customization asks. Pilot reference:
 
 ### Telegram/input
 
+- `/tools` lists only enabled bindings as `command — displayName`, adds
+  `/open_ticket`, and points to `/info`; `/info` shows scope; unmatched text
+  offers custom request vs tools; greetings use heuristics (ADR-0054 / ADR-0055).
+  See `packages/workflows/test/client-tool-catalog.test.ts` and
+  `packages/workflows/test/open-ticket.test.ts`.
 - Natural-language request resolves correctly.
 - Empty `/create_blog` returns instructions/categories.
 - Incomplete request asks only for topic.
@@ -242,9 +247,9 @@ stuck states, and customization asks. Pilot reference:
   both match.
 - `/delete_blog` — same destructive pattern for blog articles (see
   `docs/specs/delete-blog-draft.md`).
-- **`/update_menu`** (astro_orbitype) — PDF upload, menu CTA toggles, plan
-  confirm without preview; see `docs/specs/update-menu.md` and
-  `packages/menu/test/update-menu.test.ts`.
+- **`/update_menu`** (astro_orbitype) — PDF upload, opt-in menu CTA selection
+  (Select all / Continuar), plan confirm without preview; see
+  `docs/specs/update-menu.md` and `packages/workflows/test/update-menu-ingress.test.ts`.
 - **`/edit_text`** (astro_orbitype) — substring target, disambiguation, literal
   whole-field replacement, preview Approve/Cancel, admin before merge; see
   `docs/specs/edit-text.md` and `packages/text/test/`.

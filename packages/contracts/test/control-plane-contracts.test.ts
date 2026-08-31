@@ -379,6 +379,15 @@ describe('control-plane contracts', () => {
       notificationType: 'admin.direct_message',
       queued: true,
     });
+    expect(
+      adminClientMessageQueuedSchema.parse({
+        notificationType: 'admin.ticket_message',
+        queued: true,
+      }),
+    ).toEqual({
+      notificationType: 'admin.ticket_message',
+      queued: true,
+    });
   });
 
   it('accepts astro_orbitype enrollment and orbitype-api candidates', () => {

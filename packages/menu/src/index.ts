@@ -2,6 +2,7 @@ export {
   UpdateMenuExecutor,
   discoverMenuCtas,
   toggleMenuCtaSelection,
+  selectAllMenuCtaKeys,
   buildVersionedMenuPdfPath,
   publicUrlForMenuPdfPath,
   DEFAULT_MENU_CTA_KEYWORDS,

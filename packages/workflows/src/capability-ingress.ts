@@ -135,6 +135,7 @@ export const collectionCapabilityIds = Object.freeze(
     'edit_image',
     'edit_text',
     'edit_text_style',
+    'open_ticket',
     'update_menu',
   ]),
 );

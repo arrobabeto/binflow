@@ -144,6 +144,11 @@ export const toggleMenuCtaSelection = (
   return [...set].sort();
 };
 
+export const selectAllMenuCtaKeys = (
+  discovered: readonly MenuCtaCandidate[],
+): readonly string[] =>
+  [...discovered.map((cta) => cta.key)].sort();
+
 export const buildVersionedMenuPdfPath = (
   requestVersionId: string,
   now = new Date(),

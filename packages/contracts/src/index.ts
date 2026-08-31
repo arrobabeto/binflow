@@ -1118,6 +1118,31 @@ export const updateMenuInputSchema = z.discriminatedUnion('mode', [
     .strict(),
 ]);
 
+export const openTicketCollectInputSchema = z
+  .object({
+    collectionStep: z.enum([
+      'await_choice',
+      'await_requirement',
+      'await_scope',
+      'await_intent',
+      'await_urgency',
+      'await_kind',
+      'await_confirm',
+    ]),
+    effortEstimate: z.string().max(2_000).optional(),
+    intent: z.string().max(4_000).optional(),
+    kind: z.enum(['improvement', 'style', 'bug']).optional(),
+    mode: z.literal('open_ticket_collect'),
+    projectId: z.string().min(1),
+    requirement: z.string().max(4_000).optional(),
+    scope: z.string().max(4_000).optional(),
+    seedText: z.string().max(4_000).optional(),
+    summary: z.string().max(8_000).optional(),
+    title: z.string().max(240).optional(),
+    urgency: z.enum(['low', 'normal', 'high', 'urgent']).optional(),
+  })
+  .strict();
+
 export const capabilityInputSchema = z.union([
   createBlogDraftInputSchema,
   createProjectAstroInputSchema,
@@ -1127,6 +1152,7 @@ export const capabilityInputSchema = z.union([
   editTextStyleInputSchema,
   editImageInputSchema,
   updateMenuInputSchema,
+  openTicketCollectInputSchema,
 ]);
 
 export const capabilityCatalogItemSchema = z
@@ -1303,6 +1329,7 @@ export type TextStylePatch = z.infer<typeof textStylePatchSchema>;
 export type TextEditCandidate = z.infer<typeof textEditCandidateSchema>;
 export type EditImageInput = z.infer<typeof editImageInputSchema>;
 export type ImageEditCandidate = z.infer<typeof imageEditCandidateSchema>;
+export type OpenTicketCollectInput = z.infer<typeof openTicketCollectInputSchema>;
 export type DeleteProjectAstroInput = z.infer<typeof deleteProjectAstroInputSchema>;
 export type CreateProjectAstroInput = z.infer<typeof createProjectAstroInputSchema>;
 /** @deprecated Use CreateProjectAstroInput */
@@ -1361,6 +1388,7 @@ export const capabilityIdSchema = z.enum([
   'edit_image',
   'edit_text',
   'edit_text_style',
+  'open_ticket',
   'update_menu',
 ]);
 
@@ -1878,6 +1906,7 @@ export const telegramReplySchema = z
               'confirm_plan',
               'confirm_delete_target',
               'confirm_menu_selection',
+              'select_all_menu_ctas',
               'confirm_text_plan',
               'confirm_text_target',
               'pick_text_locale',
@@ -1901,6 +1930,11 @@ export const telegramReplySchema = z
               'adjust_revision_plan',
               'cancel_revision',
               'toggle_menu_cta',
+              'start_open_ticket',
+              'show_tools',
+              'pick_ticket_urgency',
+              'pick_ticket_kind',
+              'confirm_ticket_send',
               'cancel',
               'approve_publish',
               'reject',
@@ -2071,8 +2105,110 @@ export const adminClientMessageQueuedSchema = z
     notificationType: z.enum([
       'admin.direct_message',
       'admin.request_message',
+      'admin.ticket_message',
     ]),
     queued: z.literal(true),
+  })
+  .strict();
+
+export const ticketStateSchema = z.enum([
+  'new',
+  'in_process',
+  'declined',
+  'closed',
+]);
+
+export const ticketPrioritySchema = z.enum(['low', 'medium', 'high']);
+
+export const ticketTabSchema = z.enum(['pending', 'history', 'all']);
+
+export const ticketListPageSizes = requestListPageSizes;
+
+export const ticketListCursorSchema = requestListCursorSchema;
+
+export const encodeTicketListCursor = encodeRequestListCursor;
+
+export const decodeTicketListCursor = decodeRequestListCursor;
+
+export const ticketActivitySchema = z
+  .object({
+    actorType: z.enum(['platform_owner', 'system', 'client']),
+    createdAt: z.iso.datetime(),
+    id: z.string().min(1),
+    kind: z.string().min(1),
+    summary: z.string().min(1),
+  })
+  .strict();
+
+export const ticketSummarySchema = z
+  .object({
+    category: z.string().min(1).nullable(),
+    clientKey: z.string().min(1),
+    clientName: z.string().min(1),
+    createdAt: z.iso.datetime(),
+    excerpt: z.string(),
+    id: z.string().min(1),
+    priority: ticketPrioritySchema.nullable(),
+    projectId: z.string().min(1),
+    publicId: z.string().min(1),
+    readAt: z.iso.datetime().nullable(),
+    revision: resourceVersionSchema,
+    state: ticketStateSchema,
+    title: z.string().min(1),
+    updatedAt: z.iso.datetime(),
+  })
+  .strict();
+
+export const ticketDetailSchema = ticketSummarySchema
+  .extend({
+    activity: z.array(ticketActivitySchema),
+    adminNotes: z.string(),
+    body: z.string(),
+  })
+  .strict();
+
+export const ticketPageSchema = cursorPageSchema(ticketSummarySchema).extend({
+  pendingCount: z.coerce.number().int().nonnegative(),
+  totalCount: z.coerce.number().int().nonnegative(),
+});
+
+export const ticketListQuerySchema = z
+  .object({
+    cursor: z.string().min(1).optional(),
+    limit: z.coerce
+      .number()
+      .int()
+      .refine(
+        (value): value is (typeof ticketListPageSizes)[number] =>
+          (ticketListPageSizes as readonly number[]).includes(value),
+      )
+      .default(10),
+    projectId: z.string().min(1).optional(),
+    state: ticketStateSchema.optional(),
+    tab: ticketTabSchema.default('pending'),
+  })
+  .strict();
+
+export const patchTicketInputSchema = z
+  .object({
+    adminNotes: z.string().max(20_000).optional(),
+    state: ticketStateSchema.optional(),
+  })
+  .strict()
+  .refine(
+    (value) => value.state !== undefined || value.adminNotes !== undefined,
+    { message: 'At least one of state or adminNotes is required.' },
+  );
+
+export const createTicketInputSchema = z
+  .object({
+    body: z.string().min(1).max(50_000),
+    category: z.string().min(1).max(120).optional(),
+    excerpt: z.string().max(500).optional(),
+    priority: ticketPrioritySchema.optional(),
+    projectId: z.string().min(1),
+    tenantId: z.string().min(1),
+    title: z.string().min(1).max(240),
   })
   .strict();
 
@@ -2119,3 +2255,20 @@ export type ClientMessageTarget = z.infer<typeof clientMessageTargetSchema>;
 export type AdminClientMessageQueued = z.infer<
   typeof adminClientMessageQueuedSchema
 >;
+export type TicketState = z.infer<typeof ticketStateSchema>;
+export type TicketPriority = z.infer<typeof ticketPrioritySchema>;
+export type TicketTab = z.infer<typeof ticketTabSchema>;
+export type TicketActivity = z.infer<typeof ticketActivitySchema>;
+export type TicketSummary = z.infer<typeof ticketSummarySchema>;
+export type TicketDetail = z.infer<typeof ticketDetailSchema>;
+export type TicketPage = z.infer<typeof ticketPageSchema>;
+export type TicketListQuery = z.infer<typeof ticketListQuerySchema>;
+export type PatchTicketInput = z.infer<typeof patchTicketInputSchema>;
+export type CreateTicketInput = z.infer<typeof createTicketInputSchema>;
+export interface TicketListQueryInput {
+  cursor?: string;
+  limit: (typeof ticketListPageSizes)[number];
+  projectId?: string;
+  state?: TicketState;
+  tab: TicketTab;
+}

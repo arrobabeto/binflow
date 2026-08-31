@@ -54,10 +54,12 @@ ADRs preserve why durable decisions exist. Accepted ADRs are binding until a lat
 | [0046](0046-selectable-monolingual-locales.md)                       | Selectable en/es/de locales including monolingual              | Accepted |
 | [0047](0047-create-blog-orbitype-dual-write.md)                      | Create blog Orbitype dual-write (GitHub + CMS)                 | Accepted |
 | [0048](0048-enrolled-client-production-origin.md)                    | Enrolled client production origin (extends ADR-0029)           | Accepted |
-| [0049](0049-update-menu-orbitype.md)                                 | Update menu PDF for Astro+Orbitype restaurant sites            | Proposed |
+| [0049](0049-update-menu-orbitype.md)                                 | Update menu PDF for Astro+Orbitype restaurant sites            | Accepted |
 | [0050](0050-admin-telegram-approval-actions.md)                      | Admin Telegram Approve/Reject for AWAITING_ADMIN_APPROVAL      | Accepted |
 | [0051](0051-edit-text-orbitype.md)                                   | Edit page text for Astro + Orbitype (literal copy, preview)    | Proposed |
 | [0052](0052-edit-image-orbitype.md)                                  | Edit site image for Astro + Orbitype (allowlisted slots)       | Proposed |
 | [0053](0053-edit-text-style-orbitype.md)                             | Edit text style for Astro + Orbitype (size/weight/color)       | Proposed |
+| [0054](0054-client-telegram-tool-catalog.md)                         | Client Telegram `/info` catalog (`/tools` compact + footer)    | Proposed |
+| [0055](0055-admin-tickets.md)                                        | Admin tickets for out-of-catalog client requests                | Accepted |
 
 Use [0000-template.md](0000-template.md) for new decisions.

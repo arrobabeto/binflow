@@ -14,6 +14,7 @@ const mainLinks: readonly NavItem[] = [
   { icon: 'i-lucide-house', label: 'Home', to: '/' },
   { icon: 'i-lucide-users', label: 'Clients', to: '/clients' },
   { icon: 'i-lucide-list-todo', label: 'Requests', to: '/requests' },
+  { icon: 'i-lucide-ticket', label: 'Tickets', to: '/tickets' },
 ];
 
 const toolsLinks: readonly NavItem[] = [

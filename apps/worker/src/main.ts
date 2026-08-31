@@ -9,7 +9,7 @@ import pino from 'pino';
 import { v7 as uuidv7 } from 'uuid';
 
 import { workflowResumeSignalSchema } from '@binflow/contracts';
-import { createOpenAIBlogGenerationPort, createOpenAIProjectGenerationPort } from '@binflow/ai';
+import { createOpenAIBlogGenerationPort, createOpenAIProjectGenerationPort, createOpenAITicketEstimatePort } from '@binflow/ai';
 import { S3ArtifactStore } from '@binflow/artifacts';
 import { BlogExecutor, DeleteBlogExecutor, orbitypeBlogPublicationStages, type ContentCatalogPort } from '@binflow/blog';
 import { UpdateMenuExecutor } from '@binflow/menu';
@@ -75,6 +75,7 @@ import {
   resolveBundleTitle,
   resolveCapabilityRuntime,
   catalogContentKindsForRuntimeKind,
+  fallbackTicketEstimate,
   type DeleteBlogCatalogLoader,
   type DeleteProjectCatalogLoader,
   type EditImageContentLoader,
@@ -405,6 +406,54 @@ const workflowService = new WorkflowService(
   loadUpdateMenuPages,
   loadEditImageContent,
   persistReplacementImage,
+  async (input) => {
+    try {
+      const masterKey = await loadRuntimeMasterKeyFile(defaultMasterKeyPath());
+      try {
+        const credential = await withPlatformSystemScope(
+          database,
+          'open_ticket.load_openai',
+          async (scoped) => {
+            const [row] = await scoped
+              .select({ id: schema.providerCredentials.id })
+              .from(schema.providerCredentials)
+              .where(
+                and(
+                  eq(schema.providerCredentials.kind, 'openai'),
+                  eq(schema.providerCredentials.status, 'active'),
+                  eq(schema.providerCredentials.tenantId, input.tenantId),
+                ),
+              )
+              .limit(1);
+            if (row === undefined) return undefined;
+            return getCredentialForVerification(scoped, row.id);
+          },
+        );
+        if (credential === undefined) return fallbackTicketEstimate(input);
+        const plaintext = decryptSecret(
+          credential.envelope,
+          masterKey,
+          credential.secretContext,
+        );
+        try {
+          const secret = JSON.parse(plaintext.toString('utf8')) as {
+            apiKey?: unknown;
+          };
+          if (typeof secret.apiKey !== 'string')
+            return fallbackTicketEstimate(input);
+          return await createOpenAITicketEstimatePort({
+            apiKey: secret.apiKey,
+          })(input);
+        } finally {
+          plaintext.fill(0);
+        }
+      } finally {
+        masterKey.fill(0);
+      }
+    } catch {
+      return fallbackTicketEstimate(input);
+    }
+  },
 );
 const connection = new Redis(redisUrl, { maxRetriesPerRequest: null });
 // BullMQ Worker blocks on `connection`; keep polling-lock commands on a
@@ -1938,21 +1987,47 @@ const dispatchClientNotifications = async (): Promise<void> => {
                 )
                 .where(eq(schema.clientEnrollments.id, claimed.aggregateId))
                 .limit(1)
-            : await scoped
-                .select({
-                  botId: schema.channelIdentities.botId,
-                  chatId: schema.channelIdentities.chatId,
-                })
-                .from(schema.requests)
-                .innerJoin(
-                  schema.channelIdentities,
-                  and(
-                    eq(schema.channelIdentities.userId, schema.requests.userId),
-                    eq(schema.channelIdentities.status, 'active'),
-                  ),
-                )
-                .where(eq(schema.requests.id, claimed.aggregateId))
-                .limit(1);
+            : claimed.aggregateType === 'ticket'
+              ? await scoped
+                  .select({
+                    botId: schema.channelIdentities.botId,
+                    chatId: schema.channelIdentities.chatId,
+                  })
+                  .from(schema.tickets)
+                  .innerJoin(
+                    schema.channelIdentities,
+                    and(
+                      eq(
+                        schema.channelIdentities.tenantId,
+                        schema.tickets.tenantId,
+                      ),
+                      eq(
+                        schema.channelIdentities.projectId,
+                        schema.tickets.projectId,
+                      ),
+                      eq(schema.channelIdentities.status, 'active'),
+                    ),
+                  )
+                  .where(eq(schema.tickets.id, claimed.aggregateId))
+                  .limit(1)
+              : await scoped
+                  .select({
+                    botId: schema.channelIdentities.botId,
+                    chatId: schema.channelIdentities.chatId,
+                  })
+                  .from(schema.requests)
+                  .innerJoin(
+                    schema.channelIdentities,
+                    and(
+                      eq(
+                        schema.channelIdentities.userId,
+                        schema.requests.userId,
+                      ),
+                      eq(schema.channelIdentities.status, 'active'),
+                    ),
+                  )
+                  .where(eq(schema.requests.id, claimed.aggregateId))
+                  .limit(1);
         const runtime =
           target === undefined
             ? undefined

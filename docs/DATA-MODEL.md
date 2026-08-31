@@ -144,6 +144,17 @@ an artifact-store body (markdown), digest, version number and supersession. Runs
 freeze the customization version used for generation. Customization is outside
 the enrollment manifest state machine.
 
+### `tickets` and `ticket_activities`
+
+Admin queue for out-of-catalog client asks (ADR-0055). `tickets` is
+tenant/project-scoped with public id (`TKT-…`), title, excerpt, body, state
+(`new` | `in_process` | `declined` | `closed`), optional priority/category,
+nullable `read_at`, admin notes, optimistic revision, and timestamps. Composite
+FK `(project_id, tenant_id)` and platform-owner RLS match other admin entities.
+`ticket_activities` is append-only: kind, summary, actor type, created at.
+Telegram ingest is not yet a writer; service `createTicket` inserts for tests
+and future channel feed.
+
 ### `project_locales`
 
 Immutable per-manifest snapshot of conversation, content, default, required and

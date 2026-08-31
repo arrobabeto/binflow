@@ -4,6 +4,55 @@ All notable changes to product behavior, architecture, contracts, security, oper
 
 ## Unreleased
 
+### Home metrics + recent tickets
+
+- Home status strip uses a full request cursor walk (same helper as Analytics)
+  with `useRequestFetch`. Request list contracts accept platform
+  `capabilityId: open_ticket` so `/open_ticket` rows no longer 400 the list.
+- Fourth KPI is **Open tickets** (large) with **tickets in total** underneath
+  (`pendingCount` / `totalCount`); polls ~5s. Client cards keep live per-project
+  request counts from the same catalog.
+
+### Telegram `/open_ticket` (custom ask → admin ticket)
+
+- Unmatched client messages offer custom request or `/tools` instead of a dead
+  end; `/open_ticket` interview + LLM summary/estimate; confirm sends ADR-0055
+  ticket and a short admin Telegram notice (ADR-0055 ingest complete).
+- Greeting/thanks heuristic replies politely without opening a ticket.
+- Spec: `docs/specs/open-ticket-telegram.md`.
+
+### Admin tickets queue (UI + contracts)
+
+- Main nav **Tickets** under Requests; `/tickets` Pending/History inbox and
+  `/tickets/:id` detail (ADR-0055, ADR-0044 surfaces).
+- States `new` | `in_process` | `declined` | `closed`; resolve → `closed`;
+  unread via `readAt`; Message client reuses ADR-0043 outbox with aggregate
+  `ticket` / `admin.ticket_message` and a localized prefix
+  `Respuesta al ticket {publicId}:` (not the generic Binflow-admin banner).
+- Platform-owner API list/get/patch/read/message-target/messages; Telegram
+  `/open_ticket` ingest creates tickets (ADR-0055).
+
+### update_menu: opt-in button selection interview
+
+- After PDF upload, menu CTAs start **unselected**; client taps to choose which
+  buttons receive the new PDF (ADR-0049 amendment).
+- New selection CTAs: **Seleccionar todos** / Select all / Alle auswählen;
+  **Continuar** / Continue / Weiter (primary); Cancel localized on selection
+  and plan steps.
+- Empty Continuar uses pick-at-least-one copy instead of the no-CTAs-found
+  message. Other tools unchanged (ADR-0042).
+
+### Client Telegram tool catalog (`/tools` + `/info`)
+
+- `/tools` keeps the compact `command — displayName` list and adds a footer
+  pointing to `/info` (ADR-0054).
+- New `/info` and `/info <tool>` for localized scope/detail without starting a
+  request; resolves capability id, slash command, or title; misses stay
+  project-scoped.
+- `/help` and pairing copy point to `/tools` / `/info`.
+- Code-owned catalog copy (`de`/`en`/`es`) for `/info` and `setMyCommands`
+  descriptions when synced.
+
 ### edit_text_style: visible spans + fail-closed preview restore
 
 - Pilot Bistro: render allowlisted `text` bodies (e.g. `SectionStory`) via

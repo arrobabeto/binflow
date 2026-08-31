@@ -11,6 +11,7 @@ import { schema, type ScopedDatabase } from '@binflow/db';
 import { updateMenuDefinition } from '@binflow/policies';
 import {
   discoverMenuCtas,
+  selectAllMenuCtaKeys,
   toggleMenuCtaSelection,
   buildVersionedMenuPdfPath,
   type MenuCtaCandidate,
@@ -20,14 +21,15 @@ import { and, desc, eq, inArray } from 'drizzle-orm';
 
 import {
   buildUpdateMenuPlanMessage,
+  buildUpdateMenuSelectionActionSpecs,
   buildUpdateMenuSelectionMessage,
   parseUpdateMenuExecuteInput,
   resolveUpdateMenuProductionOrigin,
   updateMenuActionLabels,
+  updateMenuEmptySelectionMessage,
   updateMenuGuidance,
   updateMenuNoCtasMessage,
   updateMenuPdfRejectedMessage,
-  formatMenuToggleLabel,
 } from './update-menu-ingress.js';
 
 export type UpdateMenuPagesLoader = (input: Readonly<{
@@ -77,6 +79,40 @@ const selectedFromKeys = (
     const match = discovered.find((cta) => cta.key === key);
     return match === undefined ? [] : [match];
   });
+
+const buildSelectionActionTokens = async (input: Readonly<{
+  createAction: CreateActionFn;
+  database: ScopedDatabase;
+  discovered: readonly MenuCtaCandidate[];
+  identity: ResolvedIdentity;
+  request: Pick<
+    typeof schema.requests.$inferSelect,
+    'id' | 'projectId' | 'tenantId'
+  >;
+  requestVersionId: string;
+  selectedKeys: readonly string[];
+}>): Promise<TelegramReply['actionTokens']> => {
+  const specs = buildUpdateMenuSelectionActionSpecs(
+    input.identity.locale,
+    input.discovered,
+    input.selectedKeys,
+  );
+  const actionTokens: NonNullable<TelegramReply['actionTokens']> = [];
+  for (const spec of specs) {
+    actionTokens.push({
+      action: spec.action,
+      label: spec.label,
+      token: await input.createAction(
+        input.database,
+        input.request,
+        input.requestVersionId,
+        input.identity.userId,
+        spec.tokenAction,
+      ),
+    });
+  }
+  return actionTokens;
+};
 
 export const createUpdateMenuRequest = async (input: Readonly<{
   createAction: CreateActionFn;
@@ -199,7 +235,7 @@ export const continueUpdateMenuCollection = async (input: Readonly<{
       menuPdfPublicPath,
       pdfArtifactKey: input.documentArtifactKey,
       pdfFileName: input.text.trim() || 'menu.pdf',
-      selectedCtaKeys: discovered.map((cta) => cta.key),
+      selectedCtaKeys: [],
     });
     const nextVersion = input.request.currentVersion + 1;
     const requestVersionId = uuidv7();
@@ -219,34 +255,6 @@ export const continueUpdateMenuCollection = async (input: Readonly<{
       version: nextVersion,
     });
     const selected = selectedFromKeys(discovered, interpretedInput.selectedCtaKeys);
-    const actionTokens: TelegramReply['actionTokens'] = [];
-    for (const cta of discovered.slice(0, 8)) {
-      actionTokens.push({
-        action: 'toggle_menu_cta',
-        label: formatMenuToggleLabel(
-          cta,
-          selected.some((entry) => entry.key === cta.key),
-        ),
-        token: await input.createAction(
-          input.database,
-          input.request,
-          requestVersionId,
-          input.identity.userId,
-          `toggle_menu_cta:${cta.key}`,
-        ),
-      });
-    }
-    actionTokens.push({
-      action: 'confirm_menu_selection',
-      label: updateMenuActionLabels[input.identity.locale].confirmSelection,
-      token: await input.createAction(
-        input.database,
-        input.request,
-        requestVersionId,
-        input.identity.userId,
-        'confirm_menu_selection',
-      ),
-    });
     return input.reply(
       input.identity.locale,
       buildUpdateMenuSelectionMessage(
@@ -255,7 +263,15 @@ export const continueUpdateMenuCollection = async (input: Readonly<{
         discovered,
       ),
       input.request.id,
-      actionTokens,
+      await buildSelectionActionTokens({
+        createAction: input.createAction,
+        database: input.database,
+        discovered,
+        identity: input.identity,
+        request: input.request,
+        requestVersionId,
+        selectedKeys: interpretedInput.selectedCtaKeys,
+      }),
     );
   }
 
@@ -268,27 +284,23 @@ export const continueUpdateMenuCollection = async (input: Readonly<{
   );
 };
 
-export const consumeUpdateMenuToggle = async (input: Readonly<{
-  ctaKey: string;
+const persistSelectCtasSelection = async (input: Readonly<{
   createAction: CreateActionFn;
   database: ScopedDatabase;
   identity: ResolvedIdentity;
   reply: ReplyFn;
   request: typeof schema.requests.$inferSelect;
+  selectedKeys: readonly string[];
   version: typeof schema.requestVersions.$inferSelect;
 }>): Promise<TelegramReply> => {
   const parsed = updateMenuInputSchema.parse(input.version.interpretedInput);
   if (parsed.mode !== 'collect' || parsed.collectionStep !== 'select_ctas')
-    throw new Error('Update menu toggle is invalid for this request state.');
-  const selectedKeys = toggleMenuCtaSelection(
-    parsed.selectedCtaKeys,
-    input.ctaKey,
-  );
+    throw new Error('Update menu selection mutation is invalid for this request state.');
   const nextVersion = input.request.currentVersion + 1;
   const requestVersionId = uuidv7();
   const interpretedInput = updateMenuInputSchema.parse({
     ...parsed,
-    selectedCtaKeys: selectedKeys,
+    selectedCtaKeys: input.selectedKeys,
   });
   await input.database
     .update(schema.requests)
@@ -305,35 +317,7 @@ export const consumeUpdateMenuToggle = async (input: Readonly<{
     tenantId: input.identity.tenantId,
     version: nextVersion,
   });
-  const selected = selectedFromKeys(parsed.discoveredCtas, selectedKeys);
-  const actionTokens: TelegramReply['actionTokens'] = [];
-  for (const cta of parsed.discoveredCtas.slice(0, 8)) {
-    actionTokens.push({
-      action: 'toggle_menu_cta',
-      label: formatMenuToggleLabel(
-        cta,
-        selected.some((entry) => entry.key === cta.key),
-      ),
-      token: await input.createAction(
-        input.database,
-        input.request,
-        requestVersionId,
-        input.identity.userId,
-        `toggle_menu_cta:${cta.key}`,
-      ),
-    });
-  }
-  actionTokens.push({
-    action: 'confirm_menu_selection',
-    label: updateMenuActionLabels[input.identity.locale].confirmSelection,
-    token: await input.createAction(
-      input.database,
-      input.request,
-      requestVersionId,
-      input.identity.userId,
-      'confirm_menu_selection',
-    ),
-  });
+  const selected = selectedFromKeys(parsed.discoveredCtas, input.selectedKeys);
   return input.reply(
     input.identity.locale,
     buildUpdateMenuSelectionMessage(
@@ -342,8 +326,61 @@ export const consumeUpdateMenuToggle = async (input: Readonly<{
       parsed.discoveredCtas,
     ),
     input.request.id,
-    actionTokens,
+    await buildSelectionActionTokens({
+      createAction: input.createAction,
+      database: input.database,
+      discovered: parsed.discoveredCtas,
+      identity: input.identity,
+      request: input.request,
+      requestVersionId,
+      selectedKeys: input.selectedKeys,
+    }),
   );
+};
+
+export const consumeUpdateMenuToggle = async (input: Readonly<{
+  ctaKey: string;
+  createAction: CreateActionFn;
+  database: ScopedDatabase;
+  identity: ResolvedIdentity;
+  reply: ReplyFn;
+  request: typeof schema.requests.$inferSelect;
+  version: typeof schema.requestVersions.$inferSelect;
+}>): Promise<TelegramReply> => {
+  const parsed = updateMenuInputSchema.parse(input.version.interpretedInput);
+  if (parsed.mode !== 'collect' || parsed.collectionStep !== 'select_ctas')
+    throw new Error('Update menu toggle is invalid for this request state.');
+  return persistSelectCtasSelection({
+    createAction: input.createAction,
+    database: input.database,
+    identity: input.identity,
+    reply: input.reply,
+    request: input.request,
+    selectedKeys: toggleMenuCtaSelection(parsed.selectedCtaKeys, input.ctaKey),
+    version: input.version,
+  });
+};
+
+export const consumeUpdateMenuSelectAll = async (input: Readonly<{
+  createAction: CreateActionFn;
+  database: ScopedDatabase;
+  identity: ResolvedIdentity;
+  reply: ReplyFn;
+  request: typeof schema.requests.$inferSelect;
+  version: typeof schema.requestVersions.$inferSelect;
+}>): Promise<TelegramReply> => {
+  const parsed = updateMenuInputSchema.parse(input.version.interpretedInput);
+  if (parsed.mode !== 'collect' || parsed.collectionStep !== 'select_ctas')
+    throw new Error('Update menu select-all is invalid for this request state.');
+  return persistSelectCtasSelection({
+    createAction: input.createAction,
+    database: input.database,
+    identity: input.identity,
+    reply: input.reply,
+    request: input.request,
+    selectedKeys: selectAllMenuCtaKeys(parsed.discoveredCtas),
+    version: input.version,
+  });
 };
 
 export const consumeUpdateMenuSelection = async (input: Readonly<{
@@ -359,12 +396,27 @@ export const consumeUpdateMenuSelection = async (input: Readonly<{
   const parsed = updateMenuInputSchema.parse(input.version.interpretedInput);
   if (parsed.mode !== 'collect' || parsed.collectionStep !== 'select_ctas')
     throw new Error('Update menu selection confirm is invalid.');
-  if (parsed.selectedCtaKeys.length === 0)
+  if (parsed.selectedCtaKeys.length === 0) {
+    const actionTokens = await buildSelectionActionTokens({
+      createAction: input.createAction,
+      database: input.database,
+      discovered: parsed.discoveredCtas,
+      identity: input.identity,
+      request: input.request,
+      requestVersionId: input.version.id,
+      selectedKeys: parsed.selectedCtaKeys,
+    });
     return input.reply(
       input.identity.locale,
-      updateMenuNoCtasMessage[input.identity.locale],
+      `${updateMenuEmptySelectionMessage[input.identity.locale]}\n\n${buildUpdateMenuSelectionMessage(
+        input.identity.locale,
+        [],
+        parsed.discoveredCtas,
+      )}`,
       input.request.id,
+      actionTokens,
     );
+  }
   const selected = selectedFromKeys(parsed.discoveredCtas, parsed.selectedCtaKeys);
   const executeInput = parseUpdateMenuExecuteInput(
     input.identity.projectId,
@@ -427,7 +479,7 @@ export const consumeUpdateMenuSelection = async (input: Readonly<{
       },
       {
         action: 'cancel',
-        label: 'Cancelar',
+        label: updateMenuActionLabels[input.identity.locale].cancel,
         token: cancel,
       },
     ],

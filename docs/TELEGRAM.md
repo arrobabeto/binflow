@@ -80,19 +80,25 @@ Unpaired users receive a localized access-denied message and cannot discover pro
 | Command        | Behavior                                                                                                     |
 | -------------- | ------------------------------------------------------------------------------------------------------------ |
 | `/start`       | Pair or show current connection status.                                                                      |
-| `/tools`       | List only enabled project capabilities.                                                                      |
+| `/tools`       | List enabled tools as `command — displayName`, plus platform `/open_ticket`, and a footer pointing to `/info`. |
+| `/open_ticket` | Start a custom-request interview (not a catalog tool); available to every paired client.                     |
+| `/info`        | Without args: short list + ask which tool. With arg: scope/detail for one enabled tool (does not start it).  |
 | `/create_blog` | Start the blog capability; arguments are optional.                                                           |
 | `/status`      | Show active/recent request states for this user/project.                                                     |
 | `/cancel`      | Cancel an eligible active request after confirmation.                                                        |
-| `/help`        | Explain supported interaction in the conversation locale.                                                    |
+| `/help`        | Point to `/tools` and `/info`, plus `/status` / `/cancel`, in the conversation locale.                       |
 | `/action`      | Fallback that consumes an opaque action token. Primary client controls are inline buttons, not this command. |
 
 Telegram command names use lowercase letters and underscores. Display labels may use natural language.
 
 The bot command menu is synchronized from the active project capability bindings
-via Telegram `setMyCommands` when bindings are published. Internal nodes such as
-translation never appear as commands. `/tools` lists only enabled bindings from
-the effective catalog.
+via Telegram `setMyCommands` when bindings are published. Capability descriptions
+may use localized one-line summaries from the client tool catalog. Internal nodes
+such as translation never appear as commands. `/tools` lists only enabled
+bindings; `/info` details only enabled bindings (ADR-0054). `/info` never creates
+a request. Platform command `/open_ticket` appears in `/tools` and `/help` for
+all paired clients (ADR-0055). Unmatched free-text offers custom request or
+`/tools`; greeting/thanks use a heuristic polite reply.
 
 ## Natural-language routing
 
@@ -196,13 +202,14 @@ Plan (`update_menu` — after PDF + button selection):
 
 - `Publicar menú` / `Menü veröffentlichen` / `Publish menu` — `confirm_plan`
   queues execute (no preview deploy)
-- `Cancelar` / cancel action aborts the request
+- `Cancelar` / `Cancel` / `Abbrechen` — cancel action aborts the request
 
-Selection (`update_menu` — `select_ctas` step):
+Selection (`update_menu` — `select_ctas` step; **opt-in**, none marked at start):
 
-- Toggle buttons per discovered menu CTA (`toggle_menu_cta`)
-- `Confirmar selección` / `Confirm selection` / `Auswahl bestätigen`
-- `Cancel`
+- Toggle buttons per discovered menu CTA (`toggle_menu_cta`) — tap to select
+- `Seleccionar todos` / `Select all` / `Alle auswählen` (`select_all_menu_ctas`)
+- `Continuar` / `Continue` / `Weiter` (`confirm_menu_selection`, primary)
+- `Cancelar` / `Cancel` / `Abbrechen`
 
 Plan (delete project — `delete_project`):
 

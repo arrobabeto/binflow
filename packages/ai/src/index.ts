@@ -1016,3 +1016,9 @@ export const createOpenAIProjectGenerationPort = (
     },
   };
 };
+
+export {
+  createOpenAITicketEstimatePort,
+  type OpenAITicketEstimateInput,
+  type OpenAITicketEstimateResult,
+} from './ticket-estimate.js';

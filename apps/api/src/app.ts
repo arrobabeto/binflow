@@ -18,6 +18,7 @@ import {
   healthResponseSchema,
   integrationCandidateInputSchema,
   pairingLinkResponseSchema,
+  patchTicketInputSchema,
   platformOwnerSessionSchema,
   projectManifestResponseSchema,
   readinessResponseSchema,
@@ -26,6 +27,9 @@ import {
   requestPageSchema,
   requestRevisionInputSchema,
   requestSummarySchema,
+  ticketDetailSchema,
+  ticketListQuerySchema,
+  ticketPageSchema,
   toolAssignmentsResponseSchema,
   toolCatalogResponseSchema,
   toolCustomizationDetailSchema,
@@ -46,7 +50,7 @@ import { DomainError } from '@binflow/domain';
 import type { IntegrationAdminService } from '@binflow/integration-admin';
 import type { EnrollmentService } from '@binflow/onboarding';
 import type { ToolCatalogService } from '@binflow/tools';
-import type { WorkflowService } from '@binflow/workflows';
+import type { TicketService, WorkflowService } from '@binflow/workflows';
 
 import { normalizeApiError } from './errors.js';
 
@@ -84,6 +88,15 @@ export const buildApp = (
       | 'listCatalog'
       | 'uploadCustomization'
     >;
+    ticketService?: Pick<
+      TicketService,
+      | 'get'
+      | 'getMessageTarget'
+      | 'list'
+      | 'markRead'
+      | 'patch'
+      | 'sendMessage'
+    >;
     workflowService?: Pick<
       WorkflowService,
       | 'approveAsAdmin'
@@ -112,6 +125,7 @@ export const buildApp = (
   const enrollmentService = options.enrollmentService;
   const integrationService = options.integrationService;
   const toolCatalogService = options.toolCatalogService;
+  const ticketService = options.ticketService;
   const workflowService = options.workflowService;
   const readinessCheck = options.readinessCheck;
   const trustedOrigin = new URL(
@@ -264,6 +278,15 @@ export const buildApp = (
       );
     }
     return toolCatalogService;
+  };
+  const requireTicketService = (): NonNullable<typeof ticketService> => {
+    if (ticketService === undefined) {
+      throw new DomainError(
+        'internal_error',
+        'Ticket runtime is unavailable.',
+      );
+    }
+    return ticketService;
   };
   const requireMutationHeaders = (
     headers: RequestHeaders,
@@ -623,6 +646,106 @@ export const buildApp = (
       const body = adminClientMessageInputSchema.parse(request.body);
       return adminClientMessageQueuedSchema.parse(
         await requireWorkflowService().sendEnrollmentMessage(
+          request.params.id,
+          body.message,
+          session.actorId,
+          request.id,
+          mutation.idempotencyKey,
+        ),
+      );
+    },
+  );
+
+  app.get('/api/v1/admin/tickets', async (request) => {
+    const session = await requireSession(request);
+    const query = ticketListQuerySchema.parse(request.query);
+    return ticketPageSchema.parse(
+      await requireTicketService().list(session.actorId, request.id, {
+        limit: query.limit,
+        tab: query.tab,
+        ...(query.cursor === undefined ? {} : { cursor: query.cursor }),
+        ...(query.projectId === undefined
+          ? {}
+          : { projectId: query.projectId }),
+        ...(query.state === undefined ? {} : { state: query.state }),
+      }),
+    );
+  });
+
+  app.get<{ Params: { id: string } }>(
+    '/api/v1/admin/tickets/:id',
+    async (request, reply) => {
+      const session = await requireSession(request);
+      const detail = ticketDetailSchema.parse(
+        await requireTicketService().get(
+          request.params.id,
+          session.actorId,
+          request.id,
+        ),
+      );
+      void reply.header('etag', `"${String(detail.revision)}"`);
+      return detail;
+    },
+  );
+
+  app.patch<{ Params: { id: string } }>(
+    '/api/v1/admin/tickets/:id',
+    async (request, reply) => {
+      const session = await requireSession(request, true);
+      const mutation = requireMutationHeaders(request.headers);
+      const detail = ticketDetailSchema.parse(
+        await requireTicketService().patch(
+          request.params.id,
+          patchTicketInputSchema.parse(request.body),
+          mutation.expectedVersion,
+          session.actorId,
+          request.id,
+          mutation.idempotencyKey,
+        ),
+      );
+      void reply.header('etag', `"${String(detail.revision)}"`);
+      return detail;
+    },
+  );
+
+  app.post<{ Params: { id: string } }>(
+    '/api/v1/admin/tickets/:id/read',
+    async (request, reply) => {
+      const session = await requireSession(request);
+      const detail = ticketDetailSchema.parse(
+        await requireTicketService().markRead(
+          request.params.id,
+          session.actorId,
+          request.id,
+        ),
+      );
+      void reply.header('etag', `"${String(detail.revision)}"`);
+      return detail;
+    },
+  );
+
+  app.get<{ Params: { id: string } }>(
+    '/api/v1/admin/tickets/:id/message-target',
+    async (request) => {
+      const session = await requireSession(request);
+      return clientMessageTargetSchema.parse(
+        await requireTicketService().getMessageTarget(
+          request.params.id,
+          session.actorId,
+          request.id,
+        ),
+      );
+    },
+  );
+
+  app.post<{ Params: { id: string } }>(
+    '/api/v1/admin/tickets/:id/messages',
+    async (request) => {
+      const session = await requireSession(request, true);
+      const mutation = requireMutationHeaders(request.headers, false);
+      const body = adminClientMessageInputSchema.parse(request.body);
+      return adminClientMessageQueuedSchema.parse(
+        await requireTicketService().sendMessage(
           request.params.id,
           body.message,
           session.actorId,
