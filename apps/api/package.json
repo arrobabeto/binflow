@@ -6,9 +6,9 @@
   "scripts": {
     "build": "tsc -p tsconfig.json",
     "check": "tsc -p tsconfig.json --noEmit",
-    "dev": "tsx watch src/server.ts",
+    "dev": "tsx watch --import ./src/instrumentation.ts src/server.ts",
     "lint": "eslint src --max-warnings=0",
-    "start": "node dist/server.js",
+    "start": "node --import ./dist/instrumentation.js dist/server.js",
     "test": "vitest run"
   },
   "dependencies": {
@@ -17,6 +17,7 @@
     "@binflow/db": "workspace:*",
     "@binflow/domain": "workspace:*",
     "@binflow/integration-admin": "workspace:*",
+    "@binflow/observability": "workspace:*",
     "@binflow/onboarding": "workspace:*",
     "@binflow/secrets": "workspace:*",
     "@binflow/tools": "workspace:*",

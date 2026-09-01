@@ -38,6 +38,8 @@ import {
   updateEnrollmentInputSchema,
   updateProjectCapabilitiesInputSchema,
   uploadToolCustomizationInputSchema,
+  usageListQuerySchema,
+  usageResponseSchema,
   type HealthResponse,
   type PlatformOwnerSessionResponse,
 } from '@binflow/contracts';
@@ -50,7 +52,11 @@ import { DomainError } from '@binflow/domain';
 import type { IntegrationAdminService } from '@binflow/integration-admin';
 import type { EnrollmentService } from '@binflow/onboarding';
 import type { ToolCatalogService } from '@binflow/tools';
-import type { TicketService, WorkflowService } from '@binflow/workflows';
+import type {
+  TicketService,
+  UsageService,
+  WorkflowService,
+} from '@binflow/workflows';
 
 import { normalizeApiError } from './errors.js';
 
@@ -97,6 +103,7 @@ export const buildApp = (
       | 'patch'
       | 'sendMessage'
     >;
+    usageService?: Pick<UsageService, 'get'>;
     workflowService?: Pick<
       WorkflowService,
       | 'approveAsAdmin'
@@ -126,6 +133,7 @@ export const buildApp = (
   const integrationService = options.integrationService;
   const toolCatalogService = options.toolCatalogService;
   const ticketService = options.ticketService;
+  const usageService = options.usageService;
   const workflowService = options.workflowService;
   const readinessCheck = options.readinessCheck;
   const trustedOrigin = new URL(
@@ -287,6 +295,15 @@ export const buildApp = (
       );
     }
     return ticketService;
+  };
+  const requireUsageService = (): NonNullable<typeof usageService> => {
+    if (usageService === undefined) {
+      throw new DomainError(
+        'internal_error',
+        'Usage runtime is unavailable.',
+      );
+    }
+    return usageService;
   };
   const requireMutationHeaders = (
     headers: RequestHeaders,
@@ -669,6 +686,18 @@ export const buildApp = (
           : { projectId: query.projectId }),
         ...(query.state === undefined ? {} : { state: query.state }),
       }),
+    );
+  });
+
+  app.get('/api/v1/usage', async (request) => {
+    const session = await requireSession(request);
+    const query = usageListQuerySchema.parse(request.query);
+    return usageResponseSchema.parse(
+      await requireUsageService().get(
+        session.actorId,
+        request.id,
+        query.range,
+      ),
     );
   });
 

@@ -236,6 +236,21 @@ Structured logs may contain identifiers, states, durations, provider and error c
 
 Audit stores redacted structured inputs or hashes and references large artifacts through controlled storage.
 
+### OpenTelemetry / Logfire egress (ADR-0056)
+
+Optional OpenTelemetry export from API and worker to a **platform** Pydantic
+Logfire project is an ops egress path, not a product ledger.
+
+- Enabled only when `LOGFIRE_TOKEN` (or the documented equivalent) is set in the
+  runtime environment / Docker secret. The token is a platform secret: never
+  commit it, never put it in the dashboard container, never echo it in logs.
+- Span/log attributes are **allowlisted**: `tenantId`, `projectId`, `requestId`,
+  capability/node identifiers, HTTP route class, durations, error class. They
+  must not include secret values, Authorization headers, prompt or attachment
+  bodies, cookies, TOTP material, or decrypted credentials.
+- Analytics KPIs must not be sourced from Logfire queries; Postgres
+  `model_calls` / `usage_records` remain the durable cost ledger.
+
 ## Security change requirements
 
 Any trust-boundary, credential, auth, tenant, approval, tool or egress change must update this document, add security tests and create/supersede an ADR when the decision is durable.

@@ -7,9 +7,12 @@ import {
   buildClientSummaries,
   countAwaitingAdminApproval,
   countPendingApprovals,
+  countRequestsOnLocalDay,
   countRequestsOnUtcDay,
   formatApproximateCount,
+  localDayKey,
   pendingApprovalsByProject,
+  requestsByProjectOnLocalDay,
   requestsByProjectOnUtcDay,
   summarizeClientMix,
   summarizeSystemHealth,
@@ -135,6 +138,33 @@ describe('overview-metrics', () => {
     expect(formatApproximateCount({ approximate: true, value: 3 })).toBe('3+');
     expect(requestsByProjectOnUtcDay(items, '2026-08-29').get('p1')).toBe(1);
     expect(pendingApprovalsByProject(items).get('p1')).toBe(2);
+    // Local-day helpers: interpret createdAt in the runtime timezone.
+    const localDay = localDayKey(new Date('2026-08-29T12:00:00'));
+    expect(
+      countRequestsOnLocalDay(
+        [
+          request({
+            createdAt: '2026-08-29T18:00:00.000Z',
+            id: 'r-local',
+            projectId: 'p1',
+          }),
+        ],
+        localDay,
+        false,
+      ).value,
+    ).toBeGreaterThanOrEqual(0);
+    expect(
+      requestsByProjectOnLocalDay(
+        [
+          request({
+            createdAt: '2026-08-29T18:00:00.000Z',
+            id: 'r-local-2',
+            projectId: 'p9',
+          }),
+        ],
+        localDayKey(new Date('2026-08-29T18:00:00.000Z')),
+      ).get('p9'),
+    ).toBe(1);
   });
 
   it('summarizes system health and attention items', () => {

@@ -762,9 +762,77 @@ POST   /api/v1/requests/:requestId/cancel
 POST   /api/v1/requests/:requestId/messages
 GET    /api/v1/requests/:requestId/message-target
 GET    /api/v1/audit
-GET    /api/v1/usage
+GET    /api/v1/usage?range=24h|7d|30d|all
 GET    /api/v1/operations/:operationId
 GET    /api/v1/readiness
+
+`GET /api/v1/usage` requires a platform-owner session (same auth as other admin
+GETs). Query `range` matches Analytics: rolling `24h`; UTC calendar `7d` /
+`30d` (inclusive of today); `all` with no lower bound. Default `7d`.
+
+Response (ADR-0056; costs in integer USD cents; latency in milliseconds):
+
+```ts
+type UsageRange = '24h' | '7d' | '30d' | 'all';
+
+type UsageResponse = {
+  range: UsageRange;
+  rangeStart: string | null; // ISO; null when range=all
+  rangeEnd: string; // ISO
+  totalSpendCents: number;
+  totalModelCalls: number;
+  distinctRequestCount: number;
+  avgCostCentsPerRequest: number | null;
+  avgLatencyMs: number | null;
+  costOverTime: ReadonlyArray<{ day: string; spendCents: number }>; // UTC YYYY-MM-DD
+  byClient: ReadonlyArray<{
+    projectId: string;
+    tenantId: string;
+    spendCents: number;
+    modelCalls: number;
+    budgetCentsPerDay: number | null;
+    budgetUtilizationPercent: number | null;
+  }>;
+  byCapability: ReadonlyArray<{
+    capabilityId: string;
+    spendCents: number;
+    modelCalls: number;
+    avgLatencyMs: number | null;
+  }>;
+  byNode: ReadonlyArray<{
+    node: string;
+    spendCents: number;
+    modelCalls: number;
+    avgLatencyMs: number | null;
+  }>;
+  byModel: ReadonlyArray<{
+    provider: string;
+    model: string;
+    spendCents: number;
+    modelCalls: number;
+    inputTokens: number;
+    outputTokens: number;
+    avgLatencyMs: number | null;
+  }>;
+  alerts: ReadonlyArray<{
+    kind: 'budget_day_utilization';
+    severity: 'warning' | 'critical';
+    projectId: string;
+    message: string;
+    utilizationPercent: number;
+  }>;
+  efficiency: ReadonlyArray<{
+    provider: string;
+    model: string;
+    score: number; // higher is better; derived from real cost/token/latency
+    spendCents: number;
+    totalTokens: number;
+    avgLatencyMs: number | null;
+  }>;
+};
+```
+
+Empty ledgers return zeros and empty arrays — never placeholder mock spend.
 
 GET    /api/v1/admin/enrollments
 GET    /api/v1/admin/enrollments/:id

@@ -12,7 +12,12 @@
     "dev": {
       "cache": false,
       "dependsOn": ["^build"],
-      "passThroughEnv": ["BINFLOW_LIVE_EXECUTION_ENABLED"],
+      "passThroughEnv": [
+        "BINFLOW_LIVE_EXECUTION_ENABLED",
+        "LOGFIRE_TOKEN",
+        "LOGFIRE_SERVICE_NAME",
+        "OTEL_SERVICE_NAME"
+      ],
       "persistent": true
     },
     "lint": {

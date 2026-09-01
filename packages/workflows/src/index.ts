@@ -177,6 +177,11 @@ export * from './project-runtime.js';
 export * from './text-runtime.js';
 export * from './text-style-runtime.js';
 export { TicketService } from './tickets.js';
+export {
+  UsageService,
+  buildUsageResponse,
+  usageRangeStart,
+} from './usage.js';
 export { graphVersionForCapability } from './capability-graph.js';
 export {
   capabilityIngressRoutes,

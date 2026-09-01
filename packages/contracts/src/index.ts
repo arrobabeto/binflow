@@ -2272,3 +2272,108 @@ export interface TicketListQueryInput {
   state?: TicketState;
   tab: TicketTab;
 }
+
+export const usageRangeSchema = z.enum(['24h', '7d', '30d', 'all']);
+
+export const usageListQuerySchema = z
+  .object({
+    range: usageRangeSchema.default('7d'),
+  })
+  .strict();
+
+export const usageCostDaySchema = z
+  .object({
+    day: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+    spendCents: z.number().int().nonnegative(),
+  })
+  .strict();
+
+export const usageByClientSchema = z
+  .object({
+    budgetCentsPerDay: z.number().int().positive().nullable(),
+    budgetUtilizationPercent: z.number().nonnegative().nullable(),
+    modelCalls: z.number().int().nonnegative(),
+    projectId: z.string().min(1),
+    spendCents: z.number().int().nonnegative(),
+    tenantId: z.string().min(1),
+  })
+  .strict();
+
+export const usageByCapabilitySchema = z
+  .object({
+    avgLatencyMs: z.number().nonnegative().nullable(),
+    capabilityId: z.string().min(1),
+    modelCalls: z.number().int().nonnegative(),
+    spendCents: z.number().int().nonnegative(),
+  })
+  .strict();
+
+export const usageByNodeSchema = z
+  .object({
+    avgLatencyMs: z.number().nonnegative().nullable(),
+    modelCalls: z.number().int().nonnegative(),
+    node: z.string().min(1),
+    spendCents: z.number().int().nonnegative(),
+  })
+  .strict();
+
+export const usageByModelSchema = z
+  .object({
+    avgLatencyMs: z.number().nonnegative().nullable(),
+    inputTokens: z.number().int().nonnegative(),
+    model: z.string().min(1),
+    modelCalls: z.number().int().nonnegative(),
+    outputTokens: z.number().int().nonnegative(),
+    provider: z.string().min(1),
+    spendCents: z.number().int().nonnegative(),
+  })
+  .strict();
+
+export const usageAlertSchema = z
+  .object({
+    kind: z.literal('budget_day_utilization'),
+    message: z.string().min(1),
+    projectId: z.string().min(1),
+    severity: z.enum(['warning', 'critical']),
+    utilizationPercent: z.number().nonnegative(),
+  })
+  .strict();
+
+export const usageEfficiencySchema = z
+  .object({
+    avgLatencyMs: z.number().nonnegative().nullable(),
+    model: z.string().min(1),
+    provider: z.string().min(1),
+    score: z.number().min(0).max(100),
+    spendCents: z.number().int().nonnegative(),
+    totalTokens: z.number().int().nonnegative(),
+  })
+  .strict();
+
+export const usageResponseSchema = z
+  .object({
+    alerts: z.array(usageAlertSchema),
+    avgCostCentsPerRequest: z.number().nonnegative().nullable(),
+    avgLatencyMs: z.number().nonnegative().nullable(),
+    byCapability: z.array(usageByCapabilitySchema),
+    byClient: z.array(usageByClientSchema),
+    byModel: z.array(usageByModelSchema),
+    byNode: z.array(usageByNodeSchema),
+    costOverTime: z.array(usageCostDaySchema),
+    distinctRequestCount: z.number().int().nonnegative(),
+    efficiency: z.array(usageEfficiencySchema),
+    range: usageRangeSchema,
+    rangeEnd: z.string().datetime(),
+    rangeStart: z.string().datetime().nullable(),
+    totalModelCalls: z.number().int().nonnegative(),
+    totalSpendCents: z.number().int().nonnegative(),
+  })
+  .strict();
+
+export type UsageRange = z.infer<typeof usageRangeSchema>;
+export type UsageResponse = z.infer<typeof usageResponseSchema>;
+export type UsageListQuery = z.infer<typeof usageListQuerySchema>;
+export type UsageByClient = z.infer<typeof usageByClientSchema>;
+export type UsageAlert = z.infer<typeof usageAlertSchema>;
+export type UsageEfficiency = z.infer<typeof usageEfficiencySchema>;
+

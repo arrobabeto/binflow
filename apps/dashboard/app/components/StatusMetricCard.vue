@@ -26,7 +26,7 @@ const valueClass = computed(() => {
 </script>
 
 <template>
-  <UCard :class="cardClass">
+  <UCard :class="['binflow-surface !ring-0', cardClass]">
     <p class="text-xs font-medium tracking-wide text-muted uppercase">
       {{ label }}
     </p>
@@ -34,7 +34,7 @@ const valueClass = computed(() => {
       class="mt-3 text-2xl font-semibold tracking-tight"
       :class="valueClass"
     >
-      {{ value }}
+      {{ value || '—' }}
     </p>
     <p v-if="detail" class="mt-1 text-sm text-muted">{{ detail }}</p>
     <UButton

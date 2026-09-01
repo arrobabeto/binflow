@@ -29,6 +29,23 @@
 
 Start durable dependencies with `docker compose -f infra/compose/local.yml up -d postgres redis minio clamav`, then apply migrations with `pnpm db:migrate`. Host `pnpm dev` needs those ports on localhost; it does not start PostgreSQL or Redis by itself. The same Compose file can build the current API, dashboard, worker and maintenance images; the CLI intentionally runs in the trusted host terminal so interactive secret input never traverses Compose configuration.
 
+#### Logfire / OpenTelemetry (local, optional)
+
+Analytics cost KPIs use Postgres via `GET /api/v1/usage` (ADR-0056). Separately,
+API and worker may export OpenTelemetry spans to a **single platform** Logfire
+project for ops debugging:
+
+1. Create a Logfire project and write token in the Logfire UI (not in git).
+2. Set `LOGFIRE_TOKEN` in the host or Compose secret env for **api** and
+   **worker** only. Omit the variable to keep pre-instrumentation behavior
+   (no egress).
+3. Optional: `OTEL_SERVICE_NAME` per process (`binflow-api`, `binflow-worker`).
+4. Confirm spans appear in Logfire; confirm attributes stay within the
+   SECURITY allowlist (no secrets/prompt bodies).
+
+Do not enable Logfire in production until a later ops change documents webhook/
+egress controls. Dashboard does not receive the token.
+
 After portfolio cover encoding changes (JPEG → AVIF), force-bump the active
 Webbin manifest path allowlist so `render_artifacts` accepts
 `public/images/projects/*.avif`:

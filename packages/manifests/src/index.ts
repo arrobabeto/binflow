@@ -484,6 +484,7 @@ const buildAstroOrbitypeManifest = (
       collections,
       editablePaths: [
         'cms/collections/**',
+        'public/documents/*.pdf',
         'src/content/blog-en/*.md',
         'src/content/blog-es/*.md',
         'src/content/blog-de/*.md',

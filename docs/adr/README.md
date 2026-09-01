@@ -61,5 +61,6 @@ ADRs preserve why durable decisions exist. Accepted ADRs are binding until a lat
 | [0053](0053-edit-text-style-orbitype.md)                             | Edit text style for Astro + Orbitype (size/weight/color)       | Proposed |
 | [0054](0054-client-telegram-tool-catalog.md)                         | Client Telegram `/info` catalog (`/tools` compact + footer)    | Proposed |
 | [0055](0055-admin-tickets.md)                                        | Admin tickets for out-of-catalog client requests                | Accepted |
+| [0056](0056-usage-ledger-and-logfire-ops.md)                         | Usage ledger for Analytics KPIs; Logfire for ops telemetry only | Accepted |
 
 Use [0000-template.md](0000-template.md) for new decisions.
