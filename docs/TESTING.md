@@ -62,6 +62,8 @@
 
 ### Contract
 
+- Analytics cost/latency panels and `GET /api/v1/usage` aggregations (empty
+  ledger vs fixture spend; no invented UI dollars).
 - OpenAI structured outputs, refusal and usage normalization.
 - Chat SDK Telegram messages, commands, buttons, files and transport modes.
 - Telegram adapter tests prove that `/start <token>` and other bot commands use

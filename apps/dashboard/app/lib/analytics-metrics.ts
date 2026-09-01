@@ -13,6 +13,8 @@ export type AnalyticsSlice = Readonly<{
 }>;
 
 export type ToolUsageRow = Readonly<{
+  avgExecutionMs: number | null;
+  capabilityId: string;
   failedCalls: number;
   successRate: number | null;
   toolName: string;
@@ -20,7 +22,10 @@ export type ToolUsageRow = Readonly<{
 }>;
 
 export type ClientCostRow = Readonly<{
+  budgetUtilizationPercent: number | null;
   label: string;
+  projectId: string;
+  spendCents: number | null;
   state: Enrollment['state'];
 }>;
 
@@ -146,6 +151,7 @@ export const aggregateFailedRequestsByCapability = (
 export const buildToolUsageRows = (
   requests: readonly Pick<RequestSummary, 'capabilityId' | 'state'>[],
   tools: readonly Pick<ToolCatalogItem, 'displayName' | 'id'>[],
+  avgLatencyByCapability: ReadonlyMap<string, number | null> = new Map(),
 ): readonly ToolUsageRow[] => {
   const labels = new Map(tools.map((tool) => [tool.id, tool.displayName]));
   const totals = new Map<string, { failed: number; total: number }>();
@@ -160,6 +166,8 @@ export const buildToolUsageRows = (
   }
   return [...totals.entries()]
     .map(([id, counts]) => ({
+      avgExecutionMs: avgLatencyByCapability.get(id) ?? null,
+      capabilityId: id,
       failedCalls: counts.failed,
       successRate:
         counts.total === 0
@@ -188,13 +196,39 @@ export const aggregateModelsFromGraphs = (
 
 export const buildClientCostRows = (
   enrollments: readonly Enrollment[],
+  spendByProject: ReadonlyMap<
+    string,
+    { budgetUtilizationPercent: number | null; spendCents: number }
+  > = new Map(),
 ): readonly ClientCostRow[] =>
   [...enrollments]
-    .map((enrollment) => ({
-      label: formatClientKeyLabel(enrollment.tenantKey),
-      state: enrollment.state,
-    }))
+    .map((enrollment) => {
+      const spend = spendByProject.get(enrollment.projectId);
+      return {
+        budgetUtilizationPercent: spend?.budgetUtilizationPercent ?? null,
+        label: formatClientKeyLabel(enrollment.tenantKey),
+        projectId: enrollment.projectId,
+        spendCents: spend?.spendCents ?? null,
+        state: enrollment.state,
+      };
+    })
     .sort((left, right) => left.label.localeCompare(right.label));
+
+export const formatUsdFromCents = (cents: number | null): string => {
+  if (cents === null) return '—';
+  return new Intl.NumberFormat('en-US', {
+    currency: 'USD',
+    maximumFractionDigits: 2,
+    minimumFractionDigits: 2,
+    style: 'currency',
+  }).format(cents / 100);
+};
+
+export const formatLatencyMs = (ms: number | null): string => {
+  if (ms === null) return '—';
+  if (ms >= 1000) return `${(ms / 1000).toFixed(2)}s`;
+  return `${Math.round(ms)}ms`;
+};
 
 export const slicePercent = (
   slices: readonly AnalyticsSlice[],

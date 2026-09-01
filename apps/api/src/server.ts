@@ -6,7 +6,7 @@ import { eq } from 'drizzle-orm';
 import { Redis } from 'ioredis';
 import { EnrollmentService } from '@binflow/onboarding';
 import { IntegrationAdminService } from '@binflow/integration-admin';
-import { WorkflowService, TicketService } from '@binflow/workflows';
+import { WorkflowService, TicketService, UsageService } from '@binflow/workflows';
 import { ToolCatalogService } from '@binflow/tools';
 import { schema, withPlatformSystemScope } from '@binflow/db';
 import {
@@ -103,6 +103,7 @@ const app = buildApp({
   readinessCheck,
   toolCatalogService: new ToolCatalogService(authRuntime.database),
   ticketService: new TicketService(authRuntime.database),
+  usageService: new UsageService(authRuntime.database),
   workflowService: new WorkflowService(authRuntime.database),
 });
 

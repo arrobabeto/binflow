@@ -4,11 +4,26 @@ All notable changes to product behavior, architecture, contracts, security, oper
 
 ## Unreleased
 
+### Usage Analytics + Logfire ops (ADR-0056)
+
+- `GET /api/v1/usage` aggregates Postgres `model_calls` / `usage_records` for
+  Analytics spend, latency, cost-over-time, cost-by-client, budget alerts, and
+  efficiency scores (same date ranges as Analytics).
+- Analytics Soon/Hybrid cost panels become Live from Usage; request-derived Live
+  panels keep existing formulas. No invented dollars; Logfire is never a KPI
+  source.
+- Optional local OpenTelemetry export to a platform Logfire project when
+  `LOGFIRE_TOKEN` is set on api/worker (env-gated; redacted attributes) via
+  `@binflow/observability` and `--import` instrumentation preload.
+- Spec: `docs/specs/usage-analytics-logfire.md`.
+
 ### Home metrics + recent tickets
 
 - Home status strip uses a full request cursor walk (same helper as Analytics)
   with `useRequestFetch`. Request list contracts accept platform
   `capabilityId: open_ticket` so `/open_ticket` rows no longer 400 the list.
+- **Requests today** uses the operator **local calendar day** (same timezone as
+  the Home clock), not UTC midnight.
 - Fourth KPI is **Open tickets** (large) with **tickets in total** underneath
   (`pendingCount` / `totalCount`); polls ~5s. Client cards keep live per-project
   request counts from the same catalog.

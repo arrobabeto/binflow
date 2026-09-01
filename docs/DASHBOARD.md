@@ -115,8 +115,9 @@ Home is the operations cockpit (`/`). It displays:
 - **Status strip**
   - System health from `GET /api/v1/health` plus `GET /api/v1/readiness`
     (Healthy when API is `ok` and readiness is `ready`).
-  - Requests created today (UTC) and pending admin approvals from a **full
-    cursor walk** of `GET /api/v1/requests` (same helper as Analytics; SSR uses
+  - Requests created today (**operator local calendar day**, matching the Home
+    clock) and pending admin approvals from a **full cursor walk** of
+    `GET /api/v1/requests` (same helper as Analytics; SSR uses
     `useRequestFetch` so session cookies apply). Counts are exact unless the
     walk hits the page cap (`+` suffix). Request summaries include platform
     `open_ticket` collection rows (ADR-0055).
@@ -138,31 +139,33 @@ Home is the operations cockpit (`/`). It displays:
   `validation_failed`, `pairing_pending`, `revalidation_required`, or
   `suspended`.
 
-Full day/month AI cost and exhaustive request totals remain specified for a
-future Usage surface (`GET /api/v1/usage`); Home does not invent those totals
-until that API is wired into the UI.
+Full day/month AI cost lives on Analytics via `GET /api/v1/usage` (ADR-0056).
+Home does not yet surface spend KPIs; it must not invent those totals.
 
 ## Analytics
 
 Analytics (`/analytics`) is the control-plane metrics surface (Figma
-`analytics-dashboard`). Layout matches the design system dark shell. Panels
-that lack a durable API show **Available soon** and never paste Figma mock
+`analytics-dashboard`). Layout matches the design system dark shell. Cost and
+latency panels read the Postgres usage ledger; they never paste Figma mock
 dollars, vendors, or tool names.
 
 | Panel | Status | Source |
 |---|---|---|
-| Total API Spend | Soon | Future `GET /api/v1/usage` |
+| Total API Spend | Live | `GET /api/v1/usage` (`totalSpendCents`) for the selected range |
 | Total Requests | Live (exact) | Full cursor walk of `GET /api/v1/requests`, then filter by `createdAt` for the selected range |
-| Avg Cost/Request | Soon | Usage |
-| Avg Latency | Soon | Usage / model_calls |
+| Avg Cost/Request | Live | Usage `avgCostCentsPerRequest` |
+| Avg Latency | Live | Usage `avgLatencyMs` from `model_calls` |
 | Tool Usage / Failures donuts | Live (exact) | Same full request catalog + range filter; labels from tools catalog |
-| Tool usage table | Hybrid | Exact counts/rates from ranged catalog; Avg Execution Time soon |
-| API Cost Over Time | Soon | Usage time-series |
-| Requests by Model | Live | Agent-node `model` fields across tool graphs |
-| Cost by Client | Hybrid | Live client + enrollment state; budget/spend soon |
-| Recent Cost Alerts | Soon | Budget alerts |
-| Model Efficiency Index | Soon | Pricing scores |
-| Date range control | Live for request-derived panels | Filters the full request catalog by `createdAt`: Last 24 hours (rolling), Last 7 / 30 days (UTC calendar), or All time. Exact totals (no `50+`) unless the page-cap safety limit truncates |
+| Tool usage table | Live | Exact counts/rates from ranged catalog; Avg Execution Time from Usage `byCapability[].avgLatencyMs` |
+| API Cost Over Time | Live | Usage `costOverTime` daily series |
+| Requests by Model | Live | Agent-node `model` fields across tool graphs (config mix, not runtime volume) |
+| Cost by Client | Live | Enrollment list + Usage `byClient` spend and budget utilization |
+| Recent Cost Alerts | Live | Usage `alerts` (budget ceiling vs spend; empty when none) |
+| Model Efficiency Index | Live | Usage `efficiency` scores from real cost/token/latency rows |
+| Date range control | Live | Same range for request-derived panels and Usage (`24h` / `7d` / `30d` / `all`). Exact request totals (no `50+`) unless the page-cap safety limit truncates |
+
+Cost and latency panels never invent dollars. When Usage returns zeros or empty
+series, show those empties. Logfire is not a source for Analytics (ADR-0056).
 
 ## Clients and projects
 

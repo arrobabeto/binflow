@@ -6,9 +6,9 @@
   "scripts": {
     "build": "tsc -p tsconfig.json",
     "check": "tsc -p tsconfig.json --noEmit",
-    "dev": "tsx watch src/main.ts",
+    "dev": "tsx watch --import ./src/instrumentation.ts src/main.ts",
     "lint": "eslint src --max-warnings=0",
-    "start": "node dist/main.js",
+    "start": "node --import ./dist/instrumentation.js dist/main.js",
     "test": "vitest run"
   },
   "dependencies": {
@@ -23,6 +23,7 @@
     "@binflow/menu": "workspace:*",
     "@binflow/text": "workspace:*",
     "@binflow/messaging": "workspace:*",
+    "@binflow/observability": "workspace:*",
     "@binflow/orbitype": "workspace:*",
     "@binflow/projects": "workspace:*",
     "@binflow/secrets": "workspace:*",

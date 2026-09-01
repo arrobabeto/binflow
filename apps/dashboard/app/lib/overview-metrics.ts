@@ -102,6 +102,30 @@ export const countRequestsOnUtcDay = (
   return { approximate: hasMore && value > 0, value };
 };
 
+/** Operator wall-clock calendar day `YYYY-MM-DD` (matches the Home local clock). */
+export const localDayKey = (now: Date = new Date()): string => {
+  const year = now.getFullYear();
+  const month = String(now.getMonth() + 1).padStart(2, '0');
+  const day = String(now.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+};
+
+const createdOnLocalDay = (iso: string, localDay: string): boolean => {
+  const created = new Date(iso);
+  return Number.isFinite(created.getTime()) && localDayKey(created) === localDay;
+};
+
+/** Count requests whose createdAt falls on the operator's local calendar day. */
+export const countRequestsOnLocalDay = (
+  items: readonly Pick<RequestSummary, 'createdAt'>[],
+  localDay: string,
+  hasMore: boolean,
+): ApproximateCount => {
+  const value = items.filter((item) => createdOnLocalDay(item.createdAt, localDay))
+    .length;
+  return { approximate: hasMore && value > 0, value };
+};
+
 export const requestsByProjectOnUtcDay = (
   items: readonly Pick<RequestSummary, 'createdAt' | 'projectId'>[],
   utcDay: string,
@@ -109,6 +133,18 @@ export const requestsByProjectOnUtcDay = (
   const counts = new Map<string, number>();
   for (const item of items) {
     if (utcDayKey(item.createdAt) !== utcDay) continue;
+    counts.set(item.projectId, (counts.get(item.projectId) ?? 0) + 1);
+  }
+  return counts;
+};
+
+export const requestsByProjectOnLocalDay = (
+  items: readonly Pick<RequestSummary, 'createdAt' | 'projectId'>[],
+  localDay: string,
+): Map<string, number> => {
+  const counts = new Map<string, number>();
+  for (const item of items) {
+    if (!createdOnLocalDay(item.createdAt, localDay)) continue;
     counts.set(item.projectId, (counts.get(item.projectId) ?? 0) + 1);
   }
   return counts;

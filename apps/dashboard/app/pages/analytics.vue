@@ -4,6 +4,7 @@ import type {
   RequestSummary,
   ToolCatalogResponse,
   ToolGraphResponse,
+  UsageResponse,
 } from '@binflow/contracts';
 
 import {
@@ -15,7 +16,9 @@ import {
   buildToolUsageRows,
   fetchAllRequestSummaries,
   filterRequestsByDateRange,
+  formatLatencyMs,
   formatPercent,
+  formatUsdFromCents,
   type AnalyticsDateRange,
 } from '../lib/analytics-metrics';
 import {
@@ -36,15 +39,18 @@ const {
   data: requestCatalog,
   status: requestsStatus,
   error: requestsError,
-} = await useAsyncData('analytics-all-requests', () =>
-  fetchAllRequestSummaries(async ({ cursor, limit }) =>
-    requestFetch<{ items: RequestSummary[]; nextCursor: string | null }>(
-      `/api/v1/requests?${analyticsRequestListSearchParams({
-        ...(cursor === undefined ? {} : { cursor }),
-        limit,
-      })}`,
+} = useAsyncData(
+  'analytics-all-requests',
+  () =>
+    fetchAllRequestSummaries(async ({ cursor, limit }) =>
+      requestFetch<{ items: RequestSummary[]; nextCursor: string | null }>(
+        `/api/v1/requests?${analyticsRequestListSearchParams({
+          ...(cursor === undefined ? {} : { cursor }),
+          limit,
+        })}`,
+      ),
     ),
-  ),
+  { lazy: true, server: false },
 );
 
 const dateRange = ref<AnalyticsDateRange>('7d');
@@ -54,6 +60,19 @@ const dateRangeItems = [
   { label: 'Last 30 days', value: '30d' },
   { label: 'All time', value: 'all' },
 ] as const;
+
+const {
+  data: usage,
+  status: usageStatus,
+  error: usageError,
+} = useAsyncData(
+  'analytics-usage',
+  () =>
+    requestFetch<UsageResponse>(
+      `/api/v1/usage?range=${encodeURIComponent(dateRange.value)}`,
+    ),
+  { lazy: true, server: false, watch: [dateRange] },
+);
 
 const loadedRequests = computed(() => requestCatalog.value?.items ?? []);
 const requestsTruncated = computed(
@@ -79,11 +98,39 @@ const usageSlices = computed(() =>
 const failureSlices = computed(() =>
   aggregateFailedRequestsByCapability(rangedRequests.value, toolItems.value),
 );
+
+const latencyByCapability = computed(() => {
+  const map = new Map<string, number | null>();
+  for (const row of usage.value?.byCapability ?? []) {
+    map.set(row.capabilityId, row.avgLatencyMs);
+  }
+  return map;
+});
+
 const usageRows = computed(() =>
-  buildToolUsageRows(rangedRequests.value, toolItems.value),
+  buildToolUsageRows(
+    rangedRequests.value,
+    toolItems.value,
+    latencyByCapability.value,
+  ),
 );
+
+const spendByProject = computed(() => {
+  const map = new Map<
+    string,
+    { budgetUtilizationPercent: number | null; spendCents: number }
+  >();
+  for (const row of usage.value?.byClient ?? []) {
+    map.set(row.projectId, {
+      budgetUtilizationPercent: row.budgetUtilizationPercent,
+      spendCents: row.spendCents,
+    });
+  }
+  return map;
+});
+
 const clientRows = computed(() =>
-  buildClientCostRows(enrollments.value?.items ?? []),
+  buildClientCostRows(enrollments.value?.items ?? [], spendByProject.value),
 );
 
 const { data: graphs, status: graphsStatus } = await useAsyncData(
@@ -103,6 +150,12 @@ const { data: graphs, status: graphsStatus } = await useAsyncData(
 const modelSlices = computed(() =>
   aggregateModelsFromGraphs(graphs.value ?? []),
 );
+
+const costSeriesMax = computed(() =>
+  Math.max(0, ...(usage.value?.costOverTime.map((day) => day.spendCents) ?? [0])),
+);
+
+const usagePending = computed(() => usageStatus.value === 'pending');
 </script>
 
 <template>
@@ -113,8 +166,8 @@ const modelSlices = computed(() =>
           Analytics
         </h1>
         <p class="mt-2 text-muted">
-          Operational metrics from live requests and tool graphs. Cost and
-          latency panels wait on usage accounting.
+          Operational metrics from live requests, tool graphs, and the Postgres
+          usage ledger.
         </p>
       </template>
       <template #actions>
@@ -128,9 +181,9 @@ const modelSlices = computed(() =>
       </template>
     </PageHeader>
     <p class="mb-6 -mt-2 text-xs text-muted">
-      Request metrics use {{ rangeDetail.toLowerCase() }} (exact count from the
-      full request list, filtered by created time). Cost panels stay Available
-      soon.
+      Request and usage metrics use {{ rangeDetail.toLowerCase() }}. Request
+      totals come from the full request list; spend and latency from
+      <span class="font-mono">GET /api/v1/usage</span>.
     </p>
     <UAlert
       v-if="requestsError"
@@ -139,12 +192,25 @@ const modelSlices = computed(() =>
       title="Could not load requests for analytics"
       :description="String(requestsError)"
     />
+    <UAlert
+      v-else-if="usageError"
+      class="mb-6"
+      color="error"
+      title="Could not load usage accounting"
+      :description="String(usageError)"
+    />
     <p v-else-if="requestsStatus === 'pending'" class="mb-6 text-sm text-muted">
       Loading all requests for exact range totals…
     </p>
 
     <div class="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-      <AnalyticsKpiCard label="Total API Spend" soon />
+      <AnalyticsKpiCard
+        label="Total API Spend"
+        :value="
+          usagePending ? '…' : formatUsdFromCents(usage?.totalSpendCents ?? 0)
+        "
+        :detail="rangeDetail"
+      />
       <AnalyticsKpiCard
         label="Total Requests"
         :value="
@@ -158,8 +224,22 @@ const modelSlices = computed(() =>
             : rangeDetail
         "
       />
-      <AnalyticsKpiCard label="Avg Cost/Request" soon />
-      <AnalyticsKpiCard label="Avg Latency" soon />
+      <AnalyticsKpiCard
+        label="Avg Cost/Request"
+        :value="
+          usagePending
+            ? '…'
+            : formatUsdFromCents(usage?.avgCostCentsPerRequest ?? null)
+        "
+        :detail="rangeDetail"
+      />
+      <AnalyticsKpiCard
+        label="Avg Latency"
+        :value="
+          usagePending ? '…' : formatLatencyMs(usage?.avgLatencyMs ?? null)
+        "
+        :detail="rangeDetail"
+      />
     </div>
 
     <div class="mt-6 grid gap-4 lg:grid-cols-2">
@@ -201,7 +281,7 @@ const modelSlices = computed(() =>
               </tr>
               <tr
                 v-for="row in usageRows"
-                :key="row.toolName"
+                :key="row.capabilityId"
                 class="border-b border-[var(--binflow-border)] last:border-b-0"
               >
                 <td class="py-3 font-medium text-white">{{ row.toolName }}</td>
@@ -226,7 +306,9 @@ const modelSlices = computed(() =>
                   </div>
                 </td>
                 <td class="py-3 font-mono text-white">{{ row.failedCalls }}</td>
-                <td class="py-3 text-muted">Available soon</td>
+                <td class="py-3 font-mono text-white">
+                  {{ formatLatencyMs(row.avgExecutionMs) }}
+                </td>
               </tr>
             </tbody>
           </table>
@@ -235,10 +317,42 @@ const modelSlices = computed(() =>
     </section>
 
     <div class="mt-6 grid gap-4 lg:grid-cols-[1.4fr_1fr]">
-      <AnalyticsSoonPanel
-        title="API Cost Over Time"
-        description="Daily spend series requires GET /api/v1/usage."
-      />
+      <UCard class="binflow-surface !ring-0">
+        <p class="font-semibold text-white">API Cost Over Time</p>
+        <p v-if="usagePending" class="mt-6 text-sm text-muted">Loading…</p>
+        <p
+          v-else-if="(usage?.costOverTime.length ?? 0) === 0"
+          class="mt-6 text-sm text-muted"
+        >
+          No model-call spend in the selected range.
+        </p>
+        <ul v-else class="mt-4 space-y-3">
+          <li
+            v-for="day in usage?.costOverTime ?? []"
+            :key="day.day"
+            class="grid grid-cols-[6.5rem_1fr_4.5rem] items-center gap-3 text-sm"
+          >
+            <span class="font-mono text-muted">{{ day.day }}</span>
+            <div
+              class="h-2 overflow-hidden rounded-full bg-[var(--binflow-elevated)]"
+            >
+              <div
+                class="h-full rounded-full bg-[var(--binflow-accent)]"
+                :style="{
+                  width: `${String(
+                    costSeriesMax === 0
+                      ? 0
+                      : (day.spendCents / costSeriesMax) * 100,
+                  )}%`,
+                }"
+              />
+            </div>
+            <span class="text-right font-mono text-white">{{
+              formatUsdFromCents(day.spendCents)
+            }}</span>
+          </li>
+        </ul>
+      </UCard>
       <AnalyticsDonutCard
         title="Requests by Model"
         :slices="modelSlices"
@@ -277,7 +391,7 @@ const modelSlices = computed(() =>
               </tr>
               <tr
                 v-for="row in clientRows"
-                :key="`${row.label}-${row.state}`"
+                :key="row.projectId"
                 class="border-b border-[var(--binflow-border)] last:border-b-0"
               >
                 <td class="py-3 font-medium text-white">{{ row.label }}</td>
@@ -294,8 +408,12 @@ const modelSlices = computed(() =>
                     >{{ row.state }}</UBadge
                   >
                 </td>
-                <td class="py-3 text-muted">Available soon</td>
-                <td class="py-3 text-muted">Available soon</td>
+                <td class="py-3 font-mono text-white">
+                  {{ formatPercent(row.budgetUtilizationPercent) }}
+                </td>
+                <td class="py-3 font-mono text-white">
+                  {{ formatUsdFromCents(row.spendCents) }}
+                </td>
               </tr>
             </tbody>
           </table>
@@ -304,14 +422,63 @@ const modelSlices = computed(() =>
     </section>
 
     <div class="mt-6 grid gap-4 lg:grid-cols-2">
-      <AnalyticsSoonPanel
-        title="Recent Cost Alerts"
-        description="Budget and anomaly alerts require usage monitoring."
-      />
-      <AnalyticsSoonPanel
-        title="Model Efficiency Index"
-        description="Token cost scores are not published until pricing snapshots are exposed."
-      />
+      <UCard class="binflow-surface !ring-0">
+        <p class="font-semibold text-white">Recent Cost Alerts</p>
+        <p v-if="usagePending" class="mt-6 text-sm text-muted">Loading…</p>
+        <p
+          v-else-if="(usage?.alerts.length ?? 0) === 0"
+          class="mt-6 text-sm text-muted"
+        >
+          No budget utilization alerts in the selected range.
+        </p>
+        <ul v-else class="mt-4 space-y-3">
+          <li
+            v-for="(alert, index) in usage?.alerts ?? []"
+            :key="`${alert.projectId}-${String(index)}`"
+            class="rounded-lg border border-[var(--binflow-border)] bg-[var(--binflow-elevated)]/40 px-3 py-3"
+          >
+            <div class="flex items-center gap-2">
+              <UBadge
+                :color="alert.severity === 'critical' ? 'error' : 'warning'"
+                variant="soft"
+                >{{ alert.severity }}</UBadge
+              >
+              <span class="font-mono text-xs text-muted">{{
+                alert.projectId
+              }}</span>
+            </div>
+            <p class="mt-2 text-sm text-white">{{ alert.message }}</p>
+          </li>
+        </ul>
+      </UCard>
+      <UCard class="binflow-surface !ring-0">
+        <p class="font-semibold text-white">Model Efficiency Index</p>
+        <p v-if="usagePending" class="mt-6 text-sm text-muted">Loading…</p>
+        <p
+          v-else-if="(usage?.efficiency.length ?? 0) === 0"
+          class="mt-6 text-sm text-muted"
+        >
+          No model-call efficiency scores in the selected range.
+        </p>
+        <ul v-else class="mt-4 space-y-3">
+          <li
+            v-for="row in usage?.efficiency ?? []"
+            :key="`${row.provider}:${row.model}`"
+            class="grid grid-cols-[1fr_auto] gap-3 text-sm"
+          >
+            <div>
+              <p class="font-medium text-white">{{ row.model }}</p>
+              <p class="font-mono text-xs text-muted">
+                {{ row.provider }} · {{ formatUsdFromCents(row.spendCents) }} ·
+                {{ formatLatencyMs(row.avgLatencyMs) }}
+              </p>
+            </div>
+            <span class="font-mono text-lg text-[var(--binflow-accent)]">{{
+              row.score
+            }}</span>
+          </li>
+        </ul>
+      </UCard>
     </div>
   </main>
 </template>

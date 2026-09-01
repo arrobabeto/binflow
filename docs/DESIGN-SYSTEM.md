@@ -93,9 +93,9 @@ pattern.
 | Ticket inbox row | Unread: cyan left border + cyan unread dot. Read: neutral border. Client tag, title, excerpt, relative time, status badge (`new` primary, `in_process` warning, `declined` error, `closed` success/neutral), **Open ticket** |
 | Ticket detail | Soft **Back to tickets**; mono cyan public id; meta cards; admin notes; activity log; footer Message + Mark as resolved |
 | Metric card | Label, large value, detail, optional Open link |
-| Analytics KPI | Same surface language; soon state shows title + “Available soon” without fake values |
+| Analytics KPI | Same surface language; spend/latency KPIs from Usage; never invent dollars |
 | Analytics donut | Dark card + SVG ring + legend; Tool Usage/Failures from request batches; Models from tool-graph agent nodes |
-| Analytics soon panel | Bordered surface with section title and Available soon body (cost charts, alerts, efficiency) |
+| Analytics usage panels | Cost over time, alerts, and efficiency from `GET /api/v1/usage`; empty real data stays empty (no Figma mocks) |
 | Attention banner | Full-width surface with warning CTA text |
 | Client / list row | Surface card, status badge, mono project key, primary/secondary actions |
 | Modal | Dim overlay; title; Sending-to inset; textarea; Cancel + primary Queue |
@@ -131,4 +131,5 @@ pattern.
 - Reintroduce top-bar primary navigation.
 - Add a light theme toggle without a superseding ADR.
 - Paste Figma placeholder capabilities or fake request topics into production UI.
-- Fill Analytics cost/latency panels with invented spend figures before usage API.
+- Fill Analytics cost/latency panels with invented spend figures; only
+  `GET /api/v1/usage` (Postgres ledger) may supply those numbers (ADR-0056).

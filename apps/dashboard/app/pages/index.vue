@@ -12,12 +12,12 @@ import {
   buildAttentionItems,
   buildClientSummaries,
   countAwaitingAdminApproval,
-  countRequestsOnUtcDay,
+  countRequestsOnLocalDay,
   formatApproximateCount,
+  localDayKey,
   pendingApprovalsByProject,
-  requestsByProjectOnUtcDay,
+  requestsByProjectOnLocalDay,
   summarizeSystemHealth,
-  utcTodayKey,
 } from '../lib/overview-metrics';
 import { analyticsRequestListSearchParams } from '../lib/request-inbox';
 import { ticketListSearchParams } from '../lib/ticket-inbox';
@@ -29,7 +29,6 @@ type Readiness = {
 };
 
 const requestFetch = useRequestFetch();
-const todayKey = utcTodayKey();
 
 const { data: health } = await useFetch<HealthResponse>('/api/v1/health');
 const { data: readiness } = await useFetch<Readiness>('/api/v1/readiness');
@@ -82,13 +81,20 @@ const pendingApprovals = computed(() =>
   countAwaitingAdminApproval(allRequests.value, requestsTruncated.value),
 );
 
-const requestsToday = computed(() =>
-  countRequestsOnUtcDay(
+const now = ref(new Date());
+/** Set after mount so "today" matches the operator clock (not server UTC). */
+const todayKey = ref<string | null>(null);
+
+const requestsToday = computed(() => {
+  if (todayKey.value === null) {
+    return { approximate: false, value: 0 };
+  }
+  return countRequestsOnLocalDay(
     allRequests.value,
-    todayKey,
+    todayKey.value,
     requestsTruncated.value,
-  ),
-);
+  );
+});
 
 const openTickets = computed(() => ticketsPage.value?.pendingCount ?? 0);
 const totalTickets = computed(() => ticketsPage.value?.totalCount ?? 0);
@@ -108,7 +114,9 @@ const openTicketsAccent = computed(() =>
 const clientCards = computed(() =>
   buildClientSummaries(
     enrollments.value?.items ?? [],
-    requestsByProjectOnUtcDay(allRequests.value, todayKey),
+    todayKey.value === null
+      ? new Map()
+      : requestsByProjectOnLocalDay(allRequests.value, todayKey.value),
     pendingApprovalsByProject(
       allRequests.value.filter(
         (item) => item.state === 'AWAITING_ADMIN_APPROVAL',
@@ -134,7 +142,6 @@ const openMessage = (enrollmentId: string) => {
   messageOpen.value = true;
 };
 
-const now = ref(new Date());
 let clockTimer: ReturnType<typeof setInterval> | undefined;
 let ticketsPollTimer: ReturnType<typeof setInterval> | undefined;
 
@@ -151,18 +158,27 @@ const clockTime = computed(() => {
 });
 
 const metricsPending = computed(
-  () => requestsStatus.value === 'pending' && !requestCatalog.value,
+  () =>
+    todayKey.value === null ||
+    (requestsStatus.value === 'pending' && !requestCatalog.value),
 );
+
+const syncLocalDay = (date: Date) => {
+  now.value = date;
+  todayKey.value = localDayKey(date);
+};
 
 const onVisibility = () => {
   if (document.visibilityState !== 'visible') return;
+  syncLocalDay(new Date());
   void refreshTickets();
   void refreshRequests();
 };
 
 onMounted(() => {
+  syncLocalDay(new Date());
   clockTimer = setInterval(() => {
-    now.value = new Date();
+    syncLocalDay(new Date());
   }, 1000);
   ticketsPollTimer = setInterval(() => {
     void refreshTickets();
@@ -236,7 +252,7 @@ onBeforeUnmount(() => {
         :detail="
           requestsToday.approximate
             ? 'From full request catalog (truncated)'
-            : 'Created today (UTC)'
+            : 'Created today (local time)'
         "
         to="/requests"
       />

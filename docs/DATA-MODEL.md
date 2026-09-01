@@ -305,6 +305,11 @@ Explicit rationale schema linked to model call and evidence references.
 
 Tenant/project/request/capability/node/provider/model dimensions and reported/calculated/estimated cost quality.
 
+`GET /api/v1/usage` (ADR-0056) aggregates `model_calls` (spend, tokens, latency,
+node, provider/model) and joins `usage_records.capabilityId` plus active
+manifest budget ceilings for Analytics. Logfire/OTel is not a substitute for
+these rows.
+
 ### `audit_events`
 
 Append-only actor, action, object, tenant/project/request identifiers, redacted metadata, correlation IDs and timestamp.

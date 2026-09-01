@@ -34,10 +34,19 @@ describe('analytics metrics', () => {
       { label: 'Create blog', value: 1 },
     ]);
     expect(buildToolUsageRows(requests, tools)[0]).toMatchObject({
+      avgExecutionMs: null,
+      capabilityId: 'create_blog_draft',
       failedCalls: 1,
       toolName: 'Create blog',
       totalCalls: 2,
     });
+    expect(
+      buildToolUsageRows(
+        requests,
+        tools,
+        new Map([['create_blog_draft', 420]]),
+      )[0]?.avgExecutionMs,
+    ).toBe(420);
     expect(formatPercent(50)).toBe('50.0%');
   });
 
@@ -75,15 +84,49 @@ describe('analytics metrics', () => {
     expect(analyticsRangeDetail('24h')).toContain('24 hours');
   });
 
-  it('lists enrollment clients for cost table', () => {
+  it('lists enrollment clients for cost table with optional usage spend', () => {
     expect(
       buildClientCostRows([
         {
+          projectId: 'project-1',
           tenantKey: 'webbin',
           state: 'active',
         } as never,
       ]),
-    ).toEqual([{ label: 'Webbin', state: 'active' }]);
+    ).toEqual([
+      {
+        budgetUtilizationPercent: null,
+        label: 'Webbin',
+        projectId: 'project-1',
+        spendCents: null,
+        state: 'active',
+      },
+    ]);
+    expect(
+      buildClientCostRows(
+        [
+          {
+            projectId: 'project-1',
+            tenantKey: 'webbin',
+            state: 'active',
+          } as never,
+        ],
+        new Map([
+          [
+            'project-1',
+            { budgetUtilizationPercent: 40, spendCents: 120 },
+          ],
+        ]),
+      ),
+    ).toEqual([
+      {
+        budgetUtilizationPercent: 40,
+        label: 'Webbin',
+        projectId: 'project-1',
+        spendCents: 120,
+        state: 'active',
+      },
+    ]);
   });
 
   it('pages through all request cursors for exact analytics totals', async () => {
