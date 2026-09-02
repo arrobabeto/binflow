@@ -4,6 +4,12 @@ All notable changes to product behavior, architecture, contracts, security, oper
 
 ## Unreleased
 
+### Official Binflow brand mark
+
+- Dashboard ships Figma `lockup-4` (`22:63`) assets: lockup + teal waveform mark.
+- Favicon / apple-touch use the mark; auth layout (login → two-factor → security)
+  shows the lockup above the card; AppShell sidebar uses the mark.
+
 ### Usage Analytics + Logfire ops (ADR-0056)
 
 - `GET /api/v1/usage` aggregates Postgres `model_calls` / `usage_records` for

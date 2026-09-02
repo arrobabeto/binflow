@@ -57,7 +57,9 @@ palette tokens so solid action buttons keep readable contrast.
 ### Shell (`AppShell`)
 
 - Fixed left sidebar ≈ 240px.
-- Brand: Binflow mark + “CONTROL PLANE”.
+- Brand: official Binflow mark (`/binflow-mark.svg`, Figma `lockup-4` /
+  `icon-container`) + “CONTROL PLANE”. Do not substitute Lucide or ad-hoc marks.
+- Favicon / apple-touch icons use the same mark (`apps/dashboard/public/favicon.*`).
 - Nav groups with uppercase section labels:
   - Main: Home, Clients, Requests, Tickets
   - Tools: Catalog (`/tools`), Customizations
@@ -68,8 +70,9 @@ palette tokens so solid action buttons keep readable contrast.
 
 ### Auth
 
-Centered card on canvas; no sidebar. Login, two-factor, and Security share this
-pattern.
+Centered stack on canvas; no sidebar. The official lockup
+(`BrandLockup` → `/binflow-lockup.svg`) sits above the card. Login, two-factor,
+and Security share this auth layout.
 
 ### Spacing and radius
 
