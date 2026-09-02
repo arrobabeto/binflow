@@ -37,40 +37,38 @@ const submit = async () => {
 </script>
 
 <template>
-  <main class="auth-shell">
-    <UCard class="auth-card">
-      <template #header>
-        <p class="eyebrow">Binflow control plane</p>
-        <h1 class="mt-2 text-3xl font-semibold tracking-tight text-white">
-          Sign in
-        </h1>
-        <p class="mt-2 text-sm text-muted">Platform-owner access only.</p>
-      </template>
-      <UForm class="space-y-5" :state="{ email, password }" @submit="submit">
-        <UFormField label="Email" name="email" required>
-          <UInput
-            v-model="email"
-            type="email"
-            autocomplete="username"
-            class="w-full"
-          />
-        </UFormField>
-        <UFormField label="Password" name="password" required>
-          <UInput
-            v-model="password"
-            type="password"
-            autocomplete="current-password"
-            class="w-full"
-          />
-        </UFormField>
-        <UAlert
-          v-if="message"
-          color="error"
-          variant="soft"
-          :description="message"
+  <UCard class="auth-card">
+    <template #header>
+      <p class="eyebrow">Control plane</p>
+      <h1 class="mt-2 text-3xl font-semibold tracking-tight text-white">
+        Sign in
+      </h1>
+      <p class="mt-2 text-sm text-muted">Platform-owner access only.</p>
+    </template>
+    <UForm class="space-y-5" :state="{ email, password }" @submit="submit">
+      <UFormField label="Email" name="email" required>
+        <UInput
+          v-model="email"
+          type="email"
+          autocomplete="username"
+          class="w-full"
         />
-        <UButton type="submit" block :loading="pending">Continue</UButton>
-      </UForm>
-    </UCard>
-  </main>
+      </UFormField>
+      <UFormField label="Password" name="password" required>
+        <UInput
+          v-model="password"
+          type="password"
+          autocomplete="current-password"
+          class="w-full"
+        />
+      </UFormField>
+      <UAlert
+        v-if="message"
+        color="error"
+        variant="soft"
+        :description="message"
+      />
+      <UButton type="submit" block :loading="pending">Continue</UButton>
+    </UForm>
+  </UCard>
 </template>

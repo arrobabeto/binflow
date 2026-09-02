@@ -49,11 +49,14 @@ const signOut = async () => {
   <div class="binflow-shell">
     <aside class="binflow-sidebar px-4 py-5" aria-label="Primary">
       <div class="flex items-center gap-2.5 px-1">
-        <div
-          class="flex size-8 items-center justify-center rounded-lg bg-primary/20 text-primary"
-        >
-          <UIcon name="i-lucide-circuit-board" class="size-4" />
-        </div>
+        <img
+          src="/binflow-mark.svg"
+          alt=""
+          width="32"
+          height="32"
+          class="size-8 shrink-0 overflow-clip rounded-[0.5rem]"
+          decoding="async"
+        />
         <div class="min-w-0">
           <p class="text-sm font-semibold tracking-tight">Binflow</p>
           <p class="eyebrow !text-[0.65rem]">Control plane</p>

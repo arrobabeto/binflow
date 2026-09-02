@@ -77,7 +77,8 @@ collection only.
 
 ## Authentication
 
-- `/login`: email and password.
+- `/login`: email and password. Auth layout shows the official Binflow lockup
+  above the sign-in card (same brand assets as favicon and AppShell).
 - `/two-factor`: TOTP or unused backup code.
 - `/security`: enable TOTP, regenerate backup codes and revoke sessions.
 - No public signup or password reset email in the first MVP; recovery follows the documented bootstrap/break-glass process.

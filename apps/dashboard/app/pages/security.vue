@@ -111,17 +111,16 @@ const signOut = async () => {
 </script>
 
 <template>
-  <main class="auth-shell">
-    <UCard class="auth-card">
-      <template #header>
-        <p class="eyebrow">Account security</p>
-        <h1 class="mt-2 text-3xl font-semibold tracking-tight text-white">
-          Secure Binflow
-        </h1>
-        <p class="mt-2 text-sm text-muted">
-          TOTP is required before business access.
-        </p>
-      </template>
+  <UCard class="auth-card">
+    <template #header>
+      <p class="eyebrow">Account security</p>
+      <h1 class="mt-2 text-3xl font-semibold tracking-tight text-white">
+        Secure Binflow
+      </h1>
+      <p class="mt-2 text-sm text-muted">
+        TOTP is required before business access.
+      </p>
+    </template>
       <div
         v-if="session?.user.twoFactorEnabled && !enrollmentComplete"
         class="space-y-6"
@@ -266,6 +265,5 @@ const signOut = async () => {
           >Sign out</UButton
         >
       </template>
-    </UCard>
-  </main>
+  </UCard>
 </template>
