@@ -3,6 +3,7 @@
 - Status: Accepted
 - Date: 2026-08-31
 - Amended: 2026-08-31 (opt-in CTA selection interview)
+- Amended: 2026-09-03 (stacked selection keyboard via `actionRows`)
 - Supersedes: None
 - Superseded by: None
 - Extends: [ADR-0030](0030-declarative-tools-and-client-customization.md),
@@ -43,8 +44,12 @@ Operators want:
    mark; `Seleccionar todos` / `Select all` / `Alle auswählen` shortcut;
    `Continuar` / `Continue` / `Weiter` advances; Cancel aborts) → plan
    confirm (`Publicar menú` / `Menü veröffentlichen` / `Publish menu`).
-   Plan confirm is the **sole** client approval gate. Empty confirm stays on
-   selection with “pick at least one” copy (not the no-CTAs-found message).
+   Selection keyboard uses optional `TelegramReply.actionRows`: **one CTA per
+   row** (button label = menu name only; slug in message text), Select all
+   alone, Continuar+Cancel together. Other tools omit `actionRows` and keep a
+   single-row keyboard (ADR-0042). Plan confirm is the **sole** client approval
+   gate. Empty confirm stays on selection with “pick at least one” copy (not
+   the no-CTAs-found message).
 4. **Graph (no preview nodes).** Linear pipeline:
    `sync_pages` → `validate_menu_update` → `render_menu_artifacts` →
    `open_menu_update_pr` → `apply_orbitype_draft` → `merge_github` →

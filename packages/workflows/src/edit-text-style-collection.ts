@@ -52,7 +52,9 @@ export type EditTextStylePagesLoader = (input: Readonly<{
 }>) => Promise<readonly OrbitypePageSnapshot[]>;
 
 type Identity = Readonly<{
+  clientActorRole: 'owner' | 'piloter';
   conversationId: string;
+  enrollmentId: string;
   locale: SupportedLocale;
   projectId: string;
   tenantId: string;
@@ -400,6 +402,7 @@ export const createEditTextStyleRequest = async (input: Readonly<{
   });
   await input.database.insert(schema.requests).values({
     capabilityId: 'edit_text_style',
+    clientActorRole: input.identity.clientActorRole,
     conversationId: input.identity.conversationId,
     currentVersion: 1,
     id: requestId,

@@ -5,15 +5,23 @@ Operator step-by-step for dashboard enrollment lives in
 shipped stack). This document owns the product lifecycle and validation
 model.
 
+For **new client sites** built to be operated by Binflow later, follow the
+[Editable Surface Contract](guides/editable-surface-contract.md) (ADR-0058)
+before the first content capability: ship a Surface Inventory and storefront
+markers so tools can allowlist declared fields instead of reverse-engineering
+the live site.
+
 ## Model
 
 Onboarding is administrator-managed and resumable. The first MVP relationship is:
 
 ```text
-one tenant → one project → one client bot → one client user
+one tenant → one project → one client bot → owner (+ optional Piloter)
 ```
 
-The data model is multi-tenant-ready, but the enrollment cannot activate multiple projects/users until that later phase is documented and implemented.
+The data model is multi-tenant-ready. Multiple projects per enrollment, or more
+than one Piloter / additional client users beyond owner + optional Piloter,
+remain out of scope until documented (ADR-0057).
 
 ## Lifecycle
 
@@ -50,6 +58,11 @@ Until the Phase 1 dashboard wizard is available, the Phase 0 interactive CLI may
   Activation requires the usual GitHub, Vercel, OpenAI and Telegram client
   checks **plus** a verified Orbitype API-key credential. Capability bindings
   may be empty at activation; tools are assigned later.
+- Post-MVP (ADR-0059): `shopify_liquid` is selectable for Shopify Liquid theme
+  enrollments. Activation requires GitHub (theme repo), OpenAI, Telegram
+  client, and `productionDomain`. **No** Vercel or Shopify Admin API in v1.
+  Empty capability catalog is allowed at activation. Surface inventory is
+  recommended (ADR-0058) but not a Validate blocker.
 - Production domain and optional preview domain expectations. For Webbin the
   client-visible live origin is `https://webbin.com.mx`.
 
@@ -141,14 +154,16 @@ evidence must match the manifest and binding snapshot before activation.
 
 ### 11. Pairing
 
-- Create the client user.
-- Generate one-time 24-hour deep link.
+- Create the primary client (owner) user.
+- Generate one-time 24-hour owner deep link.
 - Ensure the local worker has discovered the active client bot credential
   (automatic within one heartbeat after verification; no manual restart).
-- Wait for correct bot/user pairing on that client bot.
+- Wait for correct bot/owner pairing on that client bot.
 - Deliver the localized pairing confirmation and activate when configuration,
   credentials, manifest, capability catalog, pairing and Telegram delivery
   evidence remain current.
+- After `active`, optionally generate a Piloter pairing link and assign a
+  subset of project-enabled tools (ADR-0057).
 
 Content catalog synchronization, the reversible GitHub branch operation and
 Vercel preview/SHA correlation bind to the first real request and remain

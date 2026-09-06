@@ -21,7 +21,7 @@ import { and, desc, eq, inArray } from 'drizzle-orm';
 
 import {
   buildUpdateMenuPlanMessage,
-  buildUpdateMenuSelectionActionSpecs,
+  buildUpdateMenuSelectionActionRows,
   buildUpdateMenuSelectionMessage,
   parseUpdateMenuExecuteInput,
   resolveUpdateMenuProductionOrigin,
@@ -40,7 +40,9 @@ export type UpdateMenuPagesLoader = (input: Readonly<{
 }>) => Promise<readonly OrbitypePageSnapshot[]>;
 
 type ResolvedIdentity = Readonly<{
+  clientActorRole: 'owner' | 'piloter';
   conversationId: string;
+  enrollmentId: string;
   locale: SupportedLocale;
   projectId: string;
   tenantId: string;
@@ -52,6 +54,7 @@ type ReplyFn = (
   text: string,
   requestId: string | null,
   actionTokens?: TelegramReply['actionTokens'],
+  extras?: Readonly<{ actionRows?: TelegramReply['actionRows'] }>,
 ) => TelegramReply;
 
 type CreateActionFn = (
@@ -80,7 +83,7 @@ const selectedFromKeys = (
     return match === undefined ? [] : [match];
   });
 
-const buildSelectionActionTokens = async (input: Readonly<{
+const buildSelectionKeyboard = async (input: Readonly<{
   createAction: CreateActionFn;
   database: ScopedDatabase;
   discovered: readonly MenuCtaCandidate[];
@@ -91,27 +94,34 @@ const buildSelectionActionTokens = async (input: Readonly<{
   >;
   requestVersionId: string;
   selectedKeys: readonly string[];
-}>): Promise<TelegramReply['actionTokens']> => {
-  const specs = buildUpdateMenuSelectionActionSpecs(
+}>): Promise<Readonly<{
+  actionRows: NonNullable<TelegramReply['actionRows']>;
+  actionTokens: TelegramReply['actionTokens'];
+}>> => {
+  const specRows = buildUpdateMenuSelectionActionRows(
     input.identity.locale,
     input.discovered,
     input.selectedKeys,
   );
-  const actionTokens: NonNullable<TelegramReply['actionTokens']> = [];
-  for (const spec of specs) {
-    actionTokens.push({
-      action: spec.action,
-      label: spec.label,
-      token: await input.createAction(
-        input.database,
-        input.request,
-        input.requestVersionId,
-        input.identity.userId,
-        spec.tokenAction,
-      ),
-    });
+  const actionRows: NonNullable<TelegramReply['actionRows']> = [];
+  for (const row of specRows) {
+    const tokens: TelegramReply['actionTokens'] = [];
+    for (const spec of row) {
+      tokens.push({
+        action: spec.action,
+        label: spec.label,
+        token: await input.createAction(
+          input.database,
+          input.request,
+          input.requestVersionId,
+          input.identity.userId,
+          spec.tokenAction,
+        ),
+      });
+    }
+    actionRows.push(tokens);
   }
-  return actionTokens;
+  return { actionRows, actionTokens: actionRows.flat() };
 };
 
 export const createUpdateMenuRequest = async (input: Readonly<{
@@ -152,6 +162,7 @@ export const createUpdateMenuRequest = async (input: Readonly<{
   });
   await input.database.insert(schema.requests).values({
     capabilityId: 'update_menu',
+    clientActorRole: input.identity.clientActorRole,
     conversationId: input.identity.conversationId,
     currentVersion: 1,
     id: requestId,
@@ -255,6 +266,15 @@ export const continueUpdateMenuCollection = async (input: Readonly<{
       version: nextVersion,
     });
     const selected = selectedFromKeys(discovered, interpretedInput.selectedCtaKeys);
+    const keyboard = await buildSelectionKeyboard({
+      createAction: input.createAction,
+      database: input.database,
+      discovered,
+      identity: input.identity,
+      request: input.request,
+      requestVersionId,
+      selectedKeys: interpretedInput.selectedCtaKeys,
+    });
     return input.reply(
       input.identity.locale,
       buildUpdateMenuSelectionMessage(
@@ -263,15 +283,8 @@ export const continueUpdateMenuCollection = async (input: Readonly<{
         discovered,
       ),
       input.request.id,
-      await buildSelectionActionTokens({
-        createAction: input.createAction,
-        database: input.database,
-        discovered,
-        identity: input.identity,
-        request: input.request,
-        requestVersionId,
-        selectedKeys: interpretedInput.selectedCtaKeys,
-      }),
+      keyboard.actionTokens,
+      { actionRows: keyboard.actionRows },
     );
   }
 
@@ -318,6 +331,15 @@ const persistSelectCtasSelection = async (input: Readonly<{
     version: nextVersion,
   });
   const selected = selectedFromKeys(parsed.discoveredCtas, input.selectedKeys);
+  const keyboard = await buildSelectionKeyboard({
+    createAction: input.createAction,
+    database: input.database,
+    discovered: parsed.discoveredCtas,
+    identity: input.identity,
+    request: input.request,
+    requestVersionId,
+    selectedKeys: input.selectedKeys,
+  });
   return input.reply(
     input.identity.locale,
     buildUpdateMenuSelectionMessage(
@@ -326,15 +348,8 @@ const persistSelectCtasSelection = async (input: Readonly<{
       parsed.discoveredCtas,
     ),
     input.request.id,
-    await buildSelectionActionTokens({
-      createAction: input.createAction,
-      database: input.database,
-      discovered: parsed.discoveredCtas,
-      identity: input.identity,
-      request: input.request,
-      requestVersionId,
-      selectedKeys: input.selectedKeys,
-    }),
+    keyboard.actionTokens,
+    { actionRows: keyboard.actionRows },
   );
 };
 
@@ -397,7 +412,7 @@ export const consumeUpdateMenuSelection = async (input: Readonly<{
   if (parsed.mode !== 'collect' || parsed.collectionStep !== 'select_ctas')
     throw new Error('Update menu selection confirm is invalid.');
   if (parsed.selectedCtaKeys.length === 0) {
-    const actionTokens = await buildSelectionActionTokens({
+    const keyboard = await buildSelectionKeyboard({
       createAction: input.createAction,
       database: input.database,
       discovered: parsed.discoveredCtas,
@@ -414,7 +429,8 @@ export const consumeUpdateMenuSelection = async (input: Readonly<{
         parsed.discoveredCtas,
       )}`,
       input.request.id,
-      actionTokens,
+      keyboard.actionTokens,
+      { actionRows: keyboard.actionRows },
     );
   }
   const selected = selectedFromKeys(parsed.discoveredCtas, parsed.selectedCtaKeys);

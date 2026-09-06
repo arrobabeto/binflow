@@ -1,0 +1,8 @@
+kind: effect
+label: Remap surface inventory from theme markers
+nodeKind: images.remap_surface_inventory@1
+acceptsClientCustomization: false
+permissions:
+  - github:contents:read
+  - github:contents:write
+  - github:pull_requests:write

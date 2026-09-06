@@ -391,6 +391,96 @@ describe('Telegram client reply rendering', () => {
     ).toBe('Pairing complete.');
   });
 
+  it('keeps flat actionTokens as a single Actions row for existing tools', () => {
+    const card = renderClientTelegramReply({
+      actionTokens: [
+        {
+          action: 'confirm_plan',
+          label: 'Create draft',
+          token: actionToken,
+        },
+        {
+          action: 'cancel',
+          label: 'Cancel',
+          token: `${actionToken}c`,
+        },
+      ],
+      duplicate: false,
+      locale: 'en',
+      requestId: 'req-1',
+      text: 'Confirm plan?',
+    });
+    expect(isCardElement(card)).toBe(true);
+    if (!isCardElement(card)) return;
+    const actionBlocks = card.children.filter((child) => child.type === 'actions');
+    expect(actionBlocks).toHaveLength(1);
+    expect(buttonIds(card)).toEqual([actionToken, `${actionToken}c`]);
+  });
+
+  it('renders actionRows as one Actions block per keyboard row', () => {
+    const tokenA = `${actionToken}a`;
+    const tokenB = `${actionToken}b`;
+    const tokenAll = `${actionToken}l`;
+    const tokenGo = `${actionToken}g`;
+    const tokenCancel = `${actionToken}x`;
+    const actionRows = [
+      [
+        {
+          action: 'toggle_menu_cta' as const,
+          label: 'Speisekarte ansehen',
+          token: tokenA,
+        },
+      ],
+      [
+        {
+          action: 'toggle_menu_cta' as const,
+          label: 'Weinkarte ansehen',
+          token: tokenB,
+        },
+      ],
+      [
+        {
+          action: 'select_all_menu_ctas' as const,
+          label: 'Select all',
+          token: tokenAll,
+        },
+      ],
+      [
+        {
+          action: 'confirm_menu_selection' as const,
+          label: 'Continue',
+          token: tokenGo,
+        },
+        {
+          action: 'cancel' as const,
+          label: 'Cancel',
+          token: tokenCancel,
+        },
+      ],
+    ];
+    const card = renderClientTelegramReply({
+      actionRows,
+      actionTokens: actionRows.flat(),
+      duplicate: false,
+      locale: 'en',
+      requestId: 'req-menu',
+      text: 'Select buttons',
+    });
+    expect(isCardElement(card)).toBe(true);
+    if (!isCardElement(card)) return;
+    const actionBlocks = card.children.filter((child) => child.type === 'actions');
+    expect(actionBlocks).toHaveLength(4);
+    expect(actionBlocks[0]?.children).toHaveLength(1);
+    expect(actionBlocks[3]?.children).toHaveLength(2);
+    expect(buttonIds(card)).toEqual([
+      tokenA,
+      tokenB,
+      tokenAll,
+      tokenGo,
+      tokenCancel,
+    ]);
+  });
+
   it('adds Spanish and English preview URL buttons', () => {
     const links = previewUrlButtons(
       {
@@ -432,6 +522,25 @@ describe('Telegram client reply rendering', () => {
       'https://preview.example/es/articulos/demo',
       'https://preview.example/articulos/demo',
     ]);
+  });
+
+  it('renders Shopify theme image approval without preview or PR links', async () => {
+    const { renderThemeImageApprovalNotice } = await import('../src/index.js');
+    const notice = renderThemeImageApprovalNotice({
+      locale: 'es',
+      slotLabel: 'story.discovery.image · assets/story-discovery-1.jpg',
+      tokens: {
+        approve: 'a'.repeat(32),
+        cancel: 'c'.repeat(32),
+      },
+    });
+    const encoded = JSON.stringify(notice);
+    expect(encoded).toContain('Aprobar');
+    expect(encoded).toContain('story.discovery.image');
+    expect(encoded).not.toContain('binflow_preview');
+    expect(encoded).not.toContain('github.com');
+    expect(linkUrls(notice)).toEqual([]);
+    expect(buttonIds(notice)).toHaveLength(2);
   });
 
   it('posts publication complete as live-origin URL buttons', () => {

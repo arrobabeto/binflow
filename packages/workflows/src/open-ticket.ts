@@ -45,7 +45,9 @@ export const ticketPriorityFromUrgency = (
 };
 
 type Identity = Readonly<{
+  clientActorRole: 'owner' | 'piloter';
   conversationId: string;
+  enrollmentId: string;
   locale: SupportedLocale;
   projectId: string;
   tenantId: string;
@@ -309,6 +311,7 @@ const createShell = async (input: Readonly<{
   const requestVersionId = uuidv7();
   await input.database.insert(schema.requests).values({
     capabilityId: OPEN_TICKET_CAPABILITY_ID,
+    clientActorRole: input.identity.clientActorRole,
     conversationId: input.identity.conversationId,
     currentVersion: 1,
     id: requestId,

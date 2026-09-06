@@ -34,9 +34,12 @@ import {
 } from '@binflow/db';
 import { DomainError, type Clock, systemClock } from '@binflow/domain';
 import {
+  allowsEmptyCapabilityCatalog,
   astroOrbitypeGlobalProfile,
   astroRepoGlobalProfile,
   buildProjectManifest,
+  shopifyLiquidGlobalProfile,
+  type SelectableManifestProfile,
   type VerifiedManifestBindings,
 } from '@binflow/manifests';
 import {
@@ -59,10 +62,30 @@ const credentialChecksForProfile = (
 ): readonly (
   | (typeof SHARED_CREDENTIAL_CHECKS)[number]
   | typeof ORBITYPE_CREDENTIAL_CHECK
-)[] =>
-  profile === 'astro_orbitype'
-    ? [...SHARED_CREDENTIAL_CHECKS, ORBITYPE_CREDENTIAL_CHECK]
-    : SHARED_CREDENTIAL_CHECKS;
+)[] => {
+  if (profile === 'shopify_liquid')
+    return [
+      'openai_credential',
+      'telegram_admin_credential',
+      'telegram_client_credential',
+      'github_app_binding',
+    ];
+  if (profile === 'astro_orbitype')
+    return [...SHARED_CREDENTIAL_CHECKS, ORBITYPE_CREDENTIAL_CHECK];
+  return SHARED_CREDENTIAL_CHECKS;
+};
+
+const asManifestProfile = (profile: string): SelectableManifestProfile => {
+  if (profile === 'shopify_liquid') return 'shopify_liquid';
+  if (profile === 'astro_orbitype') return 'astro_orbitype';
+  return 'astro_repo';
+};
+
+const globalProfileForEnrollment = (profile: string) => {
+  if (profile === 'shopify_liquid') return shopifyLiquidGlobalProfile;
+  if (profile === 'astro_orbitype') return astroOrbitypeGlobalProfile;
+  return astroRepoGlobalProfile;
+};
 
 const activationChecksForProfile = (
   profile: string,
@@ -411,10 +434,7 @@ export class EnrollmentService {
           .orderBy(desc(schema.projectManifestVersions.version))
           .limit(1);
         return projectManifestResponseSchema.parse({
-          globalProfile:
-            enrollment.projectProfile === 'astro_orbitype'
-              ? astroOrbitypeGlobalProfile
-              : astroRepoGlobalProfile,
+          globalProfile: globalProfileForEnrollment(enrollment.projectProfile),
           manifest: row === undefined ? null : toProjectManifest(row),
         });
       },
@@ -485,7 +505,7 @@ export class EnrollmentService {
               );
             if (
               enabledBindings.length === 0 &&
-              project.profile !== 'astro_orbitype'
+              !allowsEmptyCapabilityCatalog(project.profile)
             )
               throw new DomainError(
                 'policy_denied',
@@ -946,7 +966,7 @@ export class EnrollmentService {
                   manifest.enabledCapabilities,
                 );
                 const catalogOk =
-                  current.projectProfile === 'astro_orbitype' ||
+                  allowsEmptyCapabilityCatalog(current.projectProfile) ||
                   catalog.some((capability) => capability.enabled);
                 checks.push({
                   checkName: 'capability_catalog',
@@ -955,7 +975,9 @@ export class EnrollmentService {
                       (capability) =>
                         `${capability.id}@${String(capability.version)}`,
                     ),
-                    emptyAllowed: current.projectProfile === 'astro_orbitype',
+                    emptyAllowed: allowsEmptyCapabilityCatalog(
+                      current.projectProfile,
+                    ),
                     manifestVersion: manifest.version,
                   },
                   result: catalogOk ? 'success' : 'failed',
@@ -1163,7 +1185,12 @@ export class EnrollmentService {
         const existingUser = await database
           .select({ id: schema.clientUsers.id })
           .from(schema.clientUsers)
-          .where(eq(schema.clientUsers.enrollmentId, enrollmentId))
+          .where(
+            and(
+              eq(schema.clientUsers.enrollmentId, enrollmentId),
+              eq(schema.clientUsers.kind, 'owner'),
+            ),
+          )
           .limit(1);
         const userId = existingUser[0]?.id ?? uuidv7();
         if (existingUser.length === 0) {
@@ -1174,6 +1201,7 @@ export class EnrollmentService {
             displayName: `${current.tenantKey} client`,
             enrollmentId,
             id: userId,
+            kind: 'owner',
             projectId: current.projectId,
             tenantId: current.tenantId,
           });
@@ -1196,6 +1224,7 @@ export class EnrollmentService {
           .where(
             and(
               eq(schema.pairingTokens.enrollmentId, enrollmentId),
+              eq(schema.pairingTokens.purpose, 'owner'),
               sql`${schema.pairingTokens.consumedAt} IS NULL`,
               sql`${schema.pairingTokens.revokedAt} IS NULL`,
             ),
@@ -1206,6 +1235,7 @@ export class EnrollmentService {
           expiresAt,
           id: uuidv7(),
           projectId: current.projectId,
+          purpose: 'owner',
           tenantId: current.tenantId,
           tokenHash,
           userId,
@@ -1261,6 +1291,373 @@ export class EnrollmentService {
         };
       },
     );
+  }
+
+  public async createPiloterPairingLink(
+    enrollmentId: string,
+    expectedVersion: number,
+    context: ActorContext,
+  ): Promise<
+    Readonly<{ enrollment: Enrollment; expiresAt: string; pairingUrl: string }>
+  > {
+    return withPlatformOwnerScope(
+      this.database,
+      {
+        actorId: context.actorId,
+        correlationId: context.correlationId,
+        reason: 'Create Piloter pairing link',
+      },
+      async (database) => {
+        const request = asJson({ expectedVersion, purpose: 'piloter' });
+        const reserved = await reserveIdempotencyKey(database, {
+          actorId: context.actorId,
+          expiresAt: new Date(this.clock.now().getTime() + 24 * 60 * 60 * 1000),
+          idempotencyKey: context.idempotencyKey,
+          method: 'POST',
+          requestHash: hashCanonicalRequest(request),
+          route: `/api/v1/admin/enrollments/${enrollmentId}/piloter/pairing-link`,
+        });
+        if (reserved.kind === 'replay') {
+          throw new DomainError(
+            'conflict_error',
+            'The one-time Piloter pairing link was already delivered.',
+            { code: 'pairing_link_already_delivered' },
+          );
+        }
+        const current = await selectEnrollment(database, enrollmentId);
+        if (current.version !== expectedVersion) {
+          throw new DomainError(
+            'conflict_error',
+            'Enrollment version changed while creating the Piloter pairing link.',
+            { code: 'stale_enrollment' },
+          );
+        }
+        if (current.state !== 'active') {
+          throw new DomainError(
+            'conflict_error',
+            'Enrollment must be active before pairing a Piloter.',
+            { code: 'piloter_pairing_not_ready' },
+          );
+        }
+        const [owner] = await database
+          .select({ id: schema.clientUsers.id, status: schema.clientUsers.status })
+          .from(schema.clientUsers)
+          .where(
+            and(
+              eq(schema.clientUsers.enrollmentId, enrollmentId),
+              eq(schema.clientUsers.kind, 'owner'),
+              eq(schema.clientUsers.status, 'active'),
+            ),
+          )
+          .limit(1);
+        if (owner === undefined) {
+          throw new DomainError(
+            'conflict_error',
+            'Owner must be paired before pairing a Piloter.',
+            { code: 'owner_not_paired' },
+          );
+        }
+        const bot = await database
+          .select({
+            credentialId: schema.providerCredentials.id,
+            evidence: schema.providerCredentials.verificationEvidence,
+          })
+          .from(schema.providerCredentials)
+          .where(
+            and(
+              eq(schema.providerCredentials.kind, 'telegram-client'),
+              eq(schema.providerCredentials.ownerScope, 'tenant'),
+              eq(schema.providerCredentials.tenantId, current.tenantId),
+              eq(schema.providerCredentials.status, 'active'),
+            ),
+          )
+          .limit(1);
+        const activeBot = bot[0];
+        const username = (
+          activeBot?.evidence as { username?: unknown } | undefined
+        )?.username;
+        if (
+          activeBot === undefined ||
+          typeof username !== 'string' ||
+          username.length === 0
+        )
+          throw new DomainError(
+            'credential_unavailable',
+            'Telegram client bot is unavailable.',
+          );
+        const existingPiloter = await database
+          .select({
+            id: schema.clientUsers.id,
+            status: schema.clientUsers.status,
+          })
+          .from(schema.clientUsers)
+          .where(
+            and(
+              eq(schema.clientUsers.enrollmentId, enrollmentId),
+              eq(schema.clientUsers.kind, 'piloter'),
+            ),
+          )
+          .limit(1);
+        if (existingPiloter[0]?.status === 'active') {
+          throw new DomainError(
+            'conflict_error',
+            'A Piloter is already paired for this enrollment.',
+            { code: 'piloter_already_paired' },
+          );
+        }
+        const userId = existingPiloter[0]?.id ?? uuidv7();
+        if (existingPiloter.length === 0) {
+          await database.insert(schema.clientUsers).values({
+            displayName: `${current.tenantKey} piloter`,
+            enrollmentId,
+            id: userId,
+            kind: 'piloter',
+            projectId: current.projectId,
+            tenantId: current.tenantId,
+          });
+          await database.insert(schema.memberships).values({
+            id: uuidv7(),
+            projectId: current.projectId,
+            role: 'piloter',
+            status: 'pending_pairing',
+            tenantId: current.tenantId,
+            userId,
+          });
+        } else {
+          await database
+            .update(schema.clientUsers)
+            .set({ status: 'pending_pairing', updatedAt: this.clock.now() })
+            .where(eq(schema.clientUsers.id, userId));
+          await database
+            .update(schema.memberships)
+            .set({ status: 'pending_pairing', updatedAt: this.clock.now() })
+            .where(eq(schema.memberships.userId, userId));
+        }
+        const token = randomBytes(32).toString('base64url');
+        const tokenHash = createHash('sha256').update(token).digest('hex');
+        const now = this.clock.now();
+        const expiresAt = new Date(now.getTime() + 24 * 60 * 60 * 1000);
+        await database
+          .update(schema.pairingTokens)
+          .set({ revokedAt: now })
+          .where(
+            and(
+              eq(schema.pairingTokens.enrollmentId, enrollmentId),
+              eq(schema.pairingTokens.purpose, 'piloter'),
+              sql`${schema.pairingTokens.consumedAt} IS NULL`,
+              sql`${schema.pairingTokens.revokedAt} IS NULL`,
+            ),
+          );
+        await database.insert(schema.pairingTokens).values({
+          botCredentialId: activeBot.credentialId,
+          createdBy: context.actorId,
+          enrollmentId,
+          expiresAt,
+          id: uuidv7(),
+          projectId: current.projectId,
+          purpose: 'piloter',
+          tenantId: current.tenantId,
+          tokenHash,
+          userId,
+        });
+        await recordAuditAndOutbox(database, {
+          action: 'enrollment.piloter_pairing_link_created',
+          actorId: context.actorId,
+          correlationId: context.correlationId,
+          enrollmentId,
+          eventType: 'enrollment.piloter_pairing_link_created',
+          projectId: current.projectId,
+          tenantId: current.tenantId,
+          version: current.version,
+        });
+        const enrollment = await selectEnrollment(database, enrollmentId);
+        await completeIdempotencyRecord(database, {
+          id: reserved.id,
+          responseBody: {
+            delivered: true,
+            enrollmentId,
+            expiresAt: expiresAt.toISOString(),
+            purpose: 'piloter',
+          },
+          responseStatus: 200,
+          status: 'completed',
+        });
+        return {
+          enrollment,
+          expiresAt: expiresAt.toISOString(),
+          pairingUrl: `https://t.me/${username}?start=${token}`,
+        };
+      },
+    );
+  }
+
+  public async getPiloter(
+    enrollmentId: string,
+    actorId: string,
+    correlationId: string,
+  ): Promise<
+    Readonly<{
+      capabilityIds: readonly string[];
+      paired: boolean;
+      status: 'absent' | 'pending_pairing' | 'active';
+    }>
+  > {
+    return withPlatformOwnerScope(
+      this.database,
+      { actorId, correlationId, reason: 'Read Piloter status' },
+      async (database) => {
+        await selectEnrollment(database, enrollmentId);
+        const [piloter] = await database
+          .select({
+            id: schema.clientUsers.id,
+            status: schema.clientUsers.status,
+          })
+          .from(schema.clientUsers)
+          .where(
+            and(
+              eq(schema.clientUsers.enrollmentId, enrollmentId),
+              eq(schema.clientUsers.kind, 'piloter'),
+            ),
+          )
+          .limit(1);
+        const bindings = await database
+          .select({
+            capabilityId: schema.piloterCapabilityBindings.capabilityId,
+          })
+          .from(schema.piloterCapabilityBindings)
+          .where(
+            eq(schema.piloterCapabilityBindings.enrollmentId, enrollmentId),
+          );
+        if (piloter === undefined) {
+          return {
+            capabilityIds: bindings.map((row) => row.capabilityId),
+            paired: false,
+            status: 'absent' as const,
+          };
+        }
+        const status =
+          piloter.status === 'active'
+            ? ('active' as const)
+            : ('pending_pairing' as const);
+        return {
+          capabilityIds: bindings.map((row) => row.capabilityId),
+          paired: piloter.status === 'active',
+          status,
+        };
+      },
+    );
+  }
+
+  public async updatePiloterCapabilities(
+    enrollmentId: string,
+    capabilityIds: readonly string[],
+    context: ActorContext,
+  ): Promise<
+    Readonly<{
+      capabilityIds: readonly string[];
+      paired: boolean;
+      status: 'absent' | 'pending_pairing' | 'active';
+    }>
+  > {
+    return withPlatformOwnerScope(
+      this.database,
+      {
+        actorId: context.actorId,
+        correlationId: context.correlationId,
+        reason: 'Update Piloter capability subset',
+      },
+      async (database) =>
+        withIdempotency(
+          database,
+          {
+            ...context,
+            method: 'PUT',
+            request: asJson({ capabilityIds }),
+            route: `/api/v1/admin/enrollments/${enrollmentId}/piloter/capabilities`,
+          },
+          async () => {
+            const enrollment = await selectEnrollment(database, enrollmentId);
+            const catalog = await this.readCapabilities(
+              database,
+              enrollment.projectId,
+            );
+            const enabledIds = new Set(
+              catalog.items
+                .filter((item) => item.enabled)
+                .map((item) => item.id),
+            );
+            for (const capabilityId of capabilityIds) {
+              if (!enabledIds.has(capabilityId)) {
+                throw new DomainError(
+                  'policy_denied',
+                  `Capability ${capabilityId} is not enabled on the project.`,
+                  { code: 'piloter_capability_not_bound' },
+                );
+              }
+            }
+            const uniqueIds = [...new Set(capabilityIds)];
+            await database
+              .delete(schema.piloterCapabilityBindings)
+              .where(
+                eq(
+                  schema.piloterCapabilityBindings.enrollmentId,
+                  enrollmentId,
+                ),
+              );
+            if (uniqueIds.length > 0) {
+              await database.insert(schema.piloterCapabilityBindings).values(
+                uniqueIds.map((capabilityId) => ({
+                  capabilityId,
+                  createdBy: context.actorId,
+                  enrollmentId,
+                  id: uuidv7(),
+                  projectId: enrollment.projectId,
+                  tenantId: enrollment.tenantId,
+                })),
+              );
+            }
+            await recordAuditAndOutbox(database, {
+              action: 'enrollment.piloter_capabilities_updated',
+              actorId: context.actorId,
+              correlationId: context.correlationId,
+              enrollmentId,
+              eventType: 'enrollment.piloter_capabilities_updated',
+              projectId: enrollment.projectId,
+              tenantId: enrollment.tenantId,
+              version: enrollment.version,
+            });
+            const [piloter] = await database
+              .select({
+                status: schema.clientUsers.status,
+              })
+              .from(schema.clientUsers)
+              .where(
+                and(
+                  eq(schema.clientUsers.enrollmentId, enrollmentId),
+                  eq(schema.clientUsers.kind, 'piloter'),
+                ),
+              )
+              .limit(1);
+            const status =
+              piloter === undefined
+                ? ('absent' as const)
+                : piloter.status === 'active'
+                  ? ('active' as const)
+                  : ('pending_pairing' as const);
+            return asJson({
+              capabilityIds: uniqueIds,
+              paired: piloter?.status === 'active',
+              status,
+            });
+          },
+        ),
+    ) as Promise<
+      Readonly<{
+        capabilityIds: readonly string[];
+        paired: boolean;
+        status: 'absent' | 'pending_pairing' | 'active';
+      }>
+    >;
   }
 
   public async evaluateActivation(
@@ -1361,10 +1758,7 @@ export class EnrollmentService {
     const candidate = buildProjectManifest({
       configuration: enrollment.configuration,
       id: uuidv7(),
-      profile:
-        enrollment.projectProfile === 'astro_orbitype'
-          ? 'astro_orbitype'
-          : 'astro_repo',
+      profile: asManifestProfile(enrollment.projectProfile),
       projectId: enrollment.projectId,
       projectKey: enrollment.projectKey,
       tenantKey: enrollment.tenantKey,
@@ -1483,6 +1877,10 @@ export class EnrollmentService {
     database: ScopedDatabase,
     enrollment: Enrollment,
   ): Promise<VerifiedManifestBindings> {
+    const needsVercel = enrollment.projectProfile !== 'shopify_liquid';
+    const kinds = needsVercel
+      ? (['github-app', 'vercel'] as const)
+      : (['github-app'] as const);
     const rows = await database
       .select({
         evidence: schema.integrationConnections.verificationEvidence,
@@ -1502,12 +1900,12 @@ export class EnrollmentService {
           eq(schema.integrationConnections.tenantId, enrollment.tenantId),
           eq(schema.integrationConnections.status, 'active'),
           eq(schema.providerCredentials.status, 'active'),
-          inArray(schema.integrationConnections.kind, ['github-app', 'vercel']),
+          inArray(schema.integrationConnections.kind, [...kinds]),
         ),
       );
     const evidence = (kind: 'github-app' | 'vercel') => {
       const value = rows.find((row) => row.kind === kind)?.evidence;
-      if (value === null || typeof value !== 'object' || Array.isArray(value))
+      if (value === null || typeof value === 'undefined' || typeof value !== 'object' || Array.isArray(value))
         throw new DomainError(
           'credential_unavailable',
           `${kind} verified binding evidence is unavailable.`,
@@ -1516,7 +1914,6 @@ export class EnrollmentService {
       return value as Record<string, unknown>;
     };
     const github = evidence('github-app');
-    const vercel = evidence('vercel');
     const requiredString = (
       value: Record<string, unknown>,
       key: string,
@@ -1531,13 +1928,17 @@ export class EnrollmentService {
         );
       return field;
     };
+    const githubBindings = {
+      defaultBranch: requiredString(github, 'defaultBranch', 'github'),
+      installationId: requiredString(github, 'installationId', 'github'),
+      repository: requiredString(github, 'repository', 'github'),
+    };
+    if (!needsVercel) return { github: githubBindings };
+
+    const vercel = evidence('vercel');
     const teamId = vercel.teamId;
     return {
-      github: {
-        defaultBranch: requiredString(github, 'defaultBranch', 'github'),
-        installationId: requiredString(github, 'installationId', 'github'),
-        repository: requiredString(github, 'repository', 'github'),
-      },
+      github: githubBindings,
       vercel: {
         productionBranch: requiredString(vercel, 'productionBranch', 'vercel'),
         projectId: requiredString(vercel, 'projectId', 'vercel'),

@@ -14,7 +14,7 @@ import {
 describe('@binflow/tools catalog', () => {
   it('loads Astro tools with matching executor stages', async () => {
     const tools = await listTools();
-    expect(tools).toHaveLength(9);
+    expect(tools).toHaveLength(10);
     const blog = tools.find((tool) => tool.tool.id === 'create_blog_draft');
     const blogOrbitype = tools.find(
       (tool) => tool.tool.id === 'create_blog_orbitype',
@@ -24,6 +24,9 @@ describe('@binflow/tools catalog', () => {
       (tool) => tool.tool.id === 'edit_text_style',
     );
     const editImage = tools.find((tool) => tool.tool.id === 'edit_image');
+    const editImageShopify = tools.find(
+      (tool) => tool.tool.id === 'edit_image_shopify',
+    );
     const updateMenu = tools.find((tool) => tool.tool.id === 'update_menu');
     const project = tools.find((tool) => tool.tool.id === 'create_project_astro');
     const deleteBlog = tools.find((tool) => tool.tool.id === 'delete_blog_draft');
@@ -35,6 +38,7 @@ describe('@binflow/tools catalog', () => {
     expect(editText?.tool.profile).toBe('astro_orbitype');
     expect(editTextStyle?.tool.profile).toBe('astro_orbitype');
     expect(editImage?.tool.profile).toBe('astro_orbitype');
+    expect(editImageShopify?.tool.profile).toBe('shopify_liquid');
     expect(updateMenu?.tool.profile).toBe('astro_orbitype');
     expect(project?.tool.profile).toBe('astro_repo');
     expect(deleteBlog?.tool.profile).toBe('astro_repo');
@@ -51,7 +55,11 @@ describe('@binflow/tools catalog', () => {
       'stacks/astro-orbitype/edit-text-style@1',
     );
     expect(editImage?.graph.version).toBe('stacks/astro-orbitype/edit-image@1');
+    expect(editImageShopify?.graph.version).toBe(
+      'stacks/shopify-liquid/edit-image@1',
+    );
     expect(editImage?.tool.requiresPreview).toBe(true);
+    expect(editImageShopify?.tool.requiresPreview).toBe(true);
     expect(editTextStyle?.tool.requiresPreview).toBe(true);
     expect(
       editImage?.graph.edges.some(
@@ -59,6 +67,19 @@ describe('@binflow/tools catalog', () => {
           edge.from === 'wait_preview' && edge.to === 'apply_orbitype_preview',
       ),
     ).toBe(true);
+    expect(
+      editImageShopify?.graph.edges.some(
+        (edge) =>
+          edge.from === 'record_theme_preview' &&
+          edge.to === 'awaiting_client_approval',
+      ),
+    ).toBe(true);
+    expect(
+      editImageShopify?.nodes.some((node) => node.id === 'sync_inventory_images'),
+    ).toBe(true);
+    expect(
+      editImageShopify?.nodes.some((node) => node.id === 'wait_preview'),
+    ).toBe(false);
     expect(
       editText?.graph.edges.some(
         (edge) =>

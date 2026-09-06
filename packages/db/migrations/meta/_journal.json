@@ -218,6 +218,27 @@
       "when": 1788600000000,
       "tag": "0031_admin_tickets",
       "breakpoints": true
+    },
+    {
+      "idx": 32,
+      "version": "7",
+      "when": 1788700000000,
+      "tag": "0032_piloter_role",
+      "breakpoints": true
+    },
+    {
+      "idx": 33,
+      "version": "7",
+      "when": 1788800000000,
+      "tag": "0033_shopify_liquid_profile",
+      "breakpoints": true
+    },
+    {
+      "idx": 34,
+      "version": "7",
+      "when": 1788900000000,
+      "tag": "0034_edit_image_shopify_capability",
+      "breakpoints": true
     }
   ]
 }

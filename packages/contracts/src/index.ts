@@ -28,6 +28,7 @@ export const projectBudgetPolicySchema = z
 export const projectProfileSchema = z.enum([
   'astro_repo',
   'astro_orbitype',
+  'shopify_liquid',
   'nuxt_orbitype',
   'wordpress_rest',
 ]);
@@ -41,10 +42,11 @@ export const integrationKindSchema = z.enum([
   'orbitype-api',
 ]);
 
-/** Profiles selectable for new enrollments (post-MVP includes astro_orbitype). */
+/** Profiles selectable for new enrollments (post-MVP expansions). */
 export const selectableEnrollmentProfileSchema = z.enum([
   'astro_repo',
   'astro_orbitype',
+  'shopify_liquid',
 ]);
 
 export const integrationStatusSchema = z.enum([
@@ -506,6 +508,25 @@ export const pairingLinkResponseSchema = z
     pairingUrl: z.url(),
   })
   .strict();
+
+export const piloterStatusSchema = z
+  .object({
+    capabilityIds: z.array(z.string().min(1).max(100)).max(50),
+    paired: z.boolean(),
+    status: z.enum(['absent', 'pending_pairing', 'active']),
+  })
+  .strict();
+
+export const updatePiloterCapabilitiesInputSchema = z
+  .object({
+    capabilityIds: z.array(z.string().min(1).max(100)).max(50),
+  })
+  .strict();
+
+export type PiloterStatus = z.infer<typeof piloterStatusSchema>;
+export type UpdatePiloterCapabilitiesInput = z.infer<
+  typeof updatePiloterCapabilitiesInputSchema
+>;
 
 export const enrollmentPageSchema = z
   .object({
@@ -1060,15 +1081,19 @@ export const editImageInputSchema = z.discriminatedUnion('mode', [
       collectionStep: z
         .enum([
           'await_target',
+          'browse_pages',
           'disambiguate',
           'confirm_target',
           'await_replacement',
           'ready',
         ])
         .default('await_target'),
+      browseArea: z.string().trim().min(1).max(120).optional(),
+      deepSearchAttempted: z.boolean().default(false),
       discoveredTargets: z.array(imageEditCandidateSchema).max(40).default([]),
       messages: z.array(z.string().trim().max(10_000)).max(40).default([]),
       mode: z.literal('collect'),
+      pendingSearchQuery: z.string().trim().min(1).max(500).optional(),
       projectId: z.string().min(1),
       replacementArtifactKey: z.string().trim().min(1).max(500).optional(),
       replacementMime: z.string().trim().min(1).max(80).optional(),
@@ -1251,11 +1276,13 @@ export const projectManifestSchema = z
         imageDirectory: z.string().min(1),
         portfolio: manifestPortfolioSchema.optional(),
         publicationTargets: z
-          .array(z.enum(['github', 'orbitype']))
+          .array(z.enum(['github', 'github_theme', 'orbitype']))
           .min(1)
           .max(2)
           .optional(),
         source: z.enum(['github', 'orbitype']),
+        /** Path to ADR-0058 Surface Inventory when the theme/repo ships one. */
+        surfaceInventoryPath: z.string().min(1).optional(),
       })
       .strict(),
     contentLocales: z.array(supportedLocaleSchema).min(1).max(3),
@@ -1271,7 +1298,7 @@ export const projectManifestSchema = z
         productionOrigin: httpsUrlSchema.optional(),
         projectId: z.string().min(1),
         protectionMode: z.enum(['vercel_auth', 'share_link', 'public']),
-        provider: z.literal('vercel'),
+        provider: z.enum(['vercel', 'shopify_theme']),
         teamId: z.string().min(1).optional(),
       })
       .strict(),
@@ -1386,6 +1413,7 @@ export const capabilityIdSchema = z.enum([
   'delete_blog_draft',
   'delete_project_astro',
   'edit_image',
+  'edit_image_shopify',
   'edit_text',
   'edit_text_style',
   'open_ticket',
@@ -1896,62 +1924,86 @@ export const telegramIngressSchema = z
     }
   });
 
+const telegramActionTokenSchema = z
+  .object({
+    action: z.enum([
+      'confirm_plan',
+      'confirm_delete_target',
+      'confirm_menu_selection',
+      'select_all_menu_ctas',
+      'confirm_text_plan',
+      'confirm_text_target',
+      'pick_text_locale',
+      'pick_text_target',
+      'confirm_text_style_plan',
+      'confirm_text_style_target',
+      'pick_text_style_locale',
+      'pick_text_style_target',
+      'pick_text_style_attr',
+      'pick_text_style_weight',
+      'pick_text_style_size',
+      'pick_text_style_color',
+      'done_text_style_attrs',
+      'pick_image_target',
+      'pick_image_page',
+      'cancel_image_browse',
+      'deep_search_inventory',
+      'confirm_image_target',
+      'reject_image_target',
+      'confirm_image_plan',
+      'approve_preview',
+      'request_revision',
+      'confirm_revision_plan',
+      'adjust_revision_plan',
+      'cancel_revision',
+      'toggle_menu_cta',
+      'start_open_ticket',
+      'show_tools',
+      'pick_ticket_urgency',
+      'pick_ticket_kind',
+      'confirm_ticket_send',
+      'cancel',
+      'approve_publish',
+      'reject',
+    ]),
+    label: z.string().min(1),
+    token: z.string().min(32),
+  })
+  .strict();
+
 export const telegramReplySchema = z
   .object({
-    actionTokens: z
-      .array(
-        z
-          .object({
-            action: z.enum([
-              'confirm_plan',
-              'confirm_delete_target',
-              'confirm_menu_selection',
-              'select_all_menu_ctas',
-              'confirm_text_plan',
-              'confirm_text_target',
-              'pick_text_locale',
-              'pick_text_target',
-              'confirm_text_style_plan',
-              'confirm_text_style_target',
-              'pick_text_style_locale',
-              'pick_text_style_target',
-              'pick_text_style_attr',
-              'pick_text_style_weight',
-              'pick_text_style_size',
-              'pick_text_style_color',
-              'done_text_style_attrs',
-              'pick_image_target',
-              'confirm_image_target',
-              'reject_image_target',
-              'confirm_image_plan',
-              'approve_preview',
-              'request_revision',
-              'confirm_revision_plan',
-              'adjust_revision_plan',
-              'cancel_revision',
-              'toggle_menu_cta',
-              'start_open_ticket',
-              'show_tools',
-              'pick_ticket_urgency',
-              'pick_ticket_kind',
-              'confirm_ticket_send',
-              'cancel',
-              'approve_publish',
-              'reject',
-            ]),
-            label: z.string().min(1),
-            token: z.string().min(32),
-          })
-          .strict(),
-      )
-      .default([]),
+    /** Optional keyboard rows. When set, messaging renders one `Actions` per row.
+     * Omitted replies keep a single row from `actionTokens` (existing tools). */
+    actionRows: z.array(z.array(telegramActionTokenSchema).min(1)).max(24).optional(),
+    actionTokens: z.array(telegramActionTokenSchema).default([]),
     duplicate: z.boolean().default(false),
     locale: supportedLocaleSchema,
     photoUrl: z.string().url().optional(),
     requestId: z.string().min(1).nullable(),
     text: z.string().min(1),
   })
-  .strict();
+  .strict()
+  .superRefine((value, ctx) => {
+    if (value.actionRows === undefined) return;
+    const flat = value.actionRows.flat();
+    if (
+      flat.length !== value.actionTokens.length ||
+      flat.some(
+        (token, index) =>
+          token.token !== value.actionTokens[index]?.token ||
+          token.action !== value.actionTokens[index]?.action ||
+          token.label !== value.actionTokens[index]?.label,
+      )
+    ) {
+      ctx.addIssue({
+        code: 'custom',
+        message:
+          'actionTokens must equal the flatten of actionRows when actionRows is set.',
+        path: ['actionTokens'],
+      });
+    }
+  });
 
 export const workflowResumeSignalSchema = z
   .object({
@@ -2204,7 +2256,9 @@ export const createTicketInputSchema = z
   .object({
     body: z.string().min(1).max(50_000),
     category: z.string().min(1).max(120).optional(),
+    clientActorRole: z.enum(['owner', 'piloter']).optional(),
     excerpt: z.string().max(500).optional(),
+    openerUserId: z.string().min(1).optional(),
     priority: ticketPrioritySchema.optional(),
     projectId: z.string().min(1),
     tenantId: z.string().min(1),

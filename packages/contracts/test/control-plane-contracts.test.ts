@@ -420,6 +420,18 @@ describe('control-plane contracts', () => {
     ).toMatchObject({ kind: 'orbitype-api' });
   });
 
+  it('accepts shopify_liquid enrollment without orbitype-api', () => {
+    expect(
+      createEnrollmentInputSchema.parse({
+        projectDisplayName: 'Elayva',
+        projectKey: 'elayva',
+        projectProfile: 'shopify_liquid',
+        tenantDisplayName: 'Elayva',
+        tenantKey: 'elayva',
+      }).projectProfile,
+    ).toBe('shopify_liquid');
+  });
+
   it('accepts monolingual translation policy none', () => {
     expect(translationPolicySchema.parse('none')).toBe('none');
     expect(supportedLocaleSchema.parse('de')).toBe('de');

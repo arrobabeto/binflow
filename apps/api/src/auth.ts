@@ -16,7 +16,7 @@ const readDatabaseUrl = async (): Promise<string> => {
 
 export const createApiAuthRuntime = async (): Promise<BinflowAuthRuntime> =>
   createBinflowAuthRuntime({
-    baseURL: process.env.BINFLOW_PUBLIC_URL ?? 'http://localhost:3000',
+    baseURL: process.env.BINFLOW_PUBLIC_URL ?? 'http://localhost:6060',
     databaseUrl: await readDatabaseUrl(),
     production: process.env.BINFLOW_SECURE_COOKIES === 'true',
     ...(process.env.BINFLOW_AUTH_SECRET === undefined
@@ -29,5 +29,5 @@ export const createApiAuthRuntime = async (): Promise<BinflowAuthRuntime> =>
     process.env.BINFLOW_AUTH_SECRET_FILE !== undefined
       ? { secretFile: process.env.BINFLOW_AUTH_SECRET_FILE }
       : {}),
-    trustedOrigins: [process.env.BINFLOW_PUBLIC_URL ?? 'http://localhost:3000'],
+    trustedOrigins: [process.env.BINFLOW_PUBLIC_URL ?? 'http://localhost:6060'],
   });

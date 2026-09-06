@@ -390,10 +390,20 @@ const candidateMaterial = async (
   const isWebbinPilot =
     input.tenantKey === webbinPilotBinding.tenantKey &&
     input.projectKey === webbinPilotBinding.projectKey;
-  if (!isWebbinPilot && boundProject.profile !== 'astro_orbitype') {
+  if (
+    !isWebbinPilot &&
+    boundProject.profile !== 'astro_orbitype' &&
+    boundProject.profile !== 'shopify_liquid'
+  ) {
     throw new DomainError(
       'policy_denied',
       'Phase 0 external integrations are limited to the Webbin pilot.',
+    );
+  }
+  if (input.kind === 'vercel' && boundProject.profile === 'shopify_liquid') {
+    throw new DomainError(
+      'policy_denied',
+      'Vercel bindings are not authorized for shopify_liquid projects.',
     );
   }
   if (input.kind === 'orbitype-api') {

@@ -471,6 +471,46 @@ export const clientEnrollments = pgTable(
   ],
 ).enableRLS();
 
+export const piloterCapabilityBindings = pgTable(
+  'piloter_capability_bindings',
+  {
+    id: text('id').primaryKey(),
+    enrollmentId: text('enrollment_id').notNull(),
+    tenantId: text('tenant_id').notNull(),
+    projectId: text('project_id').notNull(),
+    capabilityId: text('capability_id').notNull(),
+    createdBy: text('created_by').notNull(),
+    createdAt: timestamp('created_at', { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (table) => [
+    uniqueIndex('piloter_capability_bindings_enrollment_capability_unique').on(
+      table.enrollmentId,
+      table.capabilityId,
+    ),
+    foreignKey({
+      columns: [table.enrollmentId, table.tenantId, table.projectId],
+      foreignColumns: [
+        clientEnrollments.id,
+        clientEnrollments.tenantId,
+        clientEnrollments.projectId,
+      ],
+      name: 'piloter_capability_bindings_enrollment_scope_fk',
+    }),
+    foreignKey({
+      columns: [table.projectId, table.tenantId],
+      foreignColumns: [projects.id, projects.tenantId],
+      name: 'piloter_capability_bindings_project_tenant_fk',
+    }),
+    pgPolicy('piloter_capability_bindings_tenant_isolation', {
+      for: 'all',
+      using: sql`${table.tenantId} = nullif(current_setting('app.tenant_id', true), '') OR current_setting('app.platform_owner', true) = 'true'`,
+      withCheck: sql`${table.tenantId} = nullif(current_setting('app.tenant_id', true), '') OR current_setting('app.platform_owner', true) = 'true'`,
+    }),
+  ],
+).enableRLS();
+
 export const enrollmentValidationAttempts = pgTable(
   'enrollment_validation_attempts',
   {
@@ -527,6 +567,7 @@ export const clientUsers = pgTable(
     enrollmentId: text('enrollment_id').notNull(),
     tenantId: text('tenant_id').notNull(),
     projectId: text('project_id').notNull(),
+    kind: text('kind').notNull().default('owner'),
     contactEmail: text('contact_email'),
     displayName: text('display_name').notNull(),
     status: text('status').notNull().default('pending_pairing'),
@@ -538,7 +579,12 @@ export const clientUsers = pgTable(
       .defaultNow(),
   },
   (table) => [
-    uniqueIndex('client_users_enrollment_unique').on(table.enrollmentId),
+    uniqueIndex('client_users_enrollment_owner_unique')
+      .on(table.enrollmentId)
+      .where(sql`${table.kind} = 'owner'`),
+    uniqueIndex('client_users_enrollment_piloter_unique')
+      .on(table.enrollmentId)
+      .where(sql`${table.kind} = 'piloter'`),
     unique('client_users_id_scope_unique').on(
       table.id,
       table.tenantId,
@@ -608,6 +654,7 @@ export const pairingTokens = pgTable(
     projectId: text('project_id').notNull(),
     userId: text('user_id'),
     botCredentialId: text('bot_credential_id'),
+    purpose: text('purpose').notNull().default('owner'),
     tokenHash: text('token_hash').notNull(),
     createdBy: text('created_by').notNull(),
     expiresAt: timestamp('expires_at', { withTimezone: true }).notNull(),
@@ -999,6 +1046,7 @@ export const requests = pgTable(
     tenantId: text('tenant_id').notNull(),
     projectId: text('project_id').notNull(),
     userId: text('user_id').notNull(),
+    clientActorRole: text('client_actor_role').notNull().default('owner'),
     conversationId: text('conversation_id')
       .notNull()
       .references(() => conversations.id),
@@ -1966,6 +2014,8 @@ export const tickets = pgTable(
     publicId: text('public_id').notNull(),
     tenantId: text('tenant_id').notNull(),
     projectId: text('project_id').notNull(),
+    openerUserId: text('opener_user_id'),
+    clientActorRole: text('client_actor_role').notNull().default('owner'),
     title: text('title').notNull(),
     excerpt: text('excerpt').notNull(),
     body: text('body').notNull(),
@@ -1991,6 +2041,15 @@ export const tickets = pgTable(
       columns: [table.projectId, table.tenantId],
       foreignColumns: [projects.id, projects.tenantId],
       name: 'tickets_project_tenant_fk',
+    }),
+    foreignKey({
+      columns: [table.openerUserId, table.tenantId, table.projectId],
+      foreignColumns: [
+        clientUsers.id,
+        clientUsers.tenantId,
+        clientUsers.projectId,
+      ],
+      name: 'tickets_opener_user_scope_fk',
     }),
     pgPolicy('tickets_tenant_isolation', {
       for: 'all',

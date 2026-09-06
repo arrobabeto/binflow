@@ -62,5 +62,10 @@ ADRs preserve why durable decisions exist. Accepted ADRs are binding until a lat
 | [0054](0054-client-telegram-tool-catalog.md)                         | Client Telegram `/info` catalog (`/tools` compact + footer)    | Proposed |
 | [0055](0055-admin-tickets.md)                                        | Admin tickets for out-of-catalog client requests                | Accepted |
 | [0056](0056-usage-ledger-and-logfire-ops.md)                         | Usage ledger for Analytics KPIs; Logfire for ops telemetry only | Accepted |
+| [0057](0057-piloter-role-and-capability-subset.md)                   | Piloter role and capability subset on dedicated client bot     | Accepted |
+| [0058](0058-editable-surface-contract.md)                            | Editable Surface Contract (site-first content vocabulary)    | Accepted |
+| [0059](0059-shopify-liquid-enrollment.md)                            | Shopify Liquid enrollment (`shopify_liquid`)                 | Accepted |
+| [0060](0060-edit-image-shopify.md)                                   | Edit theme image for Shopify Liquid (`edit_image_shopify`)   | Accepted |
+| [0061](0061-surface-inventory-sync-and-deep-search.md)               | Surface inventory sync on push + deep search (amends 0058/0060) | Accepted |
 
 Use [0000-template.md](0000-template.md) for new decisions.

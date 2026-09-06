@@ -1,0 +1,6 @@
+kind: interrupt
+label: Awaiting admin publication approval
+nodeKind: workflow.awaiting_admin_approval@1
+acceptsClientCustomization: false
+actor: admin
+ttlHours: 72

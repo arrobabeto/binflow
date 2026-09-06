@@ -30,4 +30,4 @@ export const authSecretPath = (): string =>
   process.env.BINFLOW_AUTH_SECRET_FILE ?? defaultAuthSecretPath();
 
 export const publicBaseUrl = (): string =>
-  process.env.BINFLOW_PUBLIC_URL ?? 'http://localhost:3000';
+  process.env.BINFLOW_PUBLIC_URL ?? 'http://localhost:6060';

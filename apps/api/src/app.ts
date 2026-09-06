@@ -19,6 +19,7 @@ import {
   integrationCandidateInputSchema,
   pairingLinkResponseSchema,
   patchTicketInputSchema,
+  piloterStatusSchema,
   platformOwnerSessionSchema,
   projectManifestResponseSchema,
   readinessResponseSchema,
@@ -36,6 +37,7 @@ import {
   toolCustomizationSummarySchema,
   toolGraphResponseSchema,
   updateEnrollmentInputSchema,
+  updatePiloterCapabilitiesInputSchema,
   updateProjectCapabilitiesInputSchema,
   uploadToolCustomizationInputSchema,
   usageListQuerySchema,
@@ -71,13 +73,16 @@ export const buildApp = (
       EnrollmentService,
       | 'create'
       | 'createPairingLink'
+      | 'createPiloterPairingLink'
       | 'getCapabilities'
       | 'get'
       | 'getManifest'
+      | 'getPiloter'
       | 'evaluateActivation'
       | 'list'
       | 'update'
       | 'updateCapabilities'
+      | 'updatePiloterCapabilities'
       | 'validate'
     >;
     integrationService?: Pick<
@@ -139,7 +144,7 @@ export const buildApp = (
   const trustedOrigin = new URL(
     options.trustedOrigin ??
       process.env.BINFLOW_PUBLIC_URL ??
-      'http://localhost:3000',
+      'http://localhost:6060',
   ).origin;
   const app = Fastify({
     logger: {
@@ -856,6 +861,60 @@ export const buildApp = (
       void reply.header('cache-control', 'no-store');
       void reply.header('etag', `"${String(result.enrollment.version)}"`);
       return pairingLinkResponseSchema.parse(result);
+    },
+  );
+
+  app.post<{ Params: { id: string } }>(
+    '/api/v1/admin/enrollments/:id/piloter/pairing-link',
+    async (request, reply) => {
+      const session = await requireSession(request, true);
+      const mutation = requireMutationHeaders(request.headers);
+      const result = await requireService().createPiloterPairingLink(
+        request.params.id,
+        mutation.expectedVersion,
+        {
+          actorId: session.actorId,
+          correlationId: request.id,
+          idempotencyKey: mutation.idempotencyKey,
+        },
+      );
+      void reply.header('cache-control', 'no-store');
+      void reply.header('etag', `"${String(result.enrollment.version)}"`);
+      return pairingLinkResponseSchema.parse(result);
+    },
+  );
+
+  app.get<{ Params: { id: string } }>(
+    '/api/v1/admin/enrollments/:id/piloter',
+    async (request) => {
+      const session = await requireSession(request, false);
+      return piloterStatusSchema.parse(
+        await requireService().getPiloter(
+          request.params.id,
+          session.actorId,
+          request.id,
+        ),
+      );
+    },
+  );
+
+  app.put<{ Params: { id: string } }>(
+    '/api/v1/admin/enrollments/:id/piloter/capabilities',
+    async (request) => {
+      const session = await requireSession(request, true);
+      const mutation = requireMutationHeaders(request.headers, false);
+      const body = updatePiloterCapabilitiesInputSchema.parse(request.body);
+      return piloterStatusSchema.parse(
+        await requireService().updatePiloterCapabilities(
+          request.params.id,
+          body.capabilityIds,
+          {
+            actorId: session.actorId,
+            correlationId: request.id,
+            idempotencyKey: mutation.idempotencyKey,
+          },
+        ),
+      );
     },
   );
 

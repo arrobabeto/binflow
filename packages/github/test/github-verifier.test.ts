@@ -64,12 +64,17 @@ const createInput = (
 
 type MockOverrides = Readonly<{
   appPermissions?: Readonly<Record<string, string>>;
+  defaultBranch?: string;
   installationPermissions?: Readonly<Record<string, string>>;
+  repository?: string;
   repositoryNames?: readonly string[];
   repositoryTokenIds?: readonly number[];
 }>;
 
 const createGitHubFetch = (overrides: MockOverrides = {}) => {
+  const repository = overrides.repository ?? 'arrobabeto/webbin';
+  const [owner, repoName] = repository.split('/');
+  const defaultBranch = overrides.defaultBranch ?? 'main';
   const calls: { body?: unknown; method: string; path: string }[] = [];
   let tokenCount = 0;
   const fetch = vi.fn<typeof globalThis.fetch>(async (input, init) => {
@@ -105,10 +110,10 @@ const createGitHubFetch = (overrides: MockOverrides = {}) => {
     }
     if (
       method === 'GET' &&
-      url.pathname === '/repos/arrobabeto/webbin/installation'
+      url.pathname === `/repos/${owner}/${repoName}/installation`
     ) {
       return json({
-        account: { login: 'arrobabeto' },
+        account: { login: owner },
         id: 456,
         permissions:
           overrides.installationPermissions ?? githubRegistrationPermissions,
@@ -135,7 +140,7 @@ const createGitHubFetch = (overrides: MockOverrides = {}) => {
           repositoryIds === undefined
             ? undefined
             : (overrides.repositoryTokenIds ?? [789]).map((id) => ({
-                full_name: 'arrobabeto/webbin',
+                full_name: repository,
                 id,
               })),
         repository_selection: 'selected',
@@ -143,9 +148,7 @@ const createGitHubFetch = (overrides: MockOverrides = {}) => {
       });
     }
     if (method === 'GET' && url.pathname === '/installation/repositories') {
-      const repositoryNames = overrides.repositoryNames ?? [
-        'arrobabeto/webbin',
-      ];
+      const repositoryNames = overrides.repositoryNames ?? [repository];
       return json({
         repositories: repositoryNames.map((full_name, index) => ({
           full_name,
@@ -157,12 +160,12 @@ const createGitHubFetch = (overrides: MockOverrides = {}) => {
     if (method === 'DELETE' && url.pathname === '/installation/token') {
       return new Response(null, { status: 204 });
     }
-    if (method === 'GET' && url.pathname === '/repos/arrobabeto/webbin') {
+    if (method === 'GET' && url.pathname === `/repos/${owner}/${repoName}`) {
       return json({
         archived: false,
-        default_branch: 'main',
+        default_branch: defaultBranch,
         disabled: false,
-        full_name: 'arrobabeto/webbin',
+        full_name: repository,
         id: 789,
       });
     }
@@ -249,26 +252,35 @@ describe('GitHub credential verifier', () => {
   });
 
   it('rejects a project binding with the wrong default branch', async () => {
-    const mock = createGitHubFetch();
+    const mock = createGitHubFetch({
+      defaultBranch: 'main',
+      repository: 'arrobabeto/elayva-theme',
+    });
     const verifier = createGitHubCredentialVerifier({
       apiBaseUrl: 'https://github.test',
       fetch: mock.fetch,
     });
 
-    await expect(
-      verifier.verify(
+    let caught: unknown;
+    try {
+      await verifier.verify(
         createInput(
           { appId: '123', clientId: 'Iv1.binflow' },
           {
             defaultBranch: 'develop',
-            expectedRepository: 'arrobabeto/webbin',
+            expectedRepository: 'arrobabeto/elayva-theme',
           },
         ),
-      ),
-    ).rejects.toMatchObject({ category: 'policy_denied' });
-    expect(
-      mock.calls.some((call) => call.path.includes('/access_tokens')),
-    ).toBe(false);
+      );
+    } catch (error) {
+      caught = error;
+    }
+    expect(caught).toMatchObject({ category: 'policy_denied' });
+    expect(caught).toBeInstanceOf(Error);
+    expect((caught as Error).message).toMatch(
+      /default branch \(expected develop, got main\)/,
+    );
+    expect((caught as Error).message).not.toContain('Webbin');
   });
 
   it('rejects a repository token that returns more than the requested repository', async () => {

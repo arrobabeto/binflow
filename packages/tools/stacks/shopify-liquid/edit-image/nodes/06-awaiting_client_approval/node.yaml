@@ -1,0 +1,6 @@
+kind: interrupt
+label: Awaiting client preview approval
+nodeKind: workflow.awaiting_client_approval@1
+acceptsClientCustomization: false
+actor: client
+ttlHours: 72

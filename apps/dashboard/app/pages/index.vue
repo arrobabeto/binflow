@@ -8,6 +8,7 @@ import type {
 } from '@binflow/contracts';
 
 import { fetchAllRequestSummaries } from '../lib/analytics-metrics';
+import { visibleDashboardEnrollments } from '../lib/hidden-clients';
 import {
   buildAttentionItems,
   buildClientSummaries,
@@ -111,9 +112,13 @@ const openTicketsAccent = computed(() =>
   openTickets.value > 0 ? 'warning' : 'neutral',
 );
 
+const visibleEnrollments = computed(() =>
+  visibleDashboardEnrollments(enrollments.value?.items ?? []),
+);
+
 const clientCards = computed(() =>
   buildClientSummaries(
-    enrollments.value?.items ?? [],
+    visibleEnrollments.value,
     todayKey.value === null
       ? new Map()
       : requestsByProjectOnLocalDay(allRequests.value, todayKey.value),
@@ -128,7 +133,7 @@ const clientCards = computed(() =>
 const attentionItems = computed(() =>
   buildAttentionItems({
     credentials: credentials.value?.items ?? [],
-    enrollments: enrollments.value?.items ?? [],
+    enrollments: visibleEnrollments.value,
     pendingApprovals: pendingApprovals.value,
     readinessStatus: readiness.value?.status,
   }),

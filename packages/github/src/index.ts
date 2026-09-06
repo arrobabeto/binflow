@@ -283,7 +283,7 @@ export const createGitHubCredentialVerifier = (
         ) {
           throw new DomainError(
             'policy_denied',
-            'GitHub App installation scope does not match the approved Webbin contract.',
+            'GitHub App installation scope does not match the expected project binding.',
           );
         }
 
@@ -406,9 +406,31 @@ export const createGitHubCredentialVerifier = (
             repository.archived ||
             repository.disabled
           ) {
+            const mismatches: string[] = [];
+            if (repository.id !== repositoryId) {
+              mismatches.push('repository id');
+            }
+            if (
+              repository.full_name.toLowerCase() !==
+              connectionConfiguration.expectedRepository.toLowerCase()
+            ) {
+              mismatches.push(
+                `full name (expected ${connectionConfiguration.expectedRepository}, got ${repository.full_name})`,
+              );
+            }
+            if (
+              repository.default_branch !==
+              connectionConfiguration.defaultBranch
+            ) {
+              mismatches.push(
+                `default branch (expected ${connectionConfiguration.defaultBranch}, got ${repository.default_branch})`,
+              );
+            }
+            if (repository.archived) mismatches.push('archived');
+            if (repository.disabled) mismatches.push('disabled');
             throw new DomainError(
               'policy_denied',
-              'GitHub repository state does not match the Webbin contract.',
+              `GitHub repository state does not match the project binding: ${mismatches.join('; ')}.`,
             );
           }
         } catch (error) {
@@ -509,6 +531,15 @@ const combinedStatusSchema = z.object({
   state: z.enum(['success', 'pending', 'failure', 'error']),
 });
 
+export type GitHubRepositoryPublicationPort = RepositoryPublicationPort & {
+  listBlobPaths(
+    input: Readonly<{
+      prefixes: readonly string[];
+      ref?: string;
+    }>,
+  ): Promise<readonly string[]>;
+};
+
 export const createGitHubRepositoryPublicationPort = (
   input: Readonly<{
     apiBaseUrl?: string;
@@ -518,7 +549,7 @@ export const createGitHubRepositoryPublicationPort = (
     masterKey: Buffer;
     repositoryId: string;
   }>,
-): RepositoryPublicationPort => {
+): GitHubRepositoryPublicationPort => {
   if (
     input.credential.kind !== 'github-app' ||
     input.credential.status !== 'active'
@@ -1007,6 +1038,28 @@ export const createGitHubRepositoryPublicationPort = (
             'GitHub did not merge the approved PR.',
           );
         return { mergeCommitSha: result.sha };
+      });
+    },
+    async listBlobPaths(listInput) {
+      return withToken(async (requester, token) => {
+        const ref = listInput.ref ?? productionBranch;
+        const tree = treeSchema.parse(
+          (
+            await requester('GET /repos/{owner}/{repo}/git/trees/{tree_sha}', {
+              headers: authorization(token),
+              owner,
+              recursive: '1',
+              repo,
+              tree_sha: ref,
+            })
+          ).data,
+        );
+        return tree.tree
+          .filter((entry) => entry.type === 'blob')
+          .map((entry) => entry.path)
+          .filter((path) =>
+            listInput.prefixes.some((prefix) => path.startsWith(prefix)),
+          );
       });
     },
   };

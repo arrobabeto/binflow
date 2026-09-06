@@ -1,0 +1,7 @@
+kind: effect
+label: Open theme image pull request
+nodeKind: images.open_theme_edit_pr@1
+acceptsClientCustomization: false
+permissions:
+  - github:contents:write
+  - github:pull_requests:write

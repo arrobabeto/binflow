@@ -175,6 +175,70 @@ describe('project manifest', () => {
     );
   });
 
+  it('builds an empty-capability shopify_liquid enrollment stub without Vercel', () => {
+    const manifest = buildProjectManifest({
+      ...input(),
+      configuration: {
+        ...input().configuration,
+        contentLocales: ['en'],
+        defaultContentLocale: 'en',
+        productionDomain: 'https://elayva.example/',
+        requiredLocales: ['en'],
+        slugLocale: 'en',
+        translationPolicy: 'none',
+      },
+      profile: 'shopify_liquid',
+      projectKey: 'elayva',
+      tenantKey: 'elayva',
+      verifiedBindings: {
+        github: {
+          defaultBranch: 'main',
+          installationId: '1',
+          repository: 'acme/elayva-theme',
+        },
+      },
+    });
+
+    expect(manifest.profile).toBe('shopify_liquid');
+    expect(manifest.content.source).toBe('github');
+    expect(manifest.content.publicationTargets).toEqual(['github_theme']);
+    expect(manifest.enabledCapabilities).toEqual([]);
+    expect(manifest.deployment.provider).toBe('shopify_theme');
+    expect(manifest.deployment.productionOrigin).toBe('https://elayva.example');
+    expect(manifest.globalProfileVersion).toBe('shopify_liquid@1');
+    expect(manifest.deployment.teamId).toBeUndefined();
+    expect(manifest.content.surfaceInventoryPath).toBe(
+      'binflow/surface-inventory.yaml',
+    );
+  });
+
+  it('requires productionDomain for shopify_liquid', () => {
+    expect(() =>
+      buildProjectManifest({
+        ...input(),
+        configuration: {
+          ...input().configuration,
+          contentLocales: ['en'],
+          defaultContentLocale: 'en',
+          productionDomain: undefined,
+          requiredLocales: ['en'],
+          slugLocale: 'en',
+          translationPolicy: 'none',
+        },
+        profile: 'shopify_liquid',
+        projectKey: 'elayva',
+        tenantKey: 'elayva',
+        verifiedBindings: {
+          github: {
+            defaultBranch: 'main',
+            installationId: '1',
+            repository: 'acme/elayva-theme',
+          },
+        },
+      }),
+    ).toThrow(/productionDomain/);
+  });
+
   it('requires productionDomain for astro_orbitype', () => {
     expect(() =>
       buildProjectManifest({

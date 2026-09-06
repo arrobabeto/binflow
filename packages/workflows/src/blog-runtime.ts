@@ -32,6 +32,8 @@ import { DomainError, type Clock, systemClock } from '@binflow/domain';
 import { decideBlogPublicationPolicy } from '@binflow/policies';
 import { loadCustomizationSection } from '@binflow/tools';
 
+import { enqueuePiloterOwnerSuccessNotice } from './piloter-owner-notice.js';
+
 const digest = (value: string): string =>
   createHash('sha256').update(value).digest('hex');
 const newActionToken = (): string => randomBytes(32).toString('base64url');
@@ -1518,6 +1520,10 @@ export class BlogWorkflowRuntime {
           `Request ${context.request.id} published. Open /requests/${context.request.id} in the dashboard.`,
           context.request.version + 2,
         );
+        await enqueuePiloterOwnerSuccessNotice(database, {
+          ...context.request,
+          version: context.request.version + 2,
+        });
       },
     );
     return {

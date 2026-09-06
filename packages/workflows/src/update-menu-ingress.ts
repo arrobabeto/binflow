@@ -146,6 +146,32 @@ export const buildUpdateMenuSelectionActionSpecs = (
   return specs;
 };
 
+/**
+ * One CTA toggle per keyboard row; Select all alone; Continuar + Cancel share
+ * a row (short labels). Slug stays in the message text, not on buttons.
+ */
+export const buildUpdateMenuSelectionActionRows = (
+  locale: SupportedLocale,
+  discovered: readonly MenuCtaCandidate[],
+  selectedKeys: readonly string[],
+): readonly (readonly UpdateMenuSelectionActionSpec[])[] => {
+  const specs = buildUpdateMenuSelectionActionSpecs(
+    locale,
+    discovered,
+    selectedKeys,
+  );
+  const toggles = specs.filter((spec) => spec.action === 'toggle_menu_cta');
+  const selectAll = specs.find((spec) => spec.action === 'select_all_menu_ctas');
+  const confirm = specs.find((spec) => spec.action === 'confirm_menu_selection');
+  const cancel = specs.find((spec) => spec.action === 'cancel');
+  const rows: UpdateMenuSelectionActionSpec[][] = toggles.map((spec) => [spec]);
+  if (selectAll !== undefined) rows.push([selectAll]);
+  if (confirm !== undefined && cancel !== undefined) rows.push([confirm, cancel]);
+  else if (confirm !== undefined) rows.push([confirm]);
+  else if (cancel !== undefined) rows.push([cancel]);
+  return rows;
+};
+
 export const parseUpdateMenuExecuteInput = (
   projectId: string,
   requestVersionId: string,
@@ -184,7 +210,7 @@ export const resolveUpdateMenuProductionOrigin = (
 export const formatMenuToggleLabel = (
   candidate: MenuCtaCandidate,
   selected: boolean,
-): string => `${selected ? '✓ ' : ''}${candidate.label} · /${candidate.pageSlug}`;
+): string => `${selected ? '✓ ' : ''}${candidate.label}`;
 
 export const parseMenuCtaKeywordSection = (
   section: string | undefined,

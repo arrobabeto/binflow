@@ -4,6 +4,109 @@ All notable changes to product behavior, architecture, contracts, security, oper
 
 ## Unreleased
 
+### edit_image_shopify: useful confirm photo; no fake preview links
+
+- Client approval notice: Approve/Cancel only (no Preview / Pull Request
+  buttons). Copy clarifies live appears after admin merge.
+- Target confirm attaches the current image via live CDN URL from the enrolled
+  storefront HTML when found, else GitHub raw on the production branch.
+- Astro `edit_image` unchanged.
+
+### edit_image_shopify: overwrite inventory asset in place
+
+- Theme image PRs overwrite the inventory `sample` path under `assets/**`
+  (Liquid keeps resolving). Stamped siblings only when sample is missing or not
+  an asset path. Confirm UI no longer attaches `productionOrigin/assets/...`
+  (404 on Shopify). Spec/ADR-0060. Astro `edit_image` unchanged.
+
+### Surface inventory sync + deep search (ADR-0061)
+
+- Theme inventory freshness contract: client push gate + Binflow remap pipeline
+  (`images.remap_surface_inventory@1`). Guide:
+  `docs/guides/surface-inventory-sync.md`.
+- `edit_image_shopify`: on miss, Telegram offers **Deep search** (remap YAML,
+  auto-merge inventory-only PR, one re-query) alongside page browse. Action
+  `deep_search_inventory`. Astro `edit_image` unchanged.
+- Fix: theme-image publish `revalidate` uses `publication.files` (unblocks
+  admin merge after “PR changed after preview approval”).
+
+### edit_image_shopify: browse by page after miss
+
+- When target search finds no match, Telegram asks which inventory `area`
+  (page) to browse; stacked page buttons + Cancel; choosing a page lists that
+  area’s images (then confirm / disambiguate). Spec:
+  `docs/specs/edit-image-shopify.md`. Astro `edit_image` unchanged.
+
+### edit_image_shopify: stacked disambiguation keyboard
+
+- Multiple-match Telegram picks use `actionRows` (one button per row), same
+  pattern as `update_menu`, so labels stay readable. Astro `edit_image`
+  unchanged.
+
+### GitHub verify: generic project-binding error messages
+
+- Non-Webbin GitHub App verify failures no longer say “Webbin contract”.
+  Installation-scope and repository-state messages name the project binding;
+  default-branch mismatches include expected vs actual.
+
+### Dashboard: enrollment save omits empty optional URLs/text
+
+- Client enrollment PATCH no longer sends `""` for optional HTTPS/email/text
+  fields (was Zod 400 on Save draft). Empty optional keys are omitted; errors
+  surface the API message.
+
+### Dashboard: client list hide toggle
+
+- `HIDDEN_DASHBOARD_TENANT_KEYS` in
+  `apps/dashboard/app/lib/hidden-clients.ts` filters Clients / Home / Analytics
+  client rows only. List is empty again so `webbin` is visible; add a tenant
+  key to hide without deleting data.
+
+### Shopify Liquid enrollment + edit_image_shopify (ADR-0059 / ADR-0060)
+
+- Selectable profile `shopify_liquid` / stack `shopify-liquid`: Validate without
+  Vercel or Shopify Admin; empty catalog at ACTIVE; GitHub + OpenAI + Telegram +
+  `productionDomain` required. Migrations `0033` (profile marker) and `0034`
+  (`edit_image_shopify@1`).
+- First capability **`edit_image_shopify@1`**: inventory-driven theme image
+  replace (`github_theme`), branch/PR + storefront preview query; no Orbitype /
+  Vercel. Spec: `docs/specs/edit-image-shopify.md`. Stack contract:
+  `.cursor/skills/create-tool/references/stacks/shopify-liquid.md`.
+- Non-Webbin GitHub App bindings allowed for `shopify_liquid` (Vercel/Orbitype
+  still blocked). Pilot: elayva.
+
+### update_menu: stacked selection keyboard
+
+- Selection step uses optional `TelegramReply.actionRows`: one menu CTA per
+  Telegram row (readable labels without slug); Select all alone; Continuar +
+  Cancelar share a row. Other tools omit `actionRows` and keep prior single-row
+  keyboards (ADR-0042 / ADR-0049).
+
+### Editable Surface Contract (ADR-0058)
+
+- Docs-only: profile-agnostic **Editable Surface** vocabulary (`bf_id`, field
+  kinds, Surface Inventory, markup markers) for greenfield sites intended for
+  Binflow. Guide: `docs/guides/editable-surface-contract.md`. Existing
+  Webbin/Bistro pilots grandfathered. Shopify beverage theme agent brief:
+  `docs/briefs/shopify-beverage-theme-agent-brief.md` (Home + blog; no menu).
+
+### Piloter role (ADR-0057)
+
+- Scope expands to allow one optional **Piloter** beside the owner on the same
+  dedicated client bot: subset of project-enabled tools, pairing link from
+  client detail, template owner notices, Owner|Piloter attribution on
+  requests/tickets. Spec: `docs/specs/piloter.md`.
+- Implementation: migration `0032_piloter_role`; Piloter pairing + capability
+  subset APIs; Telegram authz/outbox owner targeting; dashboard Piloter panel;
+  owner template notice on Piloter success (blog publish + open ticket).
+
+### Host local ports (6060 / 2040)
+
+- Host `pnpm dev` / `pnpm run dev:live` bind the dashboard to **6060** and the
+  API to **2040**, with matching `BINFLOW_PUBLIC_URL` and
+  `BINFLOW_INTERNAL_API_URL` defaults so auth Origin and the Nitro proxy stay
+  aligned. Compose container ports remain `3000`/`8080`.
+
 ### Official Binflow brand mark
 
 - Dashboard ships Figma `lockup-4` (`22:63`) assets: lockup + teal waveform mark.

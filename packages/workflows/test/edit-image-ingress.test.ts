@@ -1,14 +1,18 @@
 import { describe, expect, it } from 'vitest';
 
 import {
+  buildEditImagePickActionRows,
   buildEditImagePlanMessage,
   buildEditImageTargetConfirmMessage,
   buildImagePublicUrl,
   editImageActionLabels,
+  editImageBrowsePagesMessage,
   editImageNaturalLanguage,
+  formatEditImagePageLabel,
   resolveEditImageProductionOrigin,
 } from '../src/edit-image-ingress.js';
 import { discoverEditableImages } from '@binflow/images';
+import { shopifyThemeImageConfirmPhotoUrl } from '../src/edit-image-shopify-collection.js';
 
 describe('edit-image ingress', () => {
   it('matches natural-language image edit intents', () => {
@@ -26,6 +30,31 @@ describe('edit-image ingress', () => {
     expect(editImageNaturalLanguage('update menu pdf')).toBe(false);
   });
 
+  it('stacks one pick button per Telegram keyboard row', () => {
+    const tokens = [
+      { action: 'pick_image_target', label: 'Select 1: Hero', token: 't1' },
+      { action: 'pick_image_target', label: 'Select 2: Product', token: 't2' },
+      { action: 'pick_image_target', label: 'Select 3: Lifestyle', token: 't3' },
+    ] as const;
+    const rows = buildEditImagePickActionRows(tokens);
+    expect(rows).toHaveLength(3);
+    expect(rows.every((row) => row.length === 1)).toBe(true);
+    expect(rows.map((row) => row[0]?.token)).toEqual(['t1', 't2', 't3']);
+  });
+
+  it('localizes browse-pages copy and page button labels', () => {
+    expect(editImageBrowsePagesMessage.es).toContain('página');
+    expect(editImageBrowsePagesMessage.es).toContain('profunda');
+    expect(editImageBrowsePagesMessage.en).toContain('page');
+    expect(editImageBrowsePagesMessage.en).toContain('Deep search');
+    expect(formatEditImagePageLabel('en', 'home')).toBe('Page: home');
+    expect(formatEditImagePageLabel('es', 'home')).toBe('Página: home');
+    expect(editImageActionLabels.es.cancel).toBe('Cancelar');
+    expect(editImageActionLabels.es.deepSearch).toBe('Búsqueda profunda');
+    expect(editImageActionLabels.en.deepSearch).toBe('Deep search');
+    expect(editImageActionLabels.de.deepSearch).toBe('Tiefe Suche');
+  });
+
   it('uses image-specific action labels without create-draft wording', () => {
     expect(editImageActionLabels.es.confirmTarget).toBe('Confirmar imagen');
     expect(editImageActionLabels.es.rejectTarget).toBe('No es esta');
@@ -34,6 +63,27 @@ describe('edit-image ingress', () => {
     expect(editImageActionLabels.de.approvePreview).toBe('Freigeben');
     expect(editImageActionLabels.es.confirmPlan).not.toContain('borrador');
     expect(editImageActionLabels.en.confirmPlan).not.toContain('draft');
+  });
+
+  it('does not attach storefront asset URLs for Shopify confirm without resolver', () => {
+    const url = shopifyThemeImageConfirmPhotoUrl(
+      {
+        deployment: { productionOrigin: 'https://elayva.example' },
+      } as never,
+      {
+        component: null,
+        currentPath: 'assets/story-discovery-1.jpg',
+        field: 'settings.image',
+        key: 'story.discovery.image_1',
+        kind: 'page',
+        label: 'story.discovery.image_1 · assets/story-discovery-1.jpg',
+        pageOrPostId: 'story.discovery.image_1',
+        pageOrPostSlug: 'story',
+        pageOrPostTitle: 'story/discovery',
+        sectionIndex: 0,
+      },
+    );
+    expect(url).toBeUndefined();
   });
 
   it('mentions all languages on multilingual plan messages', () => {

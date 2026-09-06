@@ -250,6 +250,28 @@ Content mutations use allowlisted ports only. Tools on this profile:
 
 Further CMS tools remain later Phase 6 slices.
 
+## Shopify Liquid (shopify_liquid enrollment)
+
+Profile: `shopify_liquid` (ADR-0059). Stack directory: `shopify-liquid`.
+
+Enrollment (v1) requires:
+
+- GitHub App access to the **theme** repository (read-only verify; no theme
+  push at enrollment).
+- Per-client OpenAI credential.
+- Dedicated Telegram client bot.
+- `productionDomain` (HTTPS storefront origin).
+
+**Not** required in v1: Vercel, Orbitype, Shopify Admin API.
+
+Surface inventory (`binflow/surface-inventory.yaml`) is recommended (ADR-0058)
+but is not a Validate blocker. Content tools prefer inventory + `data-bf-*`
+markers at runtime.
+
+First planned tool: inventory-driven `edit_image` (`github_theme` publication)
+via create-tool after enrollment ships. No Shopify Admin product mutation in
+this profile’s first ship.
+
 ## Future WordPress
 
 The adapter will use HTTPS, REST discovery and a revocable Application Password. Scope is posts, approved categories and blog-associated media. Pages, themes, plugins, menus, settings and unrelated media remain blocked. A separately audited Signed Preview plugin is required before the profile can be activated.

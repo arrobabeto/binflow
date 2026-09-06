@@ -44,7 +44,7 @@ provider secrets.
 
 | Threat                           | Required controls                                                                                                   |
 | -------------------------------- | ------------------------------------------------------------------------------------------------------------------- |
-| Unauthorized Telegram user       | One-time pairing, identity allowlist, tenant-scoped bot, RBAC                                                       |
+| Unauthorized Telegram user       | One-time pairing, identity allowlist, tenant-scoped bot, RBAC; optional Piloter allowlist + capability subset (ADR-0057) |
 | Forged/replayed webhook          | HTTPS, provider signature/secret, delivery dedupe, expiration                                                       |
 | Callback replay                  | Opaque server action ID, user/project/version binding, expiration, idempotency                                      |
 | Prompt injection                 | Treat external text as data, bounded capability context, output validation outside model                            |
@@ -58,6 +58,7 @@ provider secrets.
 | Approval of stale content        | Bind approval to request version, SHA and deployment/version                                                        |
 | Concurrent manual change         | Fresh source read, expected version and conflict stop                                                               |
 | Duplicate publication            | Idempotency keys, graph checkpoints, merge/publication reconciliation                                               |
+| Inventory deep search auto-merge | Inventory-file-only PR; one deep search per request; theme markers remain required (ADR-0061)                         |
 | Malicious attachment             | MIME sniffing, size limits, malware scan, safe parser, no macro execution                                           |
 | SSRF                             | URL parser, DNS/IP validation, protocol/port rules, redirect revalidation, egress policy                            |
 | `edit_image` replacement URL     | HTTPS only; block localhost/private literal hosts; no redirects; MIME + size caps before artifact persist           |
@@ -123,10 +124,18 @@ Unpaired `/start` messages, usernames and chat titles provide no authority.
 - User is resolved from Telegram numeric user ID, never username/display name.
 - Pairing token is random, hashed, single-use, bot/user/tenant scoped and expires in 24 hours.
 - The first MVP accepts direct messages only.
+- An enrollment may pair the owner plus at most one **Piloter** on the same
+  dedicated client bot (ADR-0057). Piloter authorization additionally requires
+  membership in the platform-owner-assigned capability subset. Client
+  notifications must resolve the destination chat by intended `userId` / role
+  (owner notices for Piloter activity; enrollment/ticket DMs default to owner)
+  so dual-identity enrollments cannot leak to the wrong chat.
 
 ### Authorization
 
-Every command checks user, tenant, project, role, capability, project binding, request state and effective policy. Administrator cross-tenant access uses a distinct audited authorization path.
+Every command checks user, tenant, project, role, capability, project binding,
+(Piloter subset when role is Piloter), request state and effective policy.
+Administrator cross-tenant access uses a distinct audited authorization path.
 
 Business repositories require a transaction-scoped tenant, authenticated
 platform owner or named system operation. Runtime services connect with a

@@ -108,6 +108,10 @@
 - Client pairing tests prove that identity creation precedes response delivery,
   delivery failure remains pending, success idempotently records Telegram
   delivery and moves the enrollment to active with audit/outbox evidence.
+- Piloter tests (ADR-0057): Piloter pairing on the same bot; `/tools` and starts
+  respect subset; concurrent owner+Piloter interviews isolate by `userId`;
+  owner template notices target the owner chat; enrollment/ticket DMs default
+  to owner; subset revocation blocks only new Piloter starts.
 - Manifest tests cover immutable snapshots, identical-fingerprint reuse,
   changed-fingerprint supersession, serialized project-local versions,
   provider-derived external bindings and atomic validation/audit/outbox writes.
@@ -121,6 +125,10 @@
 - Dashboard onboarding → validation → activation → pairing.
 - `astro_orbitype` enrollment: Orbitype API-key verify is required; activation
   may succeed with an empty capability catalog (ADR-0045).
+- `shopify_liquid` enrollment (ADR-0059): GitHub theme + OpenAI + Telegram +
+  `productionDomain` required; **no** Vercel / Orbitype / Shopify Admin;
+  activation may succeed with an empty capability catalog; Astro assignment
+  gates must reject cross-profile tools.
 - `create_blog_orbitype` dual-write (ADR-0047): GitHub draft then Orbitype CMS
   draft, Vercel preview URLs at `/posts/{draftId}/{titleSlug}`, merge_github
   then publish_orbitype; assignment only for `astro_orbitype` projects (Bistro

@@ -2,13 +2,18 @@
 
 ## Goal
 
-Deliver a locally operable Binflow control plane that enrolls Webbin, serves one client through Telegram and safely publishes a complete bilingual blog through GitHub and Vercel.
+Deliver a locally operable Binflow control plane that enrolls Webbin, serves the
+project owner (and optionally one Piloter on the same dedicated client bot)
+through Telegram and safely publishes a complete bilingual blog through GitHub
+and Vercel.
 
 ## User-visible flow
 
 1. The platform owner logs into the English dashboard with password and TOTP.
 2. The owner registers and validates Webbin, its client bot, OpenAI key, GitHub App installation, Vercel project, locales, rules, budgets and `create_blog_draft` binding.
-3. The dashboard produces a one-time client pairing link.
+3. The dashboard produces a one-time client (owner) pairing link. After
+   activation, the platform owner may issue an optional Piloter pairing link and
+   assign a subset of enabled tools (ADR-0057).
 4. The client opens the bot, sees available tools and invokes `/create_blog` or describes the desired blog naturally.
 5. If the command is empty, the bot explains required inputs, process order, current categories and examples.
 6. A short topic is enough to start. A longer client message is kept intact as
@@ -34,10 +39,13 @@ Deliver a locally operable Binflow control plane that enrolls Webbin, serves one
 - Bot token, OpenAI, GitHub and Vercel checks pass before pairing.
 - One-time pairing tokens are hashed, scoped, expire within 24 hours and cannot be reused.
 - An unpaired Telegram identity cannot list tools or create requests.
+- An optional Piloter pairs on the same client bot; `/tools` for Piloter shows
+  only the assigned subset; requests/tickets record Owner | Piloter.
 
 ### Tool discovery and planning
 
-- `/tools` and the bot menu show only project-enabled capabilities.
+- `/tools` and the bot menu show only project-enabled capabilities (Piloter:
+  intersection with the Piloter subset).
 - Natural language can resolve to `create_blog_draft` without seeing other tenants or disabled tools.
 - `/create_blog` with no arguments returns instructions and current categories.
 - Brief mode starts with only a topic.

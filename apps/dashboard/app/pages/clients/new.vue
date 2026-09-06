@@ -4,12 +4,19 @@ import type { Enrollment } from '@binflow/contracts';
 const profileOptions = [
   { label: 'Astro + GitHub repo (astro_repo)', value: 'astro_repo' },
   { label: 'Astro + Orbitype CMS (astro_orbitype)', value: 'astro_orbitype' },
+  {
+    label: 'Shopify Liquid theme (shopify_liquid)',
+    value: 'shopify_liquid',
+  },
 ];
 
 const form = reactive({
   projectDisplayName: 'Webbin',
   projectKey: 'webbin',
-  projectProfile: 'astro_repo' as 'astro_repo' | 'astro_orbitype',
+  projectProfile: 'astro_repo' as
+    | 'astro_repo'
+    | 'astro_orbitype'
+    | 'shopify_liquid',
   tenantDisplayName: 'Webbin',
   tenantKey: 'webbin',
 });
@@ -19,7 +26,7 @@ const saving = ref(false);
 watch(
   () => form.projectProfile,
   (profile) => {
-    if (profile === 'astro_orbitype') {
+    if (profile === 'astro_orbitype' || profile === 'shopify_liquid') {
       if (form.tenantKey === 'webbin') {
         form.tenantDisplayName = '';
         form.tenantKey = '';

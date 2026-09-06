@@ -1,0 +1,14 @@
+command: /edit_image
+description: "Lets shopify_liquid clients replace one allowlisted theme image
+  slot per request using the Surface Inventory (kind: image, publication_target:
+  github_theme). Opens a GitHub PR with the replacement asset; preview is the PR
+  plus a storefront preview query URL (no Vercel, no Shopify Admin, no
+  Orbitype). Client preview approve/cancel; admin approval before merge."
+displayName: Edit theme image
+executorId: workflow.edit_image_shopify@1
+graphVersion: stacks/shopify-liquid/edit-image@1
+id: edit_image_shopify
+profile: shopify_liquid
+requiresPreview: true
+riskClass: medium
+version: 1

@@ -33,16 +33,20 @@ Small but frequent content changes require clients to understand a CMS, reposito
 - Convert project knowledge into versioned manifests, policies and executors.
 - Preserve the repository or CMS as the source of truth.
 - Make every mutation attributable, reproducible and recoverable.
-- Add new technical profiles without weakening existing isolation or approval rules.
+- Add new technical profiles without weakening existing isolation or approval
+  rules (`astro_repo`, `astro_orbitype`, `shopify_liquid`, …).
 
 ## Users and roles
 
 First MVP:
 
 - `platform_owner`: authenticates in the dashboard, configures tenants/projects and can act across tenants.
-- `client`: one paired Telegram identity for one tenant/project/client bot.
+- `client` (owner): one primary paired Telegram identity for one tenant/project/dedicated client bot.
+- `piloter` (optional): at most one additional paired Telegram identity on the
+  **same** dedicated client bot, authorized only for a platform-owner-assigned
+  subset of project-enabled tools (ADR-0057). Not a separate project profile.
 
-Later roles may include administrator, developer, client owner, editor, reviewer and viewer. Role expansion must not change first-MVP permissions implicitly.
+Later roles may include administrator, developer, client owner, editor, reviewer and viewer. Role expansion beyond owner + one Piloter must not change first-MVP permissions implicitly.
 
 ## Product principles
 

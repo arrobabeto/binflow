@@ -18,7 +18,12 @@ session; credential and enrollment mutations remain dashboard-only.
 
 ### Client bot
 
-Each first-MVP enrollment owns a dedicated bot. The bot resolves one tenant/project and accepts one paired client user. The architecture permits additional bot integrations later without using message content to resolve tenant identity.
+Each first-MVP enrollment owns a dedicated bot. The bot resolves one
+tenant/project and accepts the primary paired **owner** plus at most one
+optional **Piloter** on separate 1:1 chats (ADR-0057). Tenant resolution remains
+bot identity; actor resolution uses Telegram numeric user ID and membership
+role. The architecture permits additional bot integrations later without using
+message content to resolve tenant identity.
 
 Both bots use a shared `MessagingGateway` domain interface and independent Chat SDK instances/state namespaces.
 
@@ -58,8 +63,8 @@ inside JSON evidence.
 
 ## Pairing
 
-1. Admin creates the client user during enrollment.
-2. Dashboard creates `t.me/<client-bot>?start=<opaque-token>`.
+1. Admin creates the primary client (owner) user during enrollment.
+2. Dashboard creates `t.me/<client-bot>?start=<opaque-token>` for the owner.
 3. Token is random, hashed, tenant/user/bot scoped, single-use and valid for 24 hours.
 4. Bot receives `/start`, validates the token and binds Telegram numeric user ID.
 5. Bot posts the localized completion response.
@@ -67,11 +72,18 @@ inside JSON evidence.
    idempotently activates the enrollment; failed delivery leaves it pending.
 7. Reuse, wrong bot, wrong user binding or expiration is rejected and audited.
 
-Enrollment creates one pending client user and membership before issuing a
-pairing link. Consumption records the active client bot credential ID.
-Replay of the same already-consumed Telegram update may repeat the visible
-completion response to recover from a post-delivery database interruption, but
-cannot create a second identity, membership or activation transition.
+Enrollment creates one pending **owner** client user and membership before
+issuing the owner pairing link. Consumption records the active client bot
+credential ID. Replay of the same already-consumed Telegram update may repeat
+the visible completion response to recover from a post-delivery database
+interruption, but cannot create a second identity, membership or activation
+transition for that token.
+
+After the enrollment is active, the platform owner may issue a separate
+one-time **Piloter** pairing link (same hash/expiry rules, role-scoped). Piloter
+pairing binds a second Telegram user to the same bot and enrollment without
+replacing the owner or re-running activation evidence (ADR-0057). At most one
+active Piloter is allowed.
 
 Unpaired users receive a localized access-denied message and cannot discover project data or tool names.
 
@@ -80,8 +92,8 @@ Unpaired users receive a localized access-denied message and cannot discover pro
 | Command        | Behavior                                                                                                     |
 | -------------- | ------------------------------------------------------------------------------------------------------------ |
 | `/start`       | Pair or show current connection status.                                                                      |
-| `/tools`       | List enabled tools as `command — displayName`, plus platform `/open_ticket`, and a footer pointing to `/info`. |
-| `/open_ticket` | Start a custom-request interview (not a catalog tool); available to every paired client.                     |
+| `/tools`       | List enabled tools as `command — displayName`, plus platform `/open_ticket`, and a footer pointing to `/info`. For Piloter: intersection with the assigned subset (ADR-0057). |
+| `/open_ticket` | Start a custom-request interview (not a catalog tool); available to every paired client (owner and Piloter). |
 | `/info`        | Without args: short list + ask which tool. With arg: scope/detail for one enabled tool (does not start it).  |
 | `/create_blog` | Start the blog capability; arguments are optional.                                                           |
 | `/status`      | Show active/recent request states for this user/project.                                                     |
@@ -95,7 +107,8 @@ The bot command menu is synchronized from the active project capability bindings
 via Telegram `setMyCommands` when bindings are published. Capability descriptions
 may use localized one-line summaries from the client tool catalog. Internal nodes
 such as translation never appear as commands. `/tools` lists only enabled
-bindings; `/info` details only enabled bindings (ADR-0054). `/info` never creates
+bindings visible to the actor (owner: full project catalog; Piloter: subset);
+`/info` details only those bindings (ADR-0054, ADR-0057). `/info` never creates
 a request. Platform command `/open_ticket` appears in `/tools` and `/help` for
 all paired clients (ADR-0055). Unmatched free-text offers custom request or
 `/tools`; greeting/thanks use a heuristic polite reply.
@@ -206,6 +219,9 @@ Plan (`update_menu` — after PDF + button selection):
 
 Selection (`update_menu` — `select_ctas` step; **opt-in**, none marked at start):
 
+- Keyboard layout: **one menu CTA per row** (button label = menu name only;
+  page slug stays in the message text). Then `Seleccionar todos` alone; then
+  `Continuar` + `Cancelar` on one row. Other tools keep a single-row keyboard.
 - Toggle buttons per discovered menu CTA (`toggle_menu_cta`) — tap to select
 - `Seleccionar todos` / `Select all` / `Alle auswählen` (`select_all_menu_ctas`)
 - `Continuar` / `Continue` / `Weiter` (`confirm_menu_selection`, primary)
@@ -322,10 +338,14 @@ cancellation, the `conversationLocale` stored for that conversation is required;
 a request whose locale cannot be resolved produces no cancellation event instead
 of an English fallback. Freeform admin messages may use a neutral English prefix
 when locale is missing; the freeform body is never auto-translated. The
-destination chat is always resolved at delivery time from the paired channel
-identity, never read from the event payload. Enrollment-scoped events resolve
-via the enrollment’s tenant/project active channel identity; request-scoped
-events resolve via the request’s user.
+destination chat is always resolved at delivery time from the intended paired
+channel identity (`userId` / role), never read from the event payload.
+Request-scoped events resolve via the request’s user. Enrollment-scoped and
+ticket-scoped events default to the **owner** identity when a Piloter is also
+paired (ADR-0057); they must not pick an arbitrary project identity.
+Owner **Piloter activity** notices use localized templates (no LLM) and target
+the owner chat; for admin-approval tools the owner is notified only of the
+successful final result.
 
 Client-initiated `/cancel` keeps its synchronous in-thread reply and enqueues
 nothing, so the client never receives the same copy twice.
