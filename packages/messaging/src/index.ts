@@ -161,15 +161,21 @@ export const renderAdminTelegramReply = (
   });
 };
 
+const actionTokenRows = (
+  reply: TelegramReply,
+): readonly (readonly TelegramReply['actionTokens'][number][])[] => {
+  if (reply.actionRows !== undefined && reply.actionRows.length > 0)
+    return reply.actionRows;
+  if (reply.actionTokens.length === 0) return [];
+  return [reply.actionTokens];
+};
+
 export const renderClientTelegramReply = (
   reply: TelegramReply,
   links: readonly TelegramPreviewLink[] = [],
 ): AdapterPostableMessage => {
-  if (
-    reply.actionTokens.length === 0 &&
-    links.length === 0 &&
-    reply.photoUrl === undefined
-  )
+  const rows = actionTokenRows(reply);
+  if (rows.length === 0 && links.length === 0 && reply.photoUrl === undefined)
     return reply.text;
   return Card({
     children: [
@@ -186,19 +192,17 @@ export const renderClientTelegramReply = (
               ),
             ),
           ]),
-      ...(reply.actionTokens.length === 0
-        ? []
-        : [
-            Actions(
-              reply.actionTokens.map((action) =>
-                Button({
-                  id: action.token,
-                  label: action.label,
-                  style: actionButtonStyle(action.action),
-                }),
-              ),
-            ),
-          ]),
+      ...rows.map((row) =>
+        Actions(
+          row.map((action) =>
+            Button({
+              id: action.token,
+              label: action.label,
+              style: actionButtonStyle(action.action),
+            }),
+          ),
+        ),
+      ),
     ],
   });
 };
@@ -316,6 +320,8 @@ export const renderPreviewReadyNotice = (
   input: Readonly<{
     includeRevision?: boolean;
     locale: SupportedLocale;
+    photoUrl?: string;
+    text?: string;
     title: string;
     tokens: Readonly<{ approve: string; cancel: string; revise?: string }>;
     urls: Readonly<Record<string, string>>;
@@ -346,11 +352,43 @@ export const renderPreviewReadyNotice = (
       duplicate: false,
       locale: input.locale,
       requestId: null,
-      text: `${copy.ready} ${input.title}.`,
+      text: input.text ?? `${copy.ready} ${input.title}.`,
+      ...(input.photoUrl === undefined ? {} : { photoUrl: input.photoUrl }),
     },
     previewUrlButtons(input.urls, input.locale),
   );
 };
+
+const themeImageApprovalCopy: Record<
+  SupportedLocale,
+  (slot: string) => string
+> = {
+  de: (slot) =>
+    `Bereit zur Freigabe: Bild **${slot}**. Die Vorschau im Shop zeigt den Wechsel noch nicht — nach Admin-Freigabe und Merge siehst du ihn live. Freigeben oder Abbrechen.`,
+  en: (slot) =>
+    `Ready to approve: image **${slot}**. The storefront does not show this change yet — it goes live after admin approval and merge. Approve or Cancel.`,
+  es: (slot) =>
+    `Listo para aprobar: imagen **${slot}**. La tienda aún no muestra el cambio — se verá en vivo tras la aprobación admin y el merge. Aprobar o Cancelar.`,
+};
+
+/** Shopify theme image: Approve/Cancel only — no fake preview/PR link buttons. */
+export const renderThemeImageApprovalNotice = (
+  input: Readonly<{
+    locale: SupportedLocale;
+    photoUrl?: string;
+    slotLabel: string;
+    tokens: Readonly<{ approve: string; cancel: string }>;
+  }>,
+): AdapterPostableMessage =>
+  renderPreviewReadyNotice({
+    includeRevision: false,
+    locale: input.locale,
+    text: themeImageApprovalCopy[input.locale](input.slotLabel),
+    title: input.slotLabel,
+    tokens: input.tokens,
+    urls: {},
+    ...(input.photoUrl === undefined ? {} : { photoUrl: input.photoUrl }),
+  });
 
 const deleteAdminPendingCopy: Record<
   'blog' | 'portfolio',

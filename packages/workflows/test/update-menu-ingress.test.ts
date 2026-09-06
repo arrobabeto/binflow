@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest';
 import { selectAllMenuCtaKeys, toggleMenuCtaSelection } from '@binflow/menu';
 
 import {
+  buildUpdateMenuSelectionActionRows,
   buildUpdateMenuSelectionActionSpecs,
   buildUpdateMenuSelectionMessage,
   updateMenuActionLabels,
@@ -93,11 +94,26 @@ describe('update menu opt-in selection UX', () => {
       'confirm_menu_selection',
       'cancel',
     ]);
-    expect(specs[0]?.label).toBe('Speisekarte · /bistro');
+    expect(specs[0]?.label).toBe('Speisekarte');
     expect(specs[0]?.label.startsWith('✓')).toBe(false);
+    expect(specs[0]?.label).not.toContain('/bistro');
     expect(specs[2]?.label).toBe('Seleccionar todos');
     expect(specs[3]?.label).toBe('Continuar');
     expect(specs[4]?.label).toBe('Cancelar');
+  });
+
+  it('stacks one CTA per row then Select all then Continuar|Cancel', () => {
+    const rows = buildUpdateMenuSelectionActionRows('es', sampleCtas, []);
+    expect(rows).toHaveLength(4);
+    expect(rows[0]?.map((spec) => spec.action)).toEqual(['toggle_menu_cta']);
+    expect(rows[1]?.map((spec) => spec.action)).toEqual(['toggle_menu_cta']);
+    expect(rows[2]?.map((spec) => spec.action)).toEqual(['select_all_menu_ctas']);
+    expect(rows[3]?.map((spec) => spec.action)).toEqual([
+      'confirm_menu_selection',
+      'cancel',
+    ]);
+    expect(rows[0]?.[0]?.label).toBe('Speisekarte');
+    expect(rows[3]?.map((spec) => spec.label)).toEqual(['Continuar', 'Cancelar']);
   });
 
   it('shows checks on toggles after select-all keys', () => {

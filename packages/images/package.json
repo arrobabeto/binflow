@@ -19,7 +19,8 @@
     "@binflow/blog": "workspace:*",
     "@binflow/contracts": "workspace:*",
     "@binflow/domain": "workspace:*",
-    "@binflow/menu": "workspace:*"
+    "@binflow/menu": "workspace:*",
+    "yaml": "2.8.2"
   },
   "devDependencies": {
     "@types/node": "24.13.3"

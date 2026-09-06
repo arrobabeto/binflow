@@ -223,6 +223,30 @@ export const clientToolCatalog: readonly ClientToolCatalogEntry[] =
       },
     ),
     entry(
+      'edit_image_shopify',
+      '/edit_image',
+      {
+        de: 'Theme-Bild ersetzen',
+        en: 'Replace theme image',
+        es: 'Cambiar imagen del theme',
+      },
+      {
+        de: 'Ersetzt ein inventarisiertes Theme-Bild per GitHub-PR und Preview-Link.',
+        en: 'Replaces an inventory theme image via GitHub PR and preview link.',
+        es: 'Reemplaza una imagen del inventory del theme vía PR de GitHub y link de preview.',
+      },
+      {
+        de: 'Starte mit /edit_image oder schreibe „Bild ändern …“.',
+        en: 'Start with /edit_image or say “change image …”.',
+        es: 'Empieza con /edit_image o di “cambiar imagen …”.',
+      },
+      {
+        de: 'Was es macht: Findet einen Inventory-Bildplatz (bf_id), nimmt Ersatzfoto/URL, öffnet PR + Storefront-Preview, Freigaben.\nWas es nicht macht: Shopify Admin, Vercel, Logos.\nGrenzen: ein Slot pro Anfrage; Inventory erforderlich.\nBeispiel: „Ändere das Hero-Bild“',
+        en: 'What it does: Finds an inventory image slot (bf_id), takes a replacement photo/URL, opens PR + storefront preview, approvals.\nWhat it does not do: Shopify Admin, Vercel, logos.\nLimits: one slot per request; inventory required.\nExample: “Change the hero image”',
+        es: 'Qué hace: Encuentra un hueco del inventory (bf_id), recibe foto/URL, abre PR + preview de tienda, aprobaciones.\nQué no hace: Shopify Admin, Vercel, logos.\nLímites: un hueco por solicitud; inventory obligatorio.\nEjemplo: “Cambia la imagen del hero”',
+      },
+    ),
+    entry(
       'update_menu',
       '/update_menu',
       {

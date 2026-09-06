@@ -21,6 +21,7 @@ import {
   formatUsdFromCents,
   type AnalyticsDateRange,
 } from '../lib/analytics-metrics';
+import { visibleDashboardEnrollments } from '../lib/hidden-clients';
 import {
   formatApproximateCount,
   type ApproximateCount,
@@ -130,7 +131,10 @@ const spendByProject = computed(() => {
 });
 
 const clientRows = computed(() =>
-  buildClientCostRows(enrollments.value?.items ?? [], spendByProject.value),
+  buildClientCostRows(
+    visibleDashboardEnrollments(enrollments.value?.items ?? []),
+    spendByProject.value,
+  ),
 );
 
 const { data: graphs, status: graphsStatus } = await useAsyncData(

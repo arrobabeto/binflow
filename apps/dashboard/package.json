@@ -6,7 +6,7 @@
   "scripts": {
     "build": "nuxt build",
     "check": "nuxt prepare",
-    "dev": "nuxt dev --host 0.0.0.0",
+    "dev": "nuxt dev --host 0.0.0.0 --port 6060",
     "lint": "nuxt prepare && eslint app server --max-warnings=0",
     "start": "node .output/server/index.mjs",
     "test": "vitest run"

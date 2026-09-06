@@ -43,6 +43,21 @@ A change is complete only when:
 
 Documentation may not be deferred to a follow-up issue or PR.
 
+## Client site builds (Editable Surface)
+
+When an agent or engineer builds a **new** storefront or theme intended for
+Binflow (before `/new-stack` or the first content tool):
+
+1. Read [Editable Surface Contract](guides/editable-surface-contract.md)
+   (ADR-0058).
+2. Ship `binflow/surface-inventory.yaml` plus `data-bf-*` markers for declared
+   surfaces.
+3. Use a project brief when one exists (e.g.
+   [Shopify beverage theme](briefs/shopify-beverage-theme-agent-brief.md)).
+
+Do not invent parallel tag systems. Existing pilots without an inventory remain
+valid (grandfathered).
+
 ## Agent skills (repo)
 
 | Skill | Role |

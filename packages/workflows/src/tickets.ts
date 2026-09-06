@@ -148,9 +148,11 @@ export class TicketService {
             adminNotes: '',
             body: parsed.body,
             category: parsed.category ?? null,
+            clientActorRole: parsed.clientActorRole ?? 'owner',
             createdAt: now,
             excerpt,
             id,
+            openerUserId: parsed.openerUserId ?? null,
             priority: parsed.priority ?? null,
             projectId: project.projectId,
             publicId: publicIdFor(id),
@@ -168,12 +170,16 @@ export class TicketService {
             { code: 'ticket_create_failed' },
           );
         await database.insert(schema.ticketActivities).values({
-          actorType: 'system',
+          actorType:
+            parsed.clientActorRole === 'piloter' ? 'client' : 'system',
           createdAt: now,
           id: uuidv7(),
           kind: 'created',
           projectId: row.projectId,
-          summary: 'Ticket created.',
+          summary:
+            parsed.clientActorRole === 'piloter'
+              ? 'Ticket created by Piloter.'
+              : 'Ticket created.',
           tenantId: row.tenantId,
           ticketId: row.id,
         });
@@ -651,10 +657,18 @@ export class TicketService {
         eq(schema.projects.id, schema.tickets.projectId),
       )
       .leftJoin(
+        schema.clientUsers,
+        and(
+          eq(schema.clientUsers.tenantId, schema.tickets.tenantId),
+          eq(schema.clientUsers.projectId, schema.tickets.projectId),
+          eq(schema.clientUsers.kind, 'owner'),
+          eq(schema.clientUsers.status, 'active'),
+        ),
+      )
+      .leftJoin(
         schema.channelIdentities,
         and(
-          eq(schema.channelIdentities.tenantId, schema.tickets.tenantId),
-          eq(schema.channelIdentities.projectId, schema.tickets.projectId),
+          eq(schema.channelIdentities.userId, schema.clientUsers.id),
           eq(schema.channelIdentities.status, 'active'),
         ),
       )
@@ -691,6 +705,14 @@ export class TicketService {
     const [row] = await database
       .select({ botCredentialId: schema.channelIdentities.botCredentialId })
       .from(schema.channelIdentities)
+      .innerJoin(
+        schema.clientUsers,
+        and(
+          eq(schema.clientUsers.id, schema.channelIdentities.userId),
+          eq(schema.clientUsers.kind, 'owner'),
+          eq(schema.clientUsers.status, 'active'),
+        ),
+      )
       .where(
         and(
           eq(schema.channelIdentities.tenantId, tenantId),

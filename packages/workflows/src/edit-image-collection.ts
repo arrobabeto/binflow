@@ -17,7 +17,7 @@ import {
   type OrbitypePostSnapshot,
 } from '@binflow/images';
 import type { OrbitypePageSnapshot } from '@binflow/menu';
-import { editImageDefinition } from '@binflow/policies';
+import { editImageDefinition, editImageShopifyDefinition } from '@binflow/policies';
 import { and, desc, eq, inArray } from 'drizzle-orm';
 
 import {
@@ -36,6 +36,27 @@ import {
   resolveEditImageProductionOrigin,
 } from './edit-image-ingress.js';
 
+export type EditImageCapabilityId = 'edit_image' | 'edit_image_shopify';
+
+const definitionForCapability = (capabilityId: EditImageCapabilityId) =>
+  capabilityId === 'edit_image_shopify'
+    ? editImageShopifyDefinition
+    : editImageDefinition;
+
+const searchThemeTargets = (
+  targets: readonly ImageEditCandidate[],
+  query: string,
+): readonly ImageEditCandidate[] => {
+  const needle = query.trim().toLowerCase();
+  if (needle.length === 0) return [];
+  return targets.filter((target) =>
+    [target.key, target.label, target.pageOrPostSlug, target.pageOrPostTitle, target.currentPath]
+      .join(' ')
+      .toLowerCase()
+      .includes(needle),
+  );
+};
+
 export type EditImageContentLoader = (input: Readonly<{
   database: ScopedDatabase;
   manifest: ProjectManifest;
@@ -44,6 +65,8 @@ export type EditImageContentLoader = (input: Readonly<{
 }>) => Promise<{
   pages: readonly OrbitypePageSnapshot[];
   posts: readonly OrbitypePostSnapshot[];
+  /** When set (Shopify inventory), search uses these instead of Orbitype pages/posts. */
+  themeTargets?: readonly ImageEditCandidate[];
 }>;
 
 export type PersistReplacementImage = (input: Readonly<{
@@ -52,7 +75,9 @@ export type PersistReplacementImage = (input: Readonly<{
 }>) => Promise<string>;
 
 type ResolvedIdentity = Readonly<{
+  clientActorRole: 'owner' | 'piloter';
   conversationId: string;
+  enrollmentId: string;
   locale: SupportedLocale;
   projectId: string;
   tenantId: string;
@@ -117,7 +142,11 @@ const persistCollectionVersion = async (input: Readonly<{
     .set({ currentVersion: nextVersion, state: 'NEEDS_INPUT' })
     .where(eq(schema.requests.id, input.request.id));
   await input.database.insert(schema.requestVersions).values({
-    capabilityVersion: editImageDefinition.version,
+    capabilityVersion: definitionForCapability(
+      (input.request.capabilityId === 'edit_image_shopify'
+        ? 'edit_image_shopify'
+        : 'edit_image') as EditImageCapabilityId,
+    ).version,
     id: requestVersionId,
     interpretedInput: input.interpretedInput as CapabilityInput,
     manifestVersionId: input.version.manifestVersionId,
@@ -265,6 +294,7 @@ const photoUrlForCandidate = (
 };
 
 export const createEditImageRequest = async (input: Readonly<{
+  capabilityId?: EditImageCapabilityId;
   createAction: CreateActionFn;
   database: ScopedDatabase;
   hasCapability: HasCapabilityFn;
@@ -273,11 +303,13 @@ export const createEditImageRequest = async (input: Readonly<{
   loadContent?: EditImageContentLoader;
   reply: ReplyFn;
 }>): Promise<TelegramReply> => {
+  const capabilityId = input.capabilityId ?? 'edit_image';
+  const definition = definitionForCapability(capabilityId);
   if (
     !(await input.hasCapability(
       input.database,
       input.identity.projectId,
-      'edit_image',
+      capabilityId,
     ))
   )
     return input.reply(
@@ -315,7 +347,8 @@ export const createEditImageRequest = async (input: Readonly<{
     projectId: input.identity.projectId,
   });
   await input.database.insert(schema.requests).values({
-    capabilityId: 'edit_image',
+    capabilityId,
+    clientActorRole: input.identity.clientActorRole,
     conversationId: input.identity.conversationId,
     currentVersion: 1,
     id: requestId,
@@ -326,7 +359,7 @@ export const createEditImageRequest = async (input: Readonly<{
     userId: input.identity.userId,
   });
   await input.database.insert(schema.requestVersions).values({
-    capabilityVersion: editImageDefinition.version,
+    capabilityVersion: definition.version,
     id: requestVersionId,
     interpretedInput,
     manifestVersionId: manifestRow.id,
@@ -488,12 +521,15 @@ export const continueEditImageCollection = async (input: Readonly<{
         editImageGuidance[input.identity.locale],
         input.request.id,
       );
-    const matches = searchEditableImages(
-      content.pages,
-      content.posts,
-      manifestRow.document.contentLocales,
-      query,
-    );
+    const matches =
+      content.themeTargets !== undefined
+        ? searchThemeTargets(content.themeTargets, query)
+        : searchEditableImages(
+            content.pages,
+            content.posts,
+            manifestRow.document.contentLocales,
+            query,
+          );
     if (matches.length === 0)
       return input.reply(
         input.identity.locale,
@@ -683,12 +719,16 @@ const finishReplacementPlan = async (input: Readonly<{
   const target =
     input.previous.targetKey === undefined
       ? null
-      : resolveImageEditCandidate(
-          content.pages,
-          content.posts,
-          input.manifest.contentLocales,
-          input.previous.targetKey,
-        );
+      : content.themeTargets !== undefined
+        ? (content.themeTargets.find(
+            (entry) => entry.key === input.previous.targetKey,
+          ) ?? null)
+        : resolveImageEditCandidate(
+            content.pages,
+            content.posts,
+            input.manifest.contentLocales,
+            input.previous.targetKey,
+          );
   if (target === null)
     return input.reply(
       input.identity.locale,
@@ -899,7 +939,11 @@ export const consumeEditImagePlanConfirm = async (input: Readonly<{
     })
     .where(eq(schema.requests.id, input.request.id));
   await input.database.insert(schema.requestVersions).values({
-    capabilityVersion: editImageDefinition.version,
+    capabilityVersion: definitionForCapability(
+      (input.request.capabilityId === 'edit_image_shopify'
+        ? 'edit_image_shopify'
+        : 'edit_image') as EditImageCapabilityId,
+    ).version,
     confirmedAt: now,
     id: requestVersionId,
     interpretedInput: executeInput as CapabilityInput,

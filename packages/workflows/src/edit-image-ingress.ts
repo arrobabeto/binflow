@@ -12,6 +12,8 @@ export const editImageActionLabels = {
     cancel: 'Abbrechen',
     confirmPlan: 'Bild veröffentlichen',
     confirmTarget: 'Bild bestätigen',
+    deepSearch: 'Tiefe Suche',
+    pickPage: 'Seite',
     pickTarget: 'Auswählen',
     rejectTarget: 'Nicht dieses',
   },
@@ -20,6 +22,8 @@ export const editImageActionLabels = {
     cancel: 'Cancel',
     confirmPlan: 'Publish image',
     confirmTarget: 'Confirm image',
+    deepSearch: 'Deep search',
+    pickPage: 'Page',
     pickTarget: 'Select',
     rejectTarget: 'Not this one',
   },
@@ -28,6 +32,8 @@ export const editImageActionLabels = {
     cancel: 'Cancelar',
     confirmPlan: 'Publicar imagen',
     confirmTarget: 'Confirmar imagen',
+    deepSearch: 'Búsqueda profunda',
+    pickPage: 'Página',
     pickTarget: 'Elegir',
     rejectTarget: 'No es esta',
   },
@@ -50,6 +56,41 @@ export const editImageTargetNotFoundMessage = {
   en: 'No editable image found. Try a longer fragment or the page title.',
   es: 'No encontramos imagen editable. Prueba con un fragmento más largo o el título.',
 } as const;
+
+export const editImageBrowsePagesMessage = {
+  de: 'Kein Treffer im Inventory. Wähle eine **Seite**, starte **Tiefe Suche** (Inventory neu scannen) oder Abbrechen.',
+  en: 'No match in inventory. Pick a **page**, run **Deep search** (rescan inventory), or Cancel.',
+  es: 'Sin coincidencia en el inventory. Elige una **página**, lanza **Búsqueda profunda** (reescanea el inventory) o Cancelar.',
+} as const;
+
+export const editImageDeepSearchEmptyInventoryMessage = {
+  de: 'Kein Inventory-Bild gefunden. Starte **Tiefe Suche** oder Abbrechen.',
+  en: 'No inventory images found. Run **Deep search** or Cancel.',
+  es: 'No hay imágenes en el inventory. Lanza **Búsqueda profunda** o Cancelar.',
+} as const;
+
+export const editImageDeepSearchRunningMessage = {
+  de: 'Tiefe Suche läuft: Inventory wird aus dem Theme neu aufgebaut…',
+  en: 'Deep search running: rebuilding inventory from the theme…',
+  es: 'Búsqueda profunda en curso: reconstruyendo el inventory desde el tema…',
+} as const;
+
+export const editImageDeepSearchFailedMessage = {
+  de: 'Tiefe Suche fehlgeschlagen. Versuche es später erneut oder nenne einen anderen Ausschnitt.',
+  en: 'Deep search failed. Try again later or send a different fragment.',
+  es: 'La búsqueda profunda falló. Inténtalo más tarde o envía otro fragmento.',
+} as const;
+
+export const editImageBrowsePageEmptyMessage = {
+  de: 'Auf dieser Seite gibt es keine bearbeitbaren Bilder. Wähle eine andere Seite.',
+  en: 'No editable images on that page. Pick another page.',
+  es: 'No hay imágenes editables en esa página. Elige otra.',
+} as const;
+
+export const formatEditImagePageLabel = (
+  locale: SupportedLocale,
+  area: string,
+): string => `${editImageActionLabels[locale].pickPage}: ${area}`;
 
 export const editImageEmptyReplacementMessage = {
   de: 'Sende ein Foto oder eine gültige HTTPS-Bild-URL.',
@@ -168,3 +209,14 @@ export const formatEditImagePickLabel = (
   const prefix = editImageActionLabels[locale].pickTarget;
   return `${prefix} ${index + 1}: ${candidate.pageOrPostTitle}`;
 };
+
+/**
+ * One pick button per Telegram keyboard row so labels stay readable
+ * (Shopify `edit_image_shopify` disambiguation; same pattern as update_menu).
+ */
+export const buildEditImagePickActionRows = <
+  T extends Readonly<{ action: string; label: string; token: string }>,
+>(
+  tokens: readonly T[],
+): T[][] => tokens.map((token) => [token]);
+

@@ -1,0 +1,4 @@
+kind: compute
+label: Record theme preview URL
+nodeKind: images.record_theme_preview@1
+acceptsClientCustomization: false

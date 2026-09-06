@@ -25,7 +25,13 @@ This directory is the canonical specification for Binflow. Documents describe cu
 
 ## Guides
 
+- [Editable Surface Contract](guides/editable-surface-contract.md) — site-first `bf_id`, field kinds, Surface Inventory, and markers for Binflow-intended sites (ADR-0058)
+- [Surface inventory sync](guides/surface-inventory-sync.md) — push gate + remap / deep search freshness (ADR-0061)
 - [Astro Orbitype tool implementation](guides/astro-orbitype-tool-implementation.md) — stack contracts, ports, manifest freeze, ops gates, failure appendix for `astro_orbitype` capabilities
+
+## Briefs
+
+- [Shopify beverage theme agent brief](briefs/shopify-beverage-theme-agent-brief.md) — paste-ready instructions for a Home + blog Liquid theme that ships a Surface Inventory
 
 ## Governance
 
@@ -58,6 +64,7 @@ This directory is the canonical specification for Binflow. Documents describe cu
 | Runtime, deployment and recovery                | `OPERATIONS.md`    |
 | Coding and delivery standards                   | `DEVELOPMENT.md`   |
 | Delivery phases                                 | `ROADMAP.md`       |
+| Site-first editable content vocabulary          | `guides/editable-surface-contract.md` |
 | Architectural decisions                         | `adr/`             |
 
 When documents conflict, an accepted ADR wins for the decision it owns; otherwise the more specific canonical document wins. Resolve contradictions immediately rather than relying on tribal knowledge.

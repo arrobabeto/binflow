@@ -1,10 +1,16 @@
 <script setup lang="ts">
 import type { Enrollment } from '@binflow/contracts';
 
+import { visibleDashboardEnrollments } from '../../lib/hidden-clients';
+
 const { data, refresh, status } = await useFetch<{
   items: Enrollment[];
   nextCursor: string | null;
 }>('/api/v1/admin/enrollments');
+
+const visibleItems = computed(() =>
+  visibleDashboardEnrollments(data.value?.items ?? []),
+);
 
 const stateColor = (
   state: Enrollment['state'],
@@ -47,14 +53,14 @@ const stateColor = (
       </template>
     </PageHeader>
     <div class="grid gap-4">
-      <UCard v-if="data?.items.length === 0" class="binflow-surface !ring-0">
+      <UCard v-if="visibleItems.length === 0" class="binflow-surface !ring-0">
         <p class="font-medium text-white">No clients yet</p>
         <p class="mt-1 text-sm text-muted">
           Create the first enrollment or adopt the existing Phase 0 scope.
         </p>
       </UCard>
       <UCard
-        v-for="item in data?.items ?? []"
+        v-for="item in visibleItems"
         :key="item.id"
         class="binflow-surface !ring-0"
       >

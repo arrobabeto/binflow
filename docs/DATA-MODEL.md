@@ -39,11 +39,16 @@ sessions from gaining assurance retroactively.
 
 ### `memberships`
 
-Tenant/project role and status. First MVP permits one client membership per enrollment plus platform owners.
+Tenant/project role and status. First MVP permits one primary **owner** client
+membership per enrollment, optionally one **Piloter** membership on the same
+enrollment (ADR-0057), plus platform owners.
 
 ### `channel_identities`
 
 Provider, external numeric user ID, user ID, tenant ID, verification state and last-seen timestamp.
+When a Piloter is paired, two active client identities may exist for the same
+tenant/project/bot; delivery and authorization select by `userId` / role, not
+an arbitrary project row (ADR-0057).
 
 ### `telegram_bot_integrations`
 
@@ -51,10 +56,17 @@ Role (`admin` or `client`), tenant, bot username, secret references, webhook/pol
 
 ### `pairing_tokens`
 
-Hashed token, tenant/user/bot binding, expiry, consumed timestamp and creator.
+Hashed token, tenant/user/bot binding, role (owner vs Piloter), expiry, consumed timestamp and creator.
 
 Migration `0013` adds explicit client-user and bot-credential binding. Tokens
 created before those bindings exist are revoked and must be regenerated.
+
+### `piloter_capability_bindings` (target)
+
+Allowlisted subset of project-enabled capability ids for the enrollment’s
+Piloter. Removing an id blocks **new** Piloter starts for that tool; in-flight
+requests may complete (ADR-0057). Exact table/column names land with the
+implementation migration.
 
 ## Command, audit and delivery foundation
 
@@ -149,7 +161,9 @@ the enrollment manifest state machine.
 Admin queue for out-of-catalog client asks (ADR-0055). `tickets` is
 tenant/project-scoped with public id (`TKT-…`), title, excerpt, body, state
 (`new` | `in_process` | `declined` | `closed`), optional priority/category,
-nullable `read_at`, admin notes, optimistic revision, and timestamps. Composite
+nullable `read_at`, admin notes, optimistic revision, and timestamps. Durable
+**opener** attribution records Owner | Piloter (and linked `userId`) when the
+ticket is created from Telegram (ADR-0057). Composite
 FK `(project_id, tenant_id)` and platform-owner RLS match other admin entities.
 `ticket_activities` is append-only: kind, summary, actor type, created at.
 Telegram ingest is not yet a writer; service `createTicket` inserts for tests
@@ -207,7 +221,10 @@ external_user_id)` are unique replay and isolation boundaries.
 
 ### `requests`
 
-Stable user intention, capability, current state/version, tenant/project/user and terminal result.
+Stable user intention, capability, current state/version, tenant/project/user and
+terminal result. When a Piloter is present, `userId` identifies the acting
+paired identity; durable actor role Owner | Piloter is recorded for audit and
+dashboard (ADR-0057).
 
 ### `request_versions`
 

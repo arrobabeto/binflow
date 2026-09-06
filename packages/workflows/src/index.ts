@@ -135,6 +135,21 @@ import {
   type PersistReplacementImage,
 } from './edit-image-collection.js';
 import {
+  continueEditImageShopifyCollection,
+  continueEditImageShopifyCollectionWithAttachment,
+  consumeEditImageShopifyBrowseCancel,
+  consumeEditImageShopifyDeepSearch,
+  consumeEditImageShopifyPagePick,
+  consumeEditImageShopifyPlanConfirm,
+  consumeEditImageShopifyTargetConfirm,
+  consumeEditImageShopifyTargetPick,
+  consumeEditImageShopifyTargetReject,
+  createEditImageShopifyRequest,
+  type ThemeAssetPreviewUrlResolver,
+  type ThemeImageInventoryLoader,
+  type ThemeInventoryRemapRunner,
+} from './edit-image-shopify-collection.js';
+import {
   formatInfoChooserMessage,
   formatInfoDetailMessage,
   formatInfoMissMessage,
@@ -159,6 +174,7 @@ import {
   type TicketEstimatePort,
 } from './open-ticket.js';
 import { TicketService } from './tickets.js';
+import { enqueuePiloterOwnerSuccessNotice } from './piloter-owner-notice.js';
 
 export * from './blog-runtime.js';
 export * from './client-tool-catalog.js';
@@ -168,10 +184,12 @@ export * from './delete-blog-catalog.js';
 export * from './delete-blog-runtime.js';
 export * from './delete-project-runtime.js';
 export * from './edit-image-collection.js';
+export * from './edit-image-shopify-collection.js';
 export * from './edit-image-ingress.js';
 export * from './edit-text-style-collection.js';
 export * from './edit-text-style-ingress.js';
 export * from './image-runtime.js';
+export * from './theme-image-runtime.js';
 export * from './menu-runtime.js';
 export * from './project-runtime.js';
 export * from './text-runtime.js';
@@ -194,6 +212,11 @@ export {
   updateMenuNaturalLanguage,
 } from './capability-ingress.js';
 export type { EditImageContentLoader } from './edit-image-collection.js';
+export type {
+  ThemeAssetPreviewUrlResolver,
+  ThemeImageInventoryLoader,
+  ThemeInventoryRemapRunner,
+} from './edit-image-shopify-collection.js';
 export type { EditTextPagesLoader } from './edit-text-collection.js';
 export type { UpdateMenuPagesLoader } from './update-menu-collection.js';
 export {
@@ -221,14 +244,26 @@ const SHARED_CLIENT_ACTIVATION_CHECKS = [
 
 const clientActivationChecksForProfile = (
   profile: string,
-): readonly string[] =>
-  profile === 'astro_orbitype'
-    ? [
-        ...SHARED_CLIENT_ACTIVATION_CHECKS.slice(0, 6),
-        'orbitype_api_credential',
-        ...SHARED_CLIENT_ACTIVATION_CHECKS.slice(6),
-      ]
-    : SHARED_CLIENT_ACTIVATION_CHECKS;
+): readonly string[] => {
+  if (profile === 'shopify_liquid')
+    return [
+      'configuration',
+      'openai_credential',
+      'telegram_admin_credential',
+      'telegram_client_credential',
+      'github_app_binding',
+      'project_manifest',
+      'capability_catalog',
+      'client_pairing',
+    ];
+  if (profile === 'astro_orbitype')
+    return [
+      ...SHARED_CLIENT_ACTIVATION_CHECKS.slice(0, 6),
+      'orbitype_api_credential',
+      ...SHARED_CLIENT_ACTIVATION_CHECKS.slice(6),
+    ];
+  return SHARED_CLIENT_ACTIVATION_CHECKS;
+};
 const TERMINAL_STATES = [
   'COMPLETED',
   'FAILED_FINAL',
@@ -485,7 +520,9 @@ const digest = (value: string): string =>
 const actionToken = (): string => randomBytes(32).toString('base64url');
 
 type ResolvedIdentity = Readonly<{
+  clientActorRole: 'owner' | 'piloter';
   conversationId: string;
+  enrollmentId: string;
   locale: SupportedLocale;
   projectId: string;
   tenantId: string;
@@ -553,6 +590,9 @@ export class WorkflowService {
     private readonly updateMenuPagesLoader?: UpdateMenuPagesLoader,
     private readonly editImageContentLoader?: EditImageContentLoader,
     private readonly persistReplacementImage?: PersistReplacementImage,
+    private readonly themeImageInventoryLoader?: ThemeImageInventoryLoader,
+    private readonly themeInventoryRemapRunner?: ThemeInventoryRemapRunner,
+    private readonly themeAssetPreviewUrlResolver?: ThemeAssetPreviewUrlResolver,
     private readonly ticketEstimate: TicketEstimatePort = async (input) =>
       fallbackTicketEstimate(input),
   ) {}
@@ -1615,10 +1655,24 @@ export class WorkflowService {
             'conflict_error',
             'Revision targets a stale or ineligible request.',
           );
+        const [actorUser] = await database
+          .select({
+            enrollmentId: schema.clientUsers.enrollmentId,
+            kind: schema.clientUsers.kind,
+          })
+          .from(schema.clientUsers)
+          .where(eq(schema.clientUsers.id, request.userId))
+          .limit(1);
         await this.reviseRequest(
           database,
           {
+            clientActorRole:
+              actorUser?.kind === 'piloter' ||
+              request.clientActorRole === 'piloter'
+                ? 'piloter'
+                : 'owner',
             conversationId: request.conversationId,
+            enrollmentId: actorUser?.enrollmentId ?? '',
             locale: 'en',
             projectId: request.projectId,
             tenantId: request.tenantId,
@@ -1723,7 +1777,10 @@ export class WorkflowService {
       .limit(1);
     const locale =
       enrollment?.configuration.clientConversationLocale ?? ('en' as const);
-    if (enrollment?.state !== 'pairing_pending')
+    const purpose = pairing.purpose === 'piloter' ? 'piloter' : 'owner';
+    if (purpose === 'owner' && enrollment?.state !== 'pairing_pending')
+      return this.reply(locale, copy[locale].accessDenied, null);
+    if (purpose === 'piloter' && enrollment?.state !== 'active')
       return this.reply(locale, copy[locale].accessDenied, null);
 
     const consumed = await database
@@ -1783,25 +1840,27 @@ export class WorkflowService {
       receivedAt: new Date(update.receivedAt),
       tenantId: pairing.tenantId,
     });
-    await database.insert(schema.enrollmentValidationAttempts).values({
-      checkName: 'client_pairing',
-      checkVersion: 1,
-      checkedAt: now,
-      dependencyFingerprint: digest(`${bot.id}:${pairing.userId}`),
-      enrollmentId: pairing.enrollmentId,
-      evidence: { botId: update.botId, paired: true },
-      id: uuidv7(),
-      projectId: pairing.projectId,
-      result: 'success',
-      tenantId: pairing.tenantId,
-    });
+    if (purpose === 'owner') {
+      await database.insert(schema.enrollmentValidationAttempts).values({
+        checkName: 'client_pairing',
+        checkVersion: 1,
+        checkedAt: now,
+        dependencyFingerprint: digest(`${bot.id}:${pairing.userId}`),
+        enrollmentId: pairing.enrollmentId,
+        evidence: { botId: update.botId, paired: true },
+        id: uuidv7(),
+        projectId: pairing.projectId,
+        result: 'success',
+        tenantId: pairing.tenantId,
+      });
+    }
     await database.insert(schema.auditEvents).values({
-      action: 'client.paired',
+      action: purpose === 'piloter' ? 'piloter.paired' : 'client.paired',
       actorId: pairing.userId,
       actorType: 'telegram_client',
       correlationId: `telegram:${update.botId}:${update.updateId}`,
       id: uuidv7(),
-      metadata: { botId: update.botId },
+      metadata: { botId: update.botId, purpose },
       objectId: pairing.userId,
       objectType: 'client_user',
       projectId: pairing.projectId,
@@ -1818,11 +1877,17 @@ export class WorkflowService {
       .select({
         identity: schema.channelIdentities,
         conversation: schema.conversations,
+        kind: schema.clientUsers.kind,
+        enrollmentId: schema.clientUsers.enrollmentId,
       })
       .from(schema.channelIdentities)
       .innerJoin(
         schema.conversations,
         eq(schema.conversations.channelIdentityId, schema.channelIdentities.id),
+      )
+      .innerJoin(
+        schema.clientUsers,
+        eq(schema.clientUsers.id, schema.channelIdentities.userId),
       )
       .where(
         and(
@@ -1835,7 +1900,9 @@ export class WorkflowService {
       .limit(1);
     if (row === undefined) return undefined;
     return {
+      clientActorRole: row.kind === 'piloter' ? 'piloter' : 'owner',
       conversationId: row.conversation.id,
+      enrollmentId: row.enrollmentId,
       locale: row.conversation.locale,
       projectId: row.identity.projectId,
       tenantId: row.identity.tenantId,
@@ -1861,6 +1928,7 @@ export class WorkflowService {
       const enabled = await this.listEnabledCapabilities(
         database,
         identity.projectId,
+        identity,
       );
       if (enabled.length === 0)
         return this.reply(identity.locale, localeCopy.accessDenied, null);
@@ -1875,6 +1943,7 @@ export class WorkflowService {
       const enabled = await this.listEnabledCapabilities(
         database,
         identity.projectId,
+        identity,
       );
       if (enabled.length === 0)
         return this.reply(identity.locale, localeCopy.accessDenied, null);
@@ -2036,6 +2105,48 @@ export class WorkflowService {
           text: text.trim(),
           version: await this.currentRequestVersion(database, latestCollecting),
         });
+      if (latestCollecting.capabilityId === 'edit_image_shopify') {
+        const version = await this.currentRequestVersion(
+          database,
+          latestCollecting,
+        );
+        const loadInventory = (args: Parameters<ThemeImageInventoryLoader>[0]) =>
+          this.loadThemeImageInventory(
+            args.database,
+            args.manifest,
+            args.projectId,
+            args.tenantId,
+          );
+        if (imageArtifactKey !== undefined)
+          return continueEditImageShopifyCollectionWithAttachment({
+            createAction: (db, request, requestVersionId, userId, action) =>
+              this.createAction(db, request, requestVersionId, userId, action),
+            database,
+            identity,
+            imageArtifactKey,
+            loadInventory,
+            reply: this.reply.bind(this),
+            request: latestCollecting,
+            version,
+          });
+        return continueEditImageShopifyCollection({
+          createAction: (db, request, requestVersionId, userId, action) =>
+            this.createAction(db, request, requestVersionId, userId, action),
+          database,
+          identity,
+          loadInventory,
+          ...(this.persistReplacementImage === undefined
+            ? {}
+            : { persistReplacementImage: this.persistReplacementImage }),
+          ...(this.themeAssetPreviewUrlResolver === undefined
+            ? {}
+            : { resolvePreviewUrl: this.themeAssetPreviewUrlResolver }),
+          reply: this.reply.bind(this),
+          request: latestCollecting,
+          text: text.trim(),
+          version,
+        });
+      }
       if (latestCollecting.capabilityId === 'edit_image') {
         const version = await this.currentRequestVersion(
           database,
@@ -2127,6 +2238,9 @@ export class WorkflowService {
     const editImageRoute = capabilityIngressRoutes.find(
       (route) => route.handlerKind === 'edit_image',
     );
+    const editImageShopifyRoute = capabilityIngressRoutes.find(
+      (route) => route.handlerKind === 'edit_image_shopify',
+    );
     const deleteBlogCommand =
       deleteBlogRoute === undefined
         ? null
@@ -2156,9 +2270,9 @@ export class WorkflowService {
         ? null
         : editTextStyleRoute.commandPattern.exec(text);
     const editImageCommand =
-      editImageRoute === undefined
+      editImageRoute === undefined && editImageShopifyRoute === undefined
         ? null
-        : editImageRoute.commandPattern.exec(text);
+        : (editImageRoute ?? editImageShopifyRoute)!.commandPattern.exec(text);
     const naturalDeleteBlog =
       deleteBlogRoute?.naturalLanguage?.(text) ?? false;
     const naturalDeleteProject =
@@ -2174,7 +2288,9 @@ export class WorkflowService {
     const naturalEditTextStyle =
       editTextStyleRoute?.naturalLanguage?.(text) ?? false;
     const naturalEditImage =
-      editImageRoute?.naturalLanguage?.(text) ?? false;
+      editImageRoute?.naturalLanguage?.(text) ??
+      editImageShopifyRoute?.naturalLanguage?.(text) ??
+      false;
     const deleteBlogEnabled =
       deleteBlogRoute === undefined
         ? false
@@ -2182,6 +2298,7 @@ export class WorkflowService {
             database,
             identity.projectId,
             deleteBlogRoute.capabilityId,
+            identity,
           );
     const deleteProjectEnabled =
       deleteProjectRoute === undefined
@@ -2190,6 +2307,7 @@ export class WorkflowService {
             database,
             identity.projectId,
             deleteProjectRoute.capabilityId,
+            identity,
           );
     const projectEnabled =
       projectRoute === undefined
@@ -2198,6 +2316,7 @@ export class WorkflowService {
             database,
             identity.projectId,
             projectRoute.capabilityId,
+            identity,
           );
     const updateMenuEnabled =
       updateMenuRoute === undefined
@@ -2206,6 +2325,7 @@ export class WorkflowService {
             database,
             identity.projectId,
             updateMenuRoute.capabilityId,
+            identity,
           );
     const editTextEnabled =
       editTextRoute === undefined
@@ -2214,6 +2334,7 @@ export class WorkflowService {
             database,
             identity.projectId,
             editTextRoute.capabilityId,
+            identity,
           );
     const editTextStyleEnabled =
       editTextStyleRoute === undefined
@@ -2222,6 +2343,7 @@ export class WorkflowService {
             database,
             identity.projectId,
             editTextStyleRoute.capabilityId,
+            identity,
           );
     const editImageEnabled =
       editImageRoute === undefined
@@ -2230,14 +2352,51 @@ export class WorkflowService {
             database,
             identity.projectId,
             editImageRoute.capabilityId,
+            identity,
+          );
+    const editImageShopifyEnabled =
+      editImageShopifyRoute === undefined
+        ? false
+        : await this.hasCapability(
+            database,
+            identity.projectId,
+            editImageShopifyRoute.capabilityId,
+            identity,
           );
 
     if (editImageCommand !== null) {
+      if (editImageShopifyEnabled) {
+        return createEditImageShopifyRequest({
+          createAction: (db, request, requestVersionId, userId, action) =>
+            this.createAction(db, request, requestVersionId, userId, action),
+          database,
+          hasCapability: (db, projectId, capabilityId) =>
+            this.hasCapability(db, projectId, capabilityId, identity),
+          identity,
+          ...(editImageCommand[1]?.trim()
+            ? {
+                initialQuery: editImageCommand[1].trim(),
+                loadInventory: (args) =>
+                  this.loadThemeImageInventory(
+                    args.database,
+                    args.manifest,
+                    args.projectId,
+                    args.tenantId,
+                  ),
+              }
+            : {}),
+          ...(this.themeAssetPreviewUrlResolver === undefined
+            ? {}
+            : { resolvePreviewUrl: this.themeAssetPreviewUrlResolver }),
+          reply: this.reply.bind(this),
+        });
+      }
       return createEditImageRequest({
         createAction: (db, request, requestVersionId, userId, action) =>
           this.createAction(db, request, requestVersionId, userId, action),
         database,
-        hasCapability: this.hasCapability.bind(this),
+        hasCapability: (db, projectId, capabilityId) =>
+          this.hasCapability(db, projectId, capabilityId, identity),
         identity,
         ...(editImageCommand[1]?.trim()
           ? {
@@ -2260,7 +2419,8 @@ export class WorkflowService {
         createAction: (db, request, requestVersionId, userId, action) =>
           this.createAction(db, request, requestVersionId, userId, action),
         database,
-        hasCapability: this.hasCapability.bind(this),
+        hasCapability: (db, projectId, capabilityId) =>
+          this.hasCapability(db, projectId, capabilityId, identity),
         identity,
         ...(editTextStyleCommand[1]?.trim()
           ? {
@@ -2283,7 +2443,8 @@ export class WorkflowService {
         createAction: (db, request, requestVersionId, userId, action) =>
           this.createAction(db, request, requestVersionId, userId, action),
         database,
-        hasCapability: this.hasCapability.bind(this),
+        hasCapability: (db, projectId, capabilityId) =>
+          this.hasCapability(db, projectId, capabilityId, identity),
         identity,
         ...(editTextCommand[1]?.trim()
           ? {
@@ -2306,14 +2467,15 @@ export class WorkflowService {
         createAction: (db, request, requestVersionId, userId, action) =>
           this.createAction(db, request, requestVersionId, userId, action),
         database,
-        hasCapability: this.hasCapability.bind(this),
+        hasCapability: (db, projectId, capabilityId) =>
+          this.hasCapability(db, projectId, capabilityId, identity),
         identity,
         reply: this.reply.bind(this),
       });
     }
 
     if (
-      editImageEnabled &&
+      (editImageEnabled || editImageShopifyEnabled) &&
       naturalEditImage &&
       blogCommand === null &&
       deleteBlogCommand === null &&
@@ -2328,11 +2490,26 @@ export class WorkflowService {
       !naturalUpdateMenu &&
       !naturalEditText
     ) {
+      if (editImageShopifyEnabled) {
+        return createEditImageShopifyRequest({
+          createAction: (db, request, requestVersionId, userId, action) =>
+            this.createAction(db, request, requestVersionId, userId, action),
+          database,
+          hasCapability: (db, projectId, capabilityId) =>
+            this.hasCapability(db, projectId, capabilityId, identity),
+          identity,
+          ...(this.themeAssetPreviewUrlResolver === undefined
+            ? {}
+            : { resolvePreviewUrl: this.themeAssetPreviewUrlResolver }),
+          reply: this.reply.bind(this),
+        });
+      }
       return createEditImageRequest({
         createAction: (db, request, requestVersionId, userId, action) =>
           this.createAction(db, request, requestVersionId, userId, action),
         database,
-        hasCapability: this.hasCapability.bind(this),
+        hasCapability: (db, projectId, capabilityId) =>
+          this.hasCapability(db, projectId, capabilityId, identity),
         identity,
         reply: this.reply.bind(this),
       });
@@ -2359,7 +2536,8 @@ export class WorkflowService {
         createAction: (db, request, requestVersionId, userId, action) =>
           this.createAction(db, request, requestVersionId, userId, action),
         database,
-        hasCapability: this.hasCapability.bind(this),
+        hasCapability: (db, projectId, capabilityId) =>
+          this.hasCapability(db, projectId, capabilityId, identity),
         identity,
         reply: this.reply.bind(this),
       });
@@ -2387,7 +2565,8 @@ export class WorkflowService {
         createAction: (db, request, requestVersionId, userId, action) =>
           this.createAction(db, request, requestVersionId, userId, action),
         database,
-        hasCapability: this.hasCapability.bind(this),
+        hasCapability: (db, projectId, capabilityId) =>
+          this.hasCapability(db, projectId, capabilityId, identity),
         identity,
         reply: this.reply.bind(this),
       });
@@ -2409,7 +2588,8 @@ export class WorkflowService {
         createAction: (db, request, requestVersionId, userId, action) =>
           this.createAction(db, request, requestVersionId, userId, action),
         database,
-        hasCapability: this.hasCapability.bind(this),
+        hasCapability: (db, projectId, capabilityId) =>
+          this.hasCapability(db, projectId, capabilityId, identity),
         identity,
         reply: this.reply.bind(this),
       });
@@ -2550,8 +2730,11 @@ export class WorkflowService {
       .limit(1);
     if (
       manifest === undefined ||
-      (await this.resolveCreateBlogCapability(database, identity.projectId)) ===
-        undefined
+      (await this.resolveCreateBlogCapability(
+        database,
+        identity.projectId,
+        identity,
+      )) === undefined
     )
       throw new DomainError(
         'policy_denied',
@@ -2560,6 +2743,7 @@ export class WorkflowService {
     const blogCapability = (await this.resolveCreateBlogCapability(
       database,
       identity.projectId,
+      identity,
     ))!;
     const interpretedInput = createBlogDraftInputSchema.parse({
       mode: 'brief',
@@ -2598,6 +2782,7 @@ export class WorkflowService {
     };
     const requestRow = {
       capabilityId: blogCapability.id,
+      clientActorRole: identity.clientActorRole,
       conversationId: identity.conversationId,
       currentVersion: 1,
       id: requestId,
@@ -2686,6 +2871,7 @@ export class WorkflowService {
         database,
         identity.projectId,
         'create_project_astro',
+        identity,
       ))
     )
       return this.reply(identity.locale, localeCopy.projectNotEnabled, null);
@@ -2764,6 +2950,7 @@ export class WorkflowService {
     };
     await database.insert(schema.requests).values({
       capabilityId: 'create_project_astro',
+      clientActorRole: identity.clientActorRole,
       conversationId: identity.conversationId,
       currentVersion: 1,
       id: requestId,
@@ -3007,6 +3194,26 @@ export class WorkflowService {
     return { pages, posts: [] as const };
   }
 
+  private async loadThemeImageInventory(
+    database: ScopedDatabase,
+    manifest: (typeof schema.projectManifestVersions.$inferSelect)['document'],
+    projectId: string,
+    tenantId: string,
+  ) {
+    if (this.themeImageInventoryLoader === undefined)
+      throw new DomainError(
+        'validation_error',
+        'Theme image inventory loader is not configured.',
+        { code: 'surface_inventory_missing' },
+      );
+    return this.themeImageInventoryLoader({
+      database,
+      manifest,
+      projectId,
+      tenantId,
+    });
+  }
+
   private async loadUpdateMenuCtaKeywords(
     projectId: string,
     tenantId: string,
@@ -3091,6 +3298,7 @@ export class WorkflowService {
         database,
         identity.projectId,
         'delete_blog_draft',
+        identity,
       ))
     )
       return this.reply(identity.locale, localeCopy.deleteBlogNotEnabled, null);
@@ -3256,7 +3464,8 @@ export class WorkflowService {
       if (existingRequest === undefined) {
         await database.insert(schema.requests).values({
           capabilityId: 'delete_blog_draft',
-          conversationId: identity.conversationId,
+          clientActorRole: identity.clientActorRole,
+      conversationId: identity.conversationId,
           currentVersion: 1,
           id: requestId,
           projectId: identity.projectId,
@@ -3360,7 +3569,8 @@ export class WorkflowService {
     if (existingRequest === undefined) {
       await database.insert(schema.requests).values({
         capabilityId: 'delete_blog_draft',
-        conversationId: identity.conversationId,
+        clientActorRole: identity.clientActorRole,
+      conversationId: identity.conversationId,
         currentVersion: 1,
         id: requestId,
         projectId: identity.projectId,
@@ -3474,7 +3684,8 @@ export class WorkflowService {
     if (createRequest) {
       await database.insert(schema.requests).values({
         capabilityId: 'delete_blog_draft',
-        conversationId: identity.conversationId,
+        clientActorRole: identity.clientActorRole,
+      conversationId: identity.conversationId,
         currentVersion: 1,
         id: requestId,
         projectId: identity.projectId,
@@ -3573,6 +3784,7 @@ export class WorkflowService {
         database,
         identity.projectId,
         'delete_project_astro',
+        identity,
       ))
     )
       return this.reply(identity.locale, localeCopy.deleteProjectNotEnabled, null);
@@ -3738,7 +3950,8 @@ export class WorkflowService {
       if (existingRequest === undefined) {
         await database.insert(schema.requests).values({
           capabilityId: 'delete_project_astro',
-          conversationId: identity.conversationId,
+          clientActorRole: identity.clientActorRole,
+      conversationId: identity.conversationId,
           currentVersion: 1,
           id: requestId,
           projectId: identity.projectId,
@@ -3842,7 +4055,8 @@ export class WorkflowService {
     if (existingRequest === undefined) {
       await database.insert(schema.requests).values({
         capabilityId: 'delete_project_astro',
-        conversationId: identity.conversationId,
+        clientActorRole: identity.clientActorRole,
+      conversationId: identity.conversationId,
         currentVersion: 1,
         id: requestId,
         projectId: identity.projectId,
@@ -3956,7 +4170,8 @@ export class WorkflowService {
     if (createRequest) {
       await database.insert(schema.requests).values({
         capabilityId: 'delete_project_astro',
-        conversationId: identity.conversationId,
+        clientActorRole: identity.clientActorRole,
+      conversationId: identity.conversationId,
         currentVersion: 1,
         id: requestId,
         projectId: identity.projectId,
@@ -4100,7 +4315,8 @@ export class WorkflowService {
     if (version === 1) {
       await database.insert(schema.requests).values({
         capabilityId: 'create_project_astro',
-        conversationId: identity.conversationId,
+        clientActorRole: identity.clientActorRole,
+      conversationId: identity.conversationId,
         currentVersion: 1,
         id: requestId,
         projectId: identity.projectId,
@@ -4753,6 +4969,7 @@ export class WorkflowService {
       const enabled = await this.listEnabledCapabilities(
         database,
         identity.projectId,
+        identity,
       );
       return this.reply(
         identity.locale,
@@ -4838,7 +5055,9 @@ export class WorkflowService {
         {
           body: buildTicketBody(collect),
           category: collect.kind,
+          clientActorRole: identity.clientActorRole,
           excerpt: collect.summary.slice(0, 280),
+          openerUserId: identity.userId,
           ...(collect.urgency === undefined
             ? {}
             : { priority: ticketPriorityFromUrgency(collect.urgency) }),
@@ -4882,18 +5101,123 @@ export class WorkflowService {
           version: request.version + 1,
         })
         .where(eq(schema.requests.id, request.id));
+      await enqueuePiloterOwnerSuccessNotice(database, {
+        ...request,
+        version: request.version + 1,
+      });
       return this.reply(
         identity.locale,
         openTicketSentMessage(identity.locale, created.publicId),
         request.id,
       );
     }
+    if (action.action.startsWith('pick_image_page:')) {
+      if (
+        request.capabilityId !== 'edit_image_shopify' ||
+        request.state !== 'NEEDS_INPUT'
+      )
+        throw new DomainError(
+          'conflict_error',
+          'Request is not waiting for image page selection.',
+        );
+      return consumeEditImageShopifyPagePick({
+        area: action.action.slice('pick_image_page:'.length),
+        createAction: (db, req, requestVersionId, userId, actionName) =>
+          this.createAction(db, req, requestVersionId, userId, actionName),
+        database,
+        identity,
+        loadInventory: (args) =>
+          this.loadThemeImageInventory(
+            args.database,
+            args.manifest,
+            args.projectId,
+            args.tenantId,
+          ),
+        reply: this.reply.bind(this),
+        request,
+        version: currentVersion,
+        ...(this.themeAssetPreviewUrlResolver === undefined
+          ? {}
+          : { resolvePreviewUrl: this.themeAssetPreviewUrlResolver }),
+      });
+    }
+    if (action.action === 'cancel_image_browse') {
+      if (
+        request.capabilityId !== 'edit_image_shopify' ||
+        request.state !== 'NEEDS_INPUT'
+      )
+        throw new DomainError(
+          'conflict_error',
+          'Request is not waiting for image page browse cancel.',
+        );
+      return consumeEditImageShopifyBrowseCancel({
+        database,
+        identity,
+        reply: this.reply.bind(this),
+        request,
+        version: currentVersion,
+      });
+    }
+    if (action.action === 'deep_search_inventory') {
+      if (
+        request.capabilityId !== 'edit_image_shopify' ||
+        request.state !== 'NEEDS_INPUT'
+      )
+        throw new DomainError(
+          'conflict_error',
+          'Request is not waiting for inventory deep search.',
+        );
+      if (this.themeInventoryRemapRunner === undefined)
+        throw new DomainError(
+          'internal_error',
+          'Theme inventory remap runner is unavailable.',
+          { code: 'inventory_remap_failed' },
+        );
+      return consumeEditImageShopifyDeepSearch({
+        createAction: (db, req, requestVersionId, userId, actionName) =>
+          this.createAction(db, req, requestVersionId, userId, actionName),
+        database,
+        identity,
+        loadInventory: (args) =>
+          this.loadThemeImageInventory(
+            args.database,
+            args.manifest,
+            args.projectId,
+            args.tenantId,
+          ),
+        remapInventory: this.themeInventoryRemapRunner,
+        reply: this.reply.bind(this),
+        request,
+        version: currentVersion,
+        ...(this.themeAssetPreviewUrlResolver === undefined
+          ? {}
+          : { resolvePreviewUrl: this.themeAssetPreviewUrlResolver }),
+      });
+    }
     if (action.action.startsWith('pick_image_target:')) {
-      if (request.capabilityId !== 'edit_image' || request.state !== 'NEEDS_INPUT')
+      if (
+        (request.capabilityId !== 'edit_image' &&
+          request.capabilityId !== 'edit_image_shopify') ||
+        request.state !== 'NEEDS_INPUT'
+      )
         throw new DomainError(
           'conflict_error',
           'Request is not waiting for image target selection.',
         );
+      if (request.capabilityId === 'edit_image_shopify')
+        return consumeEditImageShopifyTargetPick({
+          createAction: (db, req, requestVersionId, userId, actionName) =>
+            this.createAction(db, req, requestVersionId, userId, actionName),
+          database,
+          identity,
+          reply: this.reply.bind(this),
+          request,
+          targetKey: action.action.slice('pick_image_target:'.length),
+          version: currentVersion,
+          ...(this.themeAssetPreviewUrlResolver === undefined
+            ? {}
+            : { resolvePreviewUrl: this.themeAssetPreviewUrlResolver }),
+        });
       return consumeEditImageTargetPick({
         createAction: (db, req, requestVersionId, userId, actionName) =>
           this.createAction(db, req, requestVersionId, userId, actionName),
@@ -4906,11 +5230,23 @@ export class WorkflowService {
       });
     }
     if (action.action === 'confirm_image_target') {
-      if (request.capabilityId !== 'edit_image' || request.state !== 'NEEDS_INPUT')
+      if (
+        (request.capabilityId !== 'edit_image' &&
+          request.capabilityId !== 'edit_image_shopify') ||
+        request.state !== 'NEEDS_INPUT'
+      )
         throw new DomainError(
           'conflict_error',
           'Request is not waiting for image target confirmation.',
         );
+      if (request.capabilityId === 'edit_image_shopify')
+        return consumeEditImageShopifyTargetConfirm({
+          database,
+          identity,
+          reply: this.reply.bind(this),
+          request,
+          version: currentVersion,
+        });
       return consumeEditImageTargetConfirm({
         database,
         identity,
@@ -4920,11 +5256,23 @@ export class WorkflowService {
       });
     }
     if (action.action === 'reject_image_target') {
-      if (request.capabilityId !== 'edit_image' || request.state !== 'NEEDS_INPUT')
+      if (
+        (request.capabilityId !== 'edit_image' &&
+          request.capabilityId !== 'edit_image_shopify') ||
+        request.state !== 'NEEDS_INPUT'
+      )
         throw new DomainError(
           'conflict_error',
           'Request is not waiting for image target confirmation.',
         );
+      if (request.capabilityId === 'edit_image_shopify')
+        return consumeEditImageShopifyTargetReject({
+          database,
+          identity,
+          reply: this.reply.bind(this),
+          request,
+          version: currentVersion,
+        });
       return consumeEditImageTargetReject({
         database,
         identity,
@@ -4934,12 +5282,20 @@ export class WorkflowService {
       });
     }
     if (action.action === 'confirm_image_plan') {
-      if (request.capabilityId !== 'edit_image' || request.state !== 'NEEDS_INPUT')
+      if (
+        (request.capabilityId !== 'edit_image' &&
+          request.capabilityId !== 'edit_image_shopify') ||
+        request.state !== 'NEEDS_INPUT'
+      )
         throw new DomainError(
           'conflict_error',
           'Request is not waiting for image plan confirmation.',
         );
-      return consumeEditImagePlanConfirm({
+      const planConfirm =
+        request.capabilityId === 'edit_image_shopify'
+          ? consumeEditImageShopifyPlanConfirm
+          : consumeEditImagePlanConfirm;
+      return planConfirm({
         database,
         graphVersion: await graphVersionForCapability(request.capabilityId),
         identity,
@@ -5355,6 +5711,7 @@ export class WorkflowService {
         request.capabilityId === 'edit_text' ||
         request.capabilityId === 'edit_text_style' ||
         request.capabilityId === 'edit_image' ||
+        request.capabilityId === 'edit_image_shopify' ||
         ((request.capabilityId === 'create_blog_draft' ||
           request.capabilityId === 'create_blog_orbitype') &&
           categoryKind === 'new');
@@ -5396,7 +5753,8 @@ export class WorkflowService {
           .where(eq(schema.projects.id, request.projectId))
           .limit(1);
         const adminAction =
-          request.capabilityId === 'edit_image'
+          request.capabilityId === 'edit_image' ||
+          request.capabilityId === 'edit_image_shopify'
             ? 'image edit approval required'
             : request.capabilityId === 'edit_text_style'
               ? 'text style approval required'
@@ -5441,7 +5799,8 @@ export class WorkflowService {
             'Approve → merge and publish path.',
             'Reject → request cancelled; client notified.',
           ].join('\n'),
-          ...(request.capabilityId === 'edit_image' &&
+          ...((request.capabilityId === 'edit_image' ||
+            request.capabilityId === 'edit_image_shopify') &&
           Object.keys(previewUrlRecord).length > 0
             ? { previewUrls: previewUrlRecord }
             : {}),
@@ -5458,7 +5817,8 @@ export class WorkflowService {
         'request.client_approved',
       );
       const clientPendingCopy =
-        request.capabilityId === 'edit_image'
+        request.capabilityId === 'edit_image' ||
+        request.capabilityId === 'edit_image_shopify'
           ? localeCopy.adminPendingImageEdit
           : request.capabilityId === 'edit_text_style'
             ? localeCopy.adminPendingTextStyleEdit
@@ -5960,6 +6320,14 @@ export class WorkflowService {
     const [row] = await database
       .select({ botCredentialId: schema.channelIdentities.botCredentialId })
       .from(schema.channelIdentities)
+      .innerJoin(
+        schema.clientUsers,
+        and(
+          eq(schema.clientUsers.id, schema.channelIdentities.userId),
+          eq(schema.clientUsers.kind, 'owner'),
+          eq(schema.clientUsers.status, 'active'),
+        ),
+      )
       .where(
         and(
           eq(schema.channelIdentities.tenantId, tenantId),
@@ -5993,16 +6361,17 @@ export class WorkflowService {
         eq(schema.projects.id, schema.clientEnrollments.projectId),
       )
       .leftJoin(
+        schema.clientUsers,
+        and(
+          eq(schema.clientUsers.enrollmentId, schema.clientEnrollments.id),
+          eq(schema.clientUsers.kind, 'owner'),
+          eq(schema.clientUsers.status, 'active'),
+        ),
+      )
+      .leftJoin(
         schema.channelIdentities,
         and(
-          eq(
-            schema.channelIdentities.tenantId,
-            schema.clientEnrollments.tenantId,
-          ),
-          eq(
-            schema.channelIdentities.projectId,
-            schema.clientEnrollments.projectId,
-          ),
+          eq(schema.channelIdentities.userId, schema.clientUsers.id),
           eq(schema.channelIdentities.status, 'active'),
         ),
       )
@@ -6159,6 +6528,7 @@ export class WorkflowService {
   private async listEnabledCapabilities(
     database: ScopedDatabase,
     projectId: string,
+    actor?: Pick<ResolvedIdentity, 'clientActorRole' | 'enrollmentId'>,
   ): Promise<
     readonly Readonly<{ command: string; displayName: string; id: string }>[]
   > {
@@ -6180,20 +6550,41 @@ export class WorkflowService {
       .orderBy(desc(schema.projectManifestVersions.version))
       .limit(1);
     if (manifest === undefined) return [];
-    return projectCapabilityCatalog(manifest.document.enabledCapabilities)
+    let enabled = projectCapabilityCatalog(manifest.document.enabledCapabilities)
       .filter((item) => item.enabled)
       .map((item) => ({
         command: item.command,
         displayName: item.displayName,
         id: item.id,
       }));
+    if (actor?.clientActorRole === 'piloter') {
+      const subset = await database
+        .select({
+          capabilityId: schema.piloterCapabilityBindings.capabilityId,
+        })
+        .from(schema.piloterCapabilityBindings)
+        .where(
+          eq(
+            schema.piloterCapabilityBindings.enrollmentId,
+            actor.enrollmentId,
+          ),
+        );
+      const allowed = new Set(subset.map((row) => row.capabilityId));
+      enabled = enabled.filter((item) => allowed.has(item.id));
+    }
+    return enabled;
   }
 
   private async resolveCreateBlogCapability(
     database: ScopedDatabase,
     projectId: string,
+    actor?: Pick<ResolvedIdentity, 'clientActorRole' | 'enrollmentId'>,
   ): Promise<Readonly<{ id: string; version: number }> | undefined> {
-    const enabled = await this.listEnabledCapabilities(database, projectId);
+    const enabled = await this.listEnabledCapabilities(
+      database,
+      projectId,
+      actor,
+    );
     const pick =
       enabled.find((item) => item.id === 'create_blog_orbitype') ??
       enabled.find((item) => item.id === 'create_blog_draft');
@@ -6209,8 +6600,13 @@ export class WorkflowService {
     database: ScopedDatabase,
     projectId: string,
     capabilityId = 'create_blog_draft',
+    actor?: Pick<ResolvedIdentity, 'clientActorRole' | 'enrollmentId'>,
   ): Promise<boolean> {
-    const enabled = await this.listEnabledCapabilities(database, projectId);
+    const enabled = await this.listEnabledCapabilities(
+      database,
+      projectId,
+      actor,
+    );
     return enabled.some((item) => item.id === capabilityId);
   }
 
@@ -6290,7 +6686,11 @@ export class WorkflowService {
     actions: TelegramReply['actionTokens'] = [],
     duplicateOrExtras:
       | boolean
-      | Readonly<{ duplicate?: boolean; photoUrl?: string }> = false,
+      | Readonly<{
+          actionRows?: TelegramReply['actionRows'];
+          duplicate?: boolean;
+          photoUrl?: string;
+        }> = false,
   ): TelegramReply {
     const duplicate =
       typeof duplicateOrExtras === 'boolean'
@@ -6300,8 +6700,13 @@ export class WorkflowService {
       typeof duplicateOrExtras === 'boolean'
         ? undefined
         : duplicateOrExtras.photoUrl;
+    const actionRows =
+      typeof duplicateOrExtras === 'boolean'
+        ? undefined
+        : duplicateOrExtras.actionRows;
     return telegramReplySchema.parse({
-      actionTokens: actions,
+      ...(actionRows === undefined ? {} : { actionRows }),
+      actionTokens: actionRows === undefined ? actions : actionRows.flat(),
       duplicate,
       locale,
       ...(photoUrl === undefined ? {} : { photoUrl }),

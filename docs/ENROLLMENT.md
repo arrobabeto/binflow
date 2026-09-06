@@ -7,13 +7,14 @@ operational path used from the dashboard (and CLI when needed).
 Use:
 
 - **Section A** when the project profile is already selectable and shipped
-  (`astro_repo`, `astro_orbitype`, …).
+  (`astro_repo`, `astro_orbitype`, `shopify_liquid`, …).
 - **Section B** for the **first** client after a stack/profile was just
   implemented (docs from [`new-stack`](../.cursor/skills/new-stack/SKILL.md)
   plus a completed implementation session).
 
-Stack/profile naming: stack id is hyphenated (`astro-orbitype`); project
-profile is underscored (`astro_orbitype`). See [GLOSSARY.md](GLOSSARY.md).
+Stack/profile naming: stack id is hyphenated (`astro-orbitype`,
+`shopify-liquid`); project profile is underscored (`astro_orbitype`,
+`shopify_liquid`). See [GLOSSARY.md](GLOSSARY.md).
 
 ---
 
@@ -30,22 +31,24 @@ profile is underscored (`astro_orbitype`). See [GLOSSARY.md](GLOSSARY.md).
 3. Decide live execution: keep `BINFLOW_LIVE_EXECUTION_ENABLED=false` unless
    you intentionally want post-confirm OpenAI/GitHub/Vercel mutations
    (`pnpm run dev:live`). Enrollment/pairing itself does not require live
-   execution.
+   execution. Shopify theme tools use GitHub (not Vercel) for publication in
+   v1.
 4. Know the target **project profile** and whether an empty capability catalog
-   is allowed at activation (documented per profile; `astro_orbitype` yes,
-   `astro_repo` no).
+   is allowed at activation (documented per profile; `astro_orbitype` and
+   `shopify_liquid` yes, `astro_repo` no).
 
 ### A1. Create the enrollment
 
 1. Dashboard → **Clients** → **New**.
 2. Set stable slugs:
-   - **Client key** = `tenantKey` (e.g. `bistro`).
+   - **Client key** = `tenantKey` (e.g. `bistro`, `elayva`).
    - **Project key** = `projectKey` (often same as tenant for 1:1 MVP).
-3. Select **project profile** (`astro_repo` or `astro_orbitype`, …).
+3. Select **project profile** (`astro_repo`, `astro_orbitype`, or
+   `shopify_liquid`, …).
 4. Configure locales (platform set is `en` / `es` / `de`). Webbin /
    `astro_repo` overlay stays bilingual `es`+`en` + `always_translate` when
-   that freeze applies; other profiles may be monolingual with
-   `translationPolicy: none` (ADR-0046).
+   that freeze applies; `shopify_liquid` pilot defaults to monolingual `en` +
+   `translationPolicy: none` (ADR-0046 / ADR-0059).
 5. Fill domains (including **production** public HTTPS origin used in
    publication-complete Telegram links — ADR-0048), editorial fields, budgets
    as required by the form.
@@ -75,7 +78,7 @@ Wait until verification status is success before Validate.
 
 ### A4. Pair the client Telegram bot
 
-1. Generate the **pairing link** (shown once).
+1. Generate the **owner pairing link** (shown once).
 2. Open it on the **client** bot (`t.me/<CT_…_bot>?start=…`), not the admin bot.
 3. If the client bot credential was just verified, the worker discovers it on
    the next heartbeat reconcile (no manual restart required for a new bot
@@ -85,14 +88,18 @@ Wait until verification status is success before Validate.
 5. Bare `/start` without the token does not pair. After pairing, `/help` /
    `/start` should reply; `/tools` lists enabled tools or access-denied when
    the catalog is empty.
+6. Optional (ADR-0057): from the same client detail, generate a **Piloter
+   pairing link**, open it from the Piloter’s Telegram account on the **same**
+   client bot, and assign a subset of enabled tools. Enrollment stays `active`;
+   Piloter pairing does not re-run activation.
 
 ### A5. Tools
 
 - Assign only tools whose `allowedProfiles` include this project profile.
 - If the profile allows an empty catalog at activation, leave tools empty
   until the first capability ships via create-tool.
-- Do not assign `astro_repo` tools to an `astro_orbitype` project (and vice
-  versa).
+- Do not assign `astro_repo` tools to an `astro_orbitype` or `shopify_liquid`
+  project (and vice versa). Profile mismatch must fail closed.
 
 ### A6. Frequent failures
 
@@ -153,3 +160,5 @@ separate implementation session (contracts, dashboard, verifiers, etc.).
 - [DASHBOARD.md](DASHBOARD.md) — enrollment UI behavior
 - [ADR-0007](adr/0007-telegram-topology.md) — admin vs client bots
 - [ADR-0045](adr/0045-astro-orbitype-enrollment.md) — example new-stack enrollment
+- [ADR-0059](adr/0059-shopify-liquid-enrollment.md) — Shopify Liquid enrollment
+  (no Vercel / Admin API in v1; empty catalog; elayva pilot)

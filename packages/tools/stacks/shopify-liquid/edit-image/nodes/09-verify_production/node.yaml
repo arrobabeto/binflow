@@ -1,0 +1,4 @@
+kind: effect
+label: Verify production storefront
+nodeKind: images.verify_theme_production@1
+acceptsClientCustomization: false

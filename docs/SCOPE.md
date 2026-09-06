@@ -5,11 +5,14 @@
 ### Platform
 
 - Documentation-first TypeScript monorepo.
-- Multi-tenant-ready isolation with one active project/user per enrollment.
+- Multi-tenant-ready isolation with one active project per enrollment, one
+  primary client (owner) Telegram identity, and at most one optional **Piloter**
+  identity on the same dedicated client bot (ADR-0057).
 - Admin dashboard with password + TOTP authentication.
-- Managed onboarding for the `astro_repo` profile (first MVP) and, as a
-  post-MVP expansion, the `astro_orbitype` profile (enrollment + Orbitype API
-  key; see ADR-0045).
+- Managed onboarding for the `astro_repo` profile (first MVP) and, as
+  post-MVP expansions, the `astro_orbitype` profile (enrollment + Orbitype API
+  key; see ADR-0045) and the `shopify_liquid` profile (Shopify Liquid theme
+  enrollment; see ADR-0059).
 - PostgreSQL, Redis/BullMQ, workflow checkpoints and S3-compatible artifacts.
 - Per-client OpenAI credential; no global fallback.
 - Structured audit, model usage and cost records.
@@ -29,6 +32,13 @@
   receipt, messaging). Clients open tickets via Telegram `/open_ticket` or the
   unmatched-message fallback; greeting heuristics reply politely without a
   ticket (ADR-0055).
+- Optional **Piloter** on the dedicated client bot: platform owner assigns a
+  subset of already-bound tools; Piloter pairs via a one-time link; owner
+  receives template notices of Piloter success; requests/tickets record
+  Owner | Piloter (ADR-0057).
+- Post-MVP: `shopify_liquid` enrollment for Shopify Liquid themes (GitHub theme
+  repo; no Shopify Admin API in v1); first content tool family is inventory-
+  driven `edit_image` (ADR-0059 / ADR-0058).
 
 ### First capability
 
@@ -49,7 +59,9 @@
 
 ## Explicitly outside the first MVP
 
-- More than one project or client user per enrollment.
+- More than one project per enrollment.
+- More than one Piloter per enrollment, or additional client users beyond
+  owner + optional Piloter (ADR-0057).
 - Public registration, autoenrollment or customer billing.
 - Client dashboard.
 - Anthropic or provider failover.

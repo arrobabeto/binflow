@@ -277,13 +277,24 @@ export const storeCredentialVersion = async (
         boundProject.tenantKey === webbinPilotBinding.tenantKey &&
         boundProject.projectKey === webbinPilotBinding.projectKey;
       if (
-        (input.kind === 'github-app' || input.kind === 'vercel') &&
+        input.kind === 'github-app' &&
+        !isWebbinPilot &&
+        boundProject.profile !== 'astro_orbitype' &&
+        boundProject.profile !== 'shopify_liquid'
+      ) {
+        throw new DomainError(
+          'policy_denied',
+          'The external Webbin binding is authorized only for webbin/webbin.',
+        );
+      }
+      if (
+        input.kind === 'vercel' &&
         !isWebbinPilot &&
         boundProject.profile !== 'astro_orbitype'
       ) {
         throw new DomainError(
           'policy_denied',
-          'The external Webbin binding is authorized only for webbin/webbin.',
+          'Vercel bindings are not authorized for this project profile.',
         );
       }
       if (
@@ -509,13 +520,24 @@ export const getCredentialForVerification = async (
       boundProject.tenantKey === webbinPilotBinding.tenantKey &&
       boundProject.projectKey === webbinPilotBinding.projectKey;
     if (
-      (row.kind === 'github-app' || row.kind === 'vercel') &&
+      row.kind === 'github-app' &&
+      !isWebbinPilot &&
+      boundProject.profile !== 'astro_orbitype' &&
+      boundProject.profile !== 'shopify_liquid'
+    ) {
+      throw new DomainError(
+        'policy_denied',
+        'Credential connection is not authorized for the Webbin pilot scope.',
+      );
+    }
+    if (
+      row.kind === 'vercel' &&
       !isWebbinPilot &&
       boundProject.profile !== 'astro_orbitype'
     ) {
       throw new DomainError(
         'policy_denied',
-        'Credential connection is not authorized for the Webbin pilot scope.',
+        'Vercel bindings are not authorized for this project profile.',
       );
     }
     if (

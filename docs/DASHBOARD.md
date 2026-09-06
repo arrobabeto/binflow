@@ -174,7 +174,8 @@ Client list supports create, resume configuration, validate, activate, suspend a
 
 - Identity, contact, timezone and lifecycle state.
 - Conversation locale and content locale policy.
-- Dedicated client bot and paired user.
+- Dedicated client bot, paired **owner**, and optional **Piloter** (pairing
+  link + capability subset panel; ADR-0057).
 - OpenAI credential health and node model bindings.
 - GitHub/Vercel connections.
 - Active manifest, rules and capability policies.
@@ -193,8 +194,10 @@ Client list supports create, resume configuration, validate, activate, suspend a
   the operator is not stuck on conflict.
 
 Only `astro_repo` was selectable in the first MVP. Post-MVP, `astro_orbitype`
-is also selectable for enrollment (ADR-0045). Other future profile names must
-not be shown as operational choices until their acceptance criteria pass.
+(ADR-0045) and `shopify_liquid` (ADR-0059) are also selectable for enrollment.
+Other future profile names must not be shown as operational choices until their
+acceptance criteria pass. Shopify enrollment does **not** require Vercel or a
+Shopify Admin credential in v1.
 
 The enrollment form edits client configuration for draft and live enrollments.
 Pre-activation saves move the enrollment back to `configuring` so operators
@@ -212,7 +215,10 @@ The same view shows the effective code-owned capability catalog. Operators
 toggle which registry tools are bound to the client after validation; each save
 creates a new immutable manifest revision (`PUT
 /api/v1/projects/:projectId/capabilities`). Executor schemas, permissions and
-approval behavior remain read-only in the UI.
+approval behavior remain read-only in the UI. On an active enrollment, operators
+may also open the **Piloter** panel: issue a Piloter pairing link and assign a
+subset of those project-enabled tools (ADR-0057). Removing a tool from the
+subset blocks new Piloter requests for that tool only.
 
 The Tools detail page can assign a tool to validated clients with the same API,
 filtering the list to enrollments whose `projectProfile` matches the tool

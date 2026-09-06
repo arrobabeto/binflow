@@ -6,6 +6,7 @@ export type CapabilityRuntimeKind =
   | 'delete_blog'
   | 'delete_project'
   | 'edit_image'
+  | 'edit_image_shopify'
   | 'edit_text'
   | 'edit_text_style'
   | 'project'
@@ -38,6 +39,8 @@ export const catalogScopeForRuntimeKind = (
       return 'pages';
     case 'edit_image':
       return 'pages';
+    case 'edit_image_shopify':
+      return 'pages';
     case 'edit_text':
     case 'edit_text_style':
       return 'pages';
@@ -57,6 +60,7 @@ export const catalogContentKindsForRuntimeKind = (
     case 'update_menu':
       return [];
     case 'edit_image':
+    case 'edit_image_shopify':
       return [];
     case 'edit_text':
     case 'edit_text_style':
@@ -108,6 +112,11 @@ const runtimeByExecutorId = Object.freeze({
   'workflow.edit_image@1': Object.freeze({
     consumerPrefix: 'edit_image',
     kind: 'edit_image',
+    titleField: 'resolvedTitle',
+  }),
+  'workflow.edit_image_shopify@1': Object.freeze({
+    consumerPrefix: 'edit_image_shopify',
+    kind: 'edit_image_shopify',
     titleField: 'resolvedTitle',
   }),
 } as const satisfies Record<

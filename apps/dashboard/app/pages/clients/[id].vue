@@ -3,6 +3,7 @@ import type {
   CapabilityCatalogResponse,
   Enrollment,
   EnrollmentValidationAttempt,
+  PiloterStatus,
   ProjectManifestResponse,
   ToolCatalogResponse,
 } from '@binflow/contracts';
@@ -32,10 +33,15 @@ const { data: capabilityState, refresh: refreshCapabilities } =
 const { data: toolCatalog } = await useFetch<ToolCatalogResponse>(
   '/api/v1/tools',
 );
+const { data: piloterState, refresh: refreshPiloter } =
+  await useFetch<PiloterStatus>(`/api/v1/admin/enrollments/${id}/piloter`);
 const enabledToolKeys = ref<Set<string>>(new Set());
+const piloterCapabilityIds = ref<Set<string>>(new Set());
 const capabilityMessage = ref('');
+const piloterMessage = ref('');
 const attempts = ref<EnrollmentValidationAttempt[]>([]);
 const pairingUrl = ref('');
+const piloterPairingUrl = ref('');
 const message = ref('');
 const busy = ref(false);
 
@@ -43,6 +49,14 @@ watch(
   capabilityState,
   (value) => {
     enabledToolKeys.value = enabledCapabilityKeys(value);
+  },
+  { immediate: true },
+);
+
+watch(
+  piloterState,
+  (value) => {
+    piloterCapabilityIds.value = new Set(value?.capabilityIds ?? []);
   },
   { immediate: true },
 );
@@ -60,7 +74,9 @@ const assignableTools = computed(() => {
   );
 });
 const allowsEmptyTools = computed(
-  () => enrollment.value?.projectProfile === 'astro_orbitype',
+  () =>
+    enrollment.value?.projectProfile === 'astro_orbitype' ||
+    enrollment.value?.projectProfile === 'shopify_liquid',
 );
 const platformLocales = ['en', 'es', 'de'] as const;
 const isWebbinLocaleOverlay = computed(
@@ -231,38 +247,73 @@ watchEffect(() => {
   }
 });
 
-const configuration = () => ({
-  budgetPolicy: {
-    maxEstimatedCostCentsPerDay: Number(form.maxEstimatedCostCentsPerDay),
-    maxEstimatedCostCentsPerRequest: Number(
-      form.maxEstimatedCostCentsPerRequest,
-    ),
-    maxModelCallsPerRequest: Number(form.maxModelCallsPerRequest),
-    maxRequestsPerDay: Number(form.maxRequestsPerDay),
-    maxTokensPerRequest: Number(form.maxTokensPerRequest),
-  },
-  clientContactEmail: form.clientContactEmail,
-  clientConversationLocale: form.clientConversationLocale,
-  contentLocales: [...form.contentLocales],
-  defaultContentLocale: form.defaultContentLocale,
-  editorialAudience: form.editorialAudience,
-  editorialVoice: form.editorialVoice,
-  ...(form.previewDomain ? { previewDomain: form.previewDomain } : {}),
-  productionDomain: form.productionDomain,
-  prohibitedClaims: form.prohibitedClaims
+const configuration = () => {
+  const optionalHttps = (value: string): string | undefined => {
+    const trimmed = value.trim();
+    return trimmed.length > 0 ? trimmed : undefined;
+  };
+  const optionalText = (value: string): string | undefined => {
+    const trimmed = value.trim();
+    return trimmed.length > 0 ? trimmed : undefined;
+  };
+  const productionDomain = optionalHttps(form.productionDomain);
+  const previewDomain = optionalHttps(form.previewDomain);
+  const clientContactEmail = optionalText(form.clientContactEmail);
+  const editorialAudience = optionalText(form.editorialAudience);
+  const editorialVoice = optionalText(form.editorialVoice);
+  const researchPolicy = optionalText(form.researchPolicy);
+  const prohibitedClaims = form.prohibitedClaims
     .split('\n')
     .map((item) => item.trim())
-    .filter(Boolean),
-  requiredLocales: [...form.contentLocales],
-  researchPolicy: form.researchPolicy,
-  slugLocale: form.slugLocale,
-  timezone: form.timezone,
-  translationPolicy: form.translationPolicy,
-});
+    .filter(Boolean);
+
+  return {
+    budgetPolicy: {
+      maxEstimatedCostCentsPerDay: Number(form.maxEstimatedCostCentsPerDay),
+      maxEstimatedCostCentsPerRequest: Number(
+        form.maxEstimatedCostCentsPerRequest,
+      ),
+      maxModelCallsPerRequest: Number(form.maxModelCallsPerRequest),
+      maxRequestsPerDay: Number(form.maxRequestsPerDay),
+      maxTokensPerRequest: Number(form.maxTokensPerRequest),
+    },
+    ...(clientContactEmail === undefined ? {} : { clientContactEmail }),
+    clientConversationLocale: form.clientConversationLocale,
+    contentLocales: [...form.contentLocales],
+    defaultContentLocale: form.defaultContentLocale,
+    ...(editorialAudience === undefined ? {} : { editorialAudience }),
+    ...(editorialVoice === undefined ? {} : { editorialVoice }),
+    ...(previewDomain === undefined ? {} : { previewDomain }),
+    ...(productionDomain === undefined ? {} : { productionDomain }),
+    prohibitedClaims,
+    requiredLocales: [...form.contentLocales],
+    ...(researchPolicy === undefined ? {} : { researchPolicy }),
+    slugLocale: form.slugLocale,
+    timezone: form.timezone,
+    translationPolicy: form.translationPolicy,
+  };
+};
 const mutationHeaders = () => ({
   'Idempotency-Key': crypto.randomUUID(),
   'If-Match': `"${enrollment.value?.version ?? 0}"`,
 });
+const apiErrorMessage = (error: unknown): string => {
+  if (
+    typeof error === 'object' &&
+    error !== null &&
+    'data' in error &&
+    typeof error.data === 'object' &&
+    error.data !== null &&
+    'error' in error.data &&
+    typeof error.data.error === 'object' &&
+    error.data.error !== null &&
+    'message' in error.data.error &&
+    typeof error.data.error.message === 'string'
+  ) {
+    return error.data.error.message;
+  }
+  return error instanceof Error ? error.message : 'The action failed.';
+};
 const conflictStatus = (error: unknown): boolean => {
   if (typeof error !== 'object' || error === null) return false;
   const record = error as { status?: unknown; statusCode?: unknown };
@@ -283,8 +334,7 @@ const run = async (action: () => Promise<void>) => {
   try {
     await action();
   } catch (error) {
-    message.value =
-      error instanceof Error ? error.message : 'The action failed.';
+    message.value = apiErrorMessage(error);
   } finally {
     busy.value = false;
   }
@@ -343,6 +393,24 @@ const createPairing = () =>
       message.value = `Pairing link expires at ${result.expiresAt}. Copy it now; it will not be shown again.`;
     });
   });
+const createPiloterPairing = () =>
+  run(async () => {
+    await runMutation(async () => {
+      const result = await $fetch<{
+        enrollment: Enrollment;
+        expiresAt: string;
+        pairingUrl: string;
+      }>(`/api/v1/admin/enrollments/${id}/piloter/pairing-link`, {
+        body: {},
+        headers: mutationHeaders(),
+        method: 'POST',
+      });
+      enrollment.value = result.enrollment;
+      piloterPairingUrl.value = result.pairingUrl;
+      piloterMessage.value = `Piloter pairing link expires at ${result.expiresAt}. Copy it now; it will not be shown again.`;
+      await refreshPiloter();
+    });
+  });
 const toggleTool = (toolId: string, version: number, enabled: boolean) => {
   const key = capabilityKey(toolId, version);
   const next = new Set(enabledToolKeys.value);
@@ -350,6 +418,17 @@ const toggleTool = (toolId: string, version: number, enabled: boolean) => {
   else next.delete(key);
   enabledToolKeys.value = next;
 };
+const togglePiloterTool = (toolId: string, enabled: boolean) => {
+  const next = new Set(piloterCapabilityIds.value);
+  if (enabled) next.add(toolId);
+  else next.delete(toolId);
+  piloterCapabilityIds.value = next;
+};
+const piloterAssignableTools = computed(() =>
+  assignableTools.value.filter((tool) =>
+    enabledToolKeys.value.has(capabilityKey(tool.id, tool.version)),
+  ),
+);
 const saveCapabilities = () =>
   run(async () => {
     if (enrollment.value?.projectId === undefined) return;
@@ -374,6 +453,24 @@ const saveCapabilities = () =>
     );
     enabledToolKeys.value = enabledCapabilityKeys(capabilityState.value);
     capabilityMessage.value = 'Tool assignment saved.';
+  });
+const savePiloterCapabilities = () =>
+  run(async () => {
+    piloterState.value = await $fetch<PiloterStatus>(
+      `/api/v1/admin/enrollments/${id}/piloter/capabilities`,
+      {
+        body: { capabilityIds: [...piloterCapabilityIds.value] },
+        headers: {
+          'Content-Type': 'application/json',
+          'Idempotency-Key': crypto.randomUUID(),
+        },
+        method: 'PUT',
+      },
+    );
+    piloterCapabilityIds.value = new Set(
+      piloterState.value?.capabilityIds ?? [],
+    );
+    piloterMessage.value = 'Piloter tool subset saved.';
   });
 </script>
 
@@ -606,6 +703,66 @@ const saveCapabilities = () =>
           ></UCard
         >
         <UCard>
+          <p class="font-semibold">Piloter</p>
+          <p class="mt-1 text-sm text-muted">
+            Optional helper on the same client bot. Assign a subset of enabled
+            tools, then issue a pairing link (enrollment must be active).
+          </p>
+          <p class="mt-2 text-sm text-muted">
+            Status:
+            <span class="font-medium text-white">{{
+              piloterState?.status ?? 'absent'
+            }}</span>
+            <span v-if="piloterState?.paired"> · paired</span>
+          </p>
+          <UButton
+            class="mt-4 w-full"
+            :disabled="enrollment?.state !== 'active' || busy"
+            :loading="busy"
+            @click="createPiloterPairing"
+            >Create Piloter pairing link</UButton
+          >
+          <div
+            v-for="tool in piloterAssignableTools"
+            :key="`piloter-${tool.id}`"
+            class="mt-3 flex items-start justify-between gap-3 rounded-lg border border-default p-3 text-sm"
+          >
+            <div>
+              <p class="font-medium">{{ tool.displayName }}</p>
+              <p class="mt-1 font-mono text-muted">{{ tool.id }}</p>
+            </div>
+            <USwitch
+              :disabled="busy || enrollment?.state !== 'active'"
+              :model-value="piloterCapabilityIds.has(tool.id)"
+              @update:model-value="togglePiloterTool(tool.id, $event)"
+            />
+          </div>
+          <p
+            v-if="piloterAssignableTools.length === 0"
+            class="mt-3 text-sm text-muted"
+          >
+            Enable project tools first, then assign a Piloter subset.
+          </p>
+          <UButton
+            class="mt-4 w-full"
+            color="neutral"
+            variant="outline"
+            :disabled="enrollment?.state !== 'active' || busy"
+            :loading="busy"
+            @click="savePiloterCapabilities"
+            >Save Piloter tools</UButton
+          >
+          <p v-if="piloterMessage" class="mt-3 text-sm text-muted">
+            {{ piloterMessage }}
+          </p>
+          <UInput
+            v-if="piloterPairingUrl"
+            class="mt-3 w-full"
+            :model-value="piloterPairingUrl"
+            readonly
+          />
+        </UCard>
+        <UCard>
           <p class="font-semibold">Project manifest</p>
           <template v-if="manifestState?.manifest">
             <div class="mt-3 grid gap-2 text-sm">
@@ -656,7 +813,7 @@ const saveCapabilities = () =>
             Assign code-owned capabilities after validation. Each change creates a
             new manifest revision.
             <span v-if="allowsEmptyTools">
-              This profile may stay active with zero tools until Orbitype content
+              This profile may stay active with zero tools until stack
               capabilities are assigned.
             </span>
           </p>

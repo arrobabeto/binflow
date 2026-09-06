@@ -13,7 +13,6 @@ import { createOpenAIBlogGenerationPort, createOpenAIProjectGenerationPort, crea
 import { S3ArtifactStore } from '@binflow/artifacts';
 import { BlogExecutor, DeleteBlogExecutor, orbitypeBlogPublicationStages, type ContentCatalogPort } from '@binflow/blog';
 import { UpdateMenuExecutor } from '@binflow/menu';
-import { EditImageExecutor } from '@binflow/images';
 import { EditTextExecutor, EditTextStyleExecutor } from '@binflow/text';
 import {
   createOrbitypeBlogPublicationPort,
@@ -49,6 +48,7 @@ import {
   renderPreviewReadyNotice,
   renderPublicationCompleteNotice,
   renderRevisionPlanNotice,
+  renderThemeImageApprovalNotice,
   previewUrlButtons,
   type TelegramRuntime,
 } from '@binflow/messaging';
@@ -59,6 +59,13 @@ import {
 } from '@binflow/secrets';
 import { createVercelDeploymentPort } from '@binflow/vercel';
 import {
+  EditImageExecutor,
+  EditThemeImageExecutor,
+  DEFAULT_SURFACE_INVENTORY_PATH,
+  resolveThemeAssetPreviewUrlFromManifest,
+  runThemeInventoryRemap,
+} from '@binflow/images';
+import {
   BlogWorkflowRuntime,
   DeleteBlogWorkflowRuntime,
   DeleteProjectWorkflowRuntime,
@@ -67,6 +74,7 @@ import {
   ProjectWorkflowRuntime,
   TextStyleWorkflowRuntime,
   TextWorkflowRuntime,
+  ThemeImageWorkflowRuntime,
   WorkflowService,
   filterBlogCatalogItems,
   filterPortfolioCatalogItems,
@@ -79,6 +87,9 @@ import {
   type DeleteBlogCatalogLoader,
   type DeleteProjectCatalogLoader,
   type EditImageContentLoader,
+  type ThemeAssetPreviewUrlResolver,
+  type ThemeImageInventoryLoader,
+  type ThemeInventoryRemapRunner,
   type UpdateMenuPagesLoader,
 } from '@binflow/workflows';
 
@@ -398,6 +409,140 @@ const persistReplacementImage = async ({
   return key;
 };
 
+const loadThemeImageInventory: ThemeImageInventoryLoader = async ({
+  database: scoped,
+  manifest,
+  projectId,
+}) => {
+  const githubBinding = await resolveActiveProjectGithubAppBinding(
+    scoped,
+    projectId,
+  );
+  if (githubBinding === undefined)
+    throw new DomainError(
+      'credential_unavailable',
+      'Active GitHub App binding is unavailable for theme inventory.',
+    );
+  const github = await getCredentialForVerification(
+    scoped,
+    githubBinding.credentialId,
+  );
+  if (github === undefined)
+    throw new DomainError(
+      'credential_unavailable',
+      'GitHub credential material is unavailable.',
+    );
+  const masterKey = await loadRuntimeMasterKeyFile(defaultMasterKeyPath());
+  try {
+    const repository = createGitHubRepositoryPublicationPort({
+      credential: github,
+      installationId: githubBinding.installationId,
+      masterKey,
+      repositoryId: githubBinding.repositoryId,
+    });
+    const inventoryPath =
+      manifest.content.surfaceInventoryPath ?? DEFAULT_SURFACE_INVENTORY_PATH;
+    const bytes = await repository.readFileAtRef({
+      path: inventoryPath,
+      ref: manifest.repository.productionBranch,
+    });
+    if (bytes === null)
+      throw new DomainError(
+        'validation_error',
+        'Surface inventory is missing; image allowlist is empty.',
+        { code: 'surface_inventory_missing' },
+      );
+    const executor = new EditThemeImageExecutor(repository, {
+      async readFile(path) {
+        const fileBytes = await repository.readFileAtRef({
+          path,
+          ref: manifest.repository.productionBranch,
+        });
+        return fileBytes === null
+          ? null
+          : new TextDecoder().decode(fileBytes);
+      },
+    });
+    return executor.loadInventory(inventoryPath);
+  } finally {
+    masterKey.fill(0);
+  }
+};
+
+const runThemeInventoryRemapJob: ThemeInventoryRemapRunner = async ({
+  autoMerge,
+  database: scoped,
+  manifest,
+  projectId,
+  requestId,
+}) => {
+  const githubBinding = await resolveActiveProjectGithubAppBinding(
+    scoped,
+    projectId,
+  );
+  if (githubBinding === undefined)
+    throw new DomainError(
+      'credential_unavailable',
+      'Active GitHub App binding is unavailable for inventory remap.',
+      { code: 'inventory_remap_failed' },
+    );
+  const github = await getCredentialForVerification(
+    scoped,
+    githubBinding.credentialId,
+  );
+  if (github === undefined)
+    throw new DomainError(
+      'credential_unavailable',
+      'GitHub credential material is unavailable.',
+      { code: 'inventory_remap_failed' },
+    );
+  const masterKey = await loadRuntimeMasterKeyFile(defaultMasterKeyPath());
+  try {
+    const repository = createGitHubRepositoryPublicationPort({
+      credential: github,
+      installationId: githubBinding.installationId,
+      masterKey,
+      repositoryId: githubBinding.repositoryId,
+    });
+    const inventoryPath =
+      manifest.content.surfaceInventoryPath ?? DEFAULT_SURFACE_INVENTORY_PATH;
+    const result = await runThemeInventoryRemap({
+      autoMerge,
+      inventoryPath,
+      locales: manifest.contentLocales,
+      productionBranch: manifest.repository.productionBranch,
+      projectKey: manifest.repository.name,
+      repository,
+      requestId,
+      tree: {
+        async listBlobPaths({ prefixes, ref }) {
+          return repository.listBlobPaths({ prefixes, ref });
+        },
+        async readFile(path, ref) {
+          const fileBytes = await repository.readFileAtRef({ path, ref });
+          return fileBytes === null
+            ? null
+            : new TextDecoder().decode(fileBytes);
+        },
+      },
+    });
+    return {
+      changed: result.remap.changed,
+      imageRows: result.imageRows,
+      ...(result.publication === undefined
+        ? {}
+        : { pullRequestUrl: result.publication.pullRequestUrl }),
+    };
+  } finally {
+    masterKey.fill(0);
+  }
+};
+
+const resolveThemeAssetPreviewUrl: ThemeAssetPreviewUrlResolver = async ({
+  assetPath,
+  manifest,
+}) => resolveThemeAssetPreviewUrlFromManifest(manifest, assetPath);
+
 const workflowService = new WorkflowService(
   database,
   systemClock,
@@ -406,6 +551,9 @@ const workflowService = new WorkflowService(
   loadUpdateMenuPages,
   loadEditImageContent,
   persistReplacementImage,
+  loadThemeImageInventory,
+  runThemeInventoryRemapJob,
+  resolveThemeAssetPreviewUrl,
   async (input) => {
     try {
       const masterKey = await loadRuntimeMasterKeyFile(defaultMasterKeyPath());
@@ -569,7 +717,8 @@ const loadExecutionContext = async (
       if (
         openaiRow === undefined ||
         githubBinding === undefined ||
-        vercelRow === undefined
+        (request.capabilityId !== 'edit_image_shopify' &&
+          vercelRow === undefined)
       )
         throw new Error('Active execution credentials are incomplete.');
       if (
@@ -581,12 +730,18 @@ const loadExecutionContext = async (
       const [openai, github, vercel, orbitype] = await Promise.all([
         getCredentialForVerification(scoped, openaiRow.id),
         getCredentialForVerification(scoped, githubBinding.credentialId),
-        getCredentialForVerification(scoped, vercelRow.id),
+        vercelRow === undefined
+          ? Promise.resolve(undefined)
+          : getCredentialForVerification(scoped, vercelRow.id),
         orbitypeRow === undefined
           ? Promise.resolve(undefined)
           : getCredentialForVerification(scoped, orbitypeRow.id),
       ]);
-      if (openai === undefined || github === undefined || vercel === undefined)
+      if (
+        openai === undefined ||
+        github === undefined ||
+        (request.capabilityId !== 'edit_image_shopify' && vercel === undefined)
+      )
         throw new Error('Execution credential material is unavailable.');
       if (
         (request.capabilityId === 'create_blog_orbitype' ||
@@ -596,7 +751,7 @@ const loadExecutionContext = async (
         throw new Error('Orbitype credential material is unavailable.');
       if (
         openai.tenantId !== signal.tenantId ||
-        vercel.projectId !== request.projectId
+        (vercel !== undefined && vercel.projectId !== request.projectId)
       )
         throw new Error(
           'Execution credentials do not match the request scope.',
@@ -795,20 +950,96 @@ const processWorkflowJob = async (name: string, data: unknown) => {
       masterKey,
       repositoryId: context.repositoryId,
     });
-    const deployments = createVercelDeploymentPort({
-      credential: context.vercel,
-      masterKey,
-      ...(context.productionOrigin === undefined
-        ? {}
-        : { productionOrigin: context.productionOrigin }),
-    });
+    const deployments =
+      context.vercel === undefined
+        ? undefined
+        : createVercelDeploymentPort({
+            credential: context.vercel,
+            masterKey,
+            ...(context.productionOrigin === undefined
+              ? {}
+              : { productionOrigin: context.productionOrigin }),
+          });
+    if (
+      capabilityRuntime.kind !== 'edit_image_shopify' &&
+      deployments === undefined
+    )
+      throw new DomainError(
+        'validation_error',
+        'Vercel credential is required for this capability.',
+      );
+    const requireDeployments = () => {
+      if (deployments === undefined)
+        throw new DomainError(
+          'validation_error',
+          'Vercel credential is required for this capability.',
+        );
+      return deployments;
+    };
     const runtime =
-      capabilityRuntime.kind === 'edit_image'
+      capabilityRuntime.kind === 'edit_image_shopify'
+        ? await (async () => {
+            const productionBranch =
+              (await withPlatformSystemScope(
+                database,
+                'workflow.theme_image_read_ref',
+                async (scoped) => {
+                  const [row] = await scoped
+                    .select({
+                      document: schema.projectManifestVersions.document,
+                    })
+                    .from(schema.requestVersions)
+                    .innerJoin(
+                      schema.projectManifestVersions,
+                      eq(
+                        schema.projectManifestVersions.id,
+                        schema.requestVersions.manifestVersionId,
+                      ),
+                    )
+                    .where(
+                      eq(
+                        schema.requestVersions.id,
+                        signal.requestVersionId,
+                      ),
+                    )
+                    .limit(1);
+                  return (
+                    row?.document as
+                      | {
+                          repository?: { productionBranch?: string };
+                        }
+                      | undefined
+                  )?.repository?.productionBranch;
+                },
+              )) ?? 'main';
+            const reader = {
+              async readFile(path: string) {
+                const bytes = await repository.readFileAtRef({
+                  path,
+                  ref: productionBranch,
+                });
+                return bytes === null
+                  ? null
+                  : new TextDecoder().decode(bytes);
+              },
+            };
+            return new ThemeImageWorkflowRuntime(
+              database,
+              artifactStore,
+              new EditThemeImageExecutor(repository, reader),
+            );
+          })()
+        : capabilityRuntime.kind === 'edit_image'
         ? (() => {
             if (context.orbitype === undefined)
               throw new DomainError(
                 'validation_error',
                 'Orbitype credential is required for edit_image.',
+              );
+            if (deployments === undefined)
+              throw new DomainError(
+                'validation_error',
+                'Vercel credential is required for edit_image.',
               );
             const configuration = context.orbitype.configuration as {
               baseUrl?: unknown;
@@ -847,7 +1078,7 @@ const processWorkflowJob = async (name: string, data: unknown) => {
               return new ImageWorkflowRuntime(
                 database,
                 artifactStore,
-                new EditImageExecutor(repository, deployments),
+                new EditImageExecutor(repository, requireDeployments()),
                 orbitypeImages,
               );
             } finally {
@@ -894,7 +1125,7 @@ const processWorkflowJob = async (name: string, data: unknown) => {
               return new TextWorkflowRuntime(
                 database,
                 artifactStore,
-                new EditTextExecutor(repository, deployments),
+                new EditTextExecutor(repository, requireDeployments()),
                 orbitypePages,
               );
             } finally {
@@ -941,7 +1172,7 @@ const processWorkflowJob = async (name: string, data: unknown) => {
               return new TextStyleWorkflowRuntime(
                 database,
                 artifactStore,
-                new EditTextStyleExecutor(repository, deployments),
+                new EditTextStyleExecutor(repository, requireDeployments()),
                 orbitypePages,
               );
             } finally {
@@ -1008,7 +1239,7 @@ const processWorkflowJob = async (name: string, data: unknown) => {
                 onModelCall: recordModelCall,
               }),
               repository as ProjectRepositoryPort,
-              deployments,
+              requireDeployments(),
             ),
           )
         : capabilityRuntime.kind === 'delete_project'
@@ -1018,14 +1249,14 @@ const processWorkflowJob = async (name: string, data: unknown) => {
               new DeleteProjectExecutor(
                 catalog,
                 repository as ProjectRepositoryPort,
-                deployments,
+                requireDeployments(),
               ),
             )
           : capabilityRuntime.kind === 'delete_blog'
             ? new DeleteBlogWorkflowRuntime(
                 database,
                 artifactStore,
-                new DeleteBlogExecutor(catalog, repository, deployments),
+                new DeleteBlogExecutor(catalog, repository, requireDeployments()),
               )
             : (() => {
                 const blogExecutor = new BlogExecutor(
@@ -1037,7 +1268,7 @@ const processWorkflowJob = async (name: string, data: unknown) => {
                     onModelCall: recordModelCall,
                   }),
                   repository,
-                  deployments,
+                  requireDeployments(),
                 );
                 if (
                   context.capabilityId !== 'create_blog_orbitype' ||
@@ -1178,6 +1409,27 @@ const processWorkflowJob = async (name: string, data: unknown) => {
             urls: imageResult.result.deployment.urls,
           }),
         );
+      } else if (capabilityRuntime.kind === 'edit_image_shopify') {
+        const themeResult = await (
+          runtime as ThemeImageWorkflowRuntime
+        ).execute(signal);
+        const slotLabel =
+          themeResult.result.patch.candidate.label ||
+          themeResult.result.patch.candidate.key;
+        await notifyClient(
+          signal.requestId,
+          renderThemeImageApprovalNotice({
+            locale,
+            slotLabel,
+            tokens: {
+              approve: themeResult.actions.approve,
+              cancel: themeResult.actions.cancel,
+            },
+            ...(themeResult.result.replacementSourceUrl === undefined
+              ? {}
+              : { photoUrl: themeResult.result.replacementSourceUrl }),
+          }),
+        );
       } else {
         const result = await (
           runtime as BlogWorkflowRuntime | ProjectWorkflowRuntime
@@ -1278,6 +1530,17 @@ const processWorkflowJob = async (name: string, data: unknown) => {
             urls: result.urls,
           }),
         );
+      } else if (capabilityRuntime.kind === 'edit_image_shopify') {
+        const result = await (
+          runtime as ThemeImageWorkflowRuntime
+        ).publish(signal);
+        await notifyClient(
+          signal.requestId,
+          renderPublicationCompleteNotice({
+            locale,
+            urls: result.urls,
+          }),
+        );
       } else {
         const result = await (
           runtime as BlogWorkflowRuntime | ProjectWorkflowRuntime
@@ -1293,6 +1556,8 @@ const processWorkflowJob = async (name: string, data: unknown) => {
     } else if (signal.reason === 'restore_orbitype_preview') {
       if (capabilityRuntime.kind === 'edit_image') {
         await (runtime as ImageWorkflowRuntime).restorePreview(signal);
+      } else if (capabilityRuntime.kind === 'edit_image_shopify') {
+        await (runtime as ThemeImageWorkflowRuntime).restorePreview(signal);
       } else if (capabilityRuntime.kind === 'edit_text') {
         await (runtime as TextWorkflowRuntime).restorePreview(signal);
       } else if (capabilityRuntime.kind === 'edit_text_style') {
@@ -1972,15 +2237,22 @@ const dispatchClientNotifications = async (): Promise<void> => {
                 })
                 .from(schema.clientEnrollments)
                 .innerJoin(
+                  schema.clientUsers,
+                  and(
+                    eq(
+                      schema.clientUsers.enrollmentId,
+                      schema.clientEnrollments.id,
+                    ),
+                    eq(schema.clientUsers.kind, 'owner'),
+                    eq(schema.clientUsers.status, 'active'),
+                  ),
+                )
+                .innerJoin(
                   schema.channelIdentities,
                   and(
                     eq(
-                      schema.channelIdentities.tenantId,
-                      schema.clientEnrollments.tenantId,
-                    ),
-                    eq(
-                      schema.channelIdentities.projectId,
-                      schema.clientEnrollments.projectId,
+                      schema.channelIdentities.userId,
+                      schema.clientUsers.id,
                     ),
                     eq(schema.channelIdentities.status, 'active'),
                   ),
@@ -1995,15 +2267,26 @@ const dispatchClientNotifications = async (): Promise<void> => {
                   })
                   .from(schema.tickets)
                   .innerJoin(
-                    schema.channelIdentities,
+                    schema.clientUsers,
                     and(
                       eq(
-                        schema.channelIdentities.tenantId,
+                        schema.clientUsers.tenantId,
                         schema.tickets.tenantId,
                       ),
                       eq(
-                        schema.channelIdentities.projectId,
+                        schema.clientUsers.projectId,
                         schema.tickets.projectId,
+                      ),
+                      eq(schema.clientUsers.kind, 'owner'),
+                      eq(schema.clientUsers.status, 'active'),
+                    ),
+                  )
+                  .innerJoin(
+                    schema.channelIdentities,
+                    and(
+                      eq(
+                        schema.channelIdentities.userId,
+                        schema.clientUsers.id,
                       ),
                       eq(schema.channelIdentities.status, 'active'),
                     ),

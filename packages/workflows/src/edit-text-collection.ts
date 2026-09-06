@@ -41,7 +41,9 @@ export type EditTextPagesLoader = (input: Readonly<{
 }>) => Promise<readonly OrbitypePageSnapshot[]>;
 
 type ResolvedIdentity = Readonly<{
+  clientActorRole: 'owner' | 'piloter';
   conversationId: string;
+  enrollmentId: string;
   locale: SupportedLocale;
   projectId: string;
   tenantId: string;
@@ -167,6 +169,7 @@ export const createEditTextRequest = async (input: Readonly<{
   });
   await input.database.insert(schema.requests).values({
     capabilityId: 'edit_text',
+    clientActorRole: input.identity.clientActorRole,
     conversationId: input.identity.conversationId,
     currentVersion: 1,
     id: requestId,

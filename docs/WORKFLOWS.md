@@ -53,10 +53,11 @@ Rules:
 ## Coordinator graph
 
 1. Verify event idempotency.
-2. Resolve bot, channel identity, tenant, user and project.
-3. Load active manifest, enabled capabilities and conversation locale.
-4. Classify intent against only the available capabilities.
-5. Create or continue a request thread.
+2. Resolve bot, channel identity, tenant, user, role (owner | piloter) and project.
+3. Load active manifest, enabled capabilities (intersect Piloter subset when
+   role is Piloter; ADR-0057) and conversation locale.
+4. Classify intent against only the available capabilities for that actor.
+5. Create or continue a request thread scoped to the acting `userId`.
 6. Route to the selected versioned capability subgraph.
 7. Project workflow progress to Telegram/dashboard.
 8. Finalize audit, usage, notification and retention work.

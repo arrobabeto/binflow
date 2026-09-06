@@ -36,12 +36,12 @@ const authSecretSources = (): Readonly<{
 export const getAuthRuntime = (): Promise<BinflowAuthRuntime> => {
   runtime ??= (async () =>
     createBinflowAuthRuntime({
-      baseURL: process.env.BINFLOW_PUBLIC_URL ?? 'http://localhost:3000',
+      baseURL: process.env.BINFLOW_PUBLIC_URL ?? 'http://localhost:6060',
       databaseUrl: await readDatabaseUrl(),
       production: process.env.BINFLOW_SECURE_COOKIES === 'true',
       ...authSecretSources(),
       trustedOrigins: [
-        process.env.BINFLOW_PUBLIC_URL ?? 'http://localhost:3000',
+        process.env.BINFLOW_PUBLIC_URL ?? 'http://localhost:6060',
       ],
     }))().catch((error: unknown) => {
     runtime = undefined;

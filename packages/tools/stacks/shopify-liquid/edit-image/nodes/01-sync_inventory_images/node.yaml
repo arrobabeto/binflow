@@ -1,0 +1,6 @@
+kind: effect
+label: Sync inventory image allowlist
+nodeKind: images.sync_inventory_images@1
+acceptsClientCustomization: false
+permissions:
+  - github:metadata:read

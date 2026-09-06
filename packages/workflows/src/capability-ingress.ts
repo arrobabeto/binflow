@@ -9,6 +9,7 @@ export type CapabilityIngressHandlerKind =
   | 'delete_blog'
   | 'delete_project'
   | 'edit_image'
+  | 'edit_image_shopify'
   | 'edit_text'
   | 'edit_text_style'
   | 'project'
@@ -89,6 +90,7 @@ const handlerKindForExecutor = (
   if (executorId === 'workflow.edit_text@1') return 'edit_text';
   if (executorId === 'workflow.edit_text_style@1') return 'edit_text_style';
   if (executorId === 'workflow.edit_image@1') return 'edit_image';
+  if (executorId === 'workflow.edit_image_shopify@1') return 'edit_image_shopify';
   throw new Error(`Unsupported ingress executor ${executorId}.`);
 };
 
@@ -106,7 +108,8 @@ const naturalLanguageForCapability = (
   if (capabilityId === 'update_menu') return updateMenuNaturalLanguage;
   if (capabilityId === 'edit_text') return editTextNaturalLanguage;
   if (capabilityId === 'edit_text_style') return editTextStyleNaturalLanguage;
-  if (capabilityId === 'edit_image') return editImageNaturalLanguage;
+  if (capabilityId === 'edit_image' || capabilityId === 'edit_image_shopify')
+    return editImageNaturalLanguage;
   return undefined;
 };
 
@@ -133,6 +136,7 @@ export const collectionCapabilityIds = Object.freeze(
     'delete_blog_draft',
     'delete_project_astro',
     'edit_image',
+    'edit_image_shopify',
     'edit_text',
     'edit_text_style',
     'open_ticket',

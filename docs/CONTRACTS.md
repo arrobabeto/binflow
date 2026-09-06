@@ -131,7 +131,11 @@ restored/foreground navigation against the server.
 
 ```ts
 type ProjectProfile =
-  'astro_repo' | 'astro_orbitype' | 'nuxt_orbitype' | 'wordpress_rest';
+  | 'astro_repo'
+  | 'astro_orbitype'
+  | 'shopify_liquid'
+  | 'nuxt_orbitype'
+  | 'wordpress_rest';
 
 type SupportedLocale = 'en' | 'es' | 'de';
 type TranslationPolicy = 'always_translate' | 'ask_each_action' | 'none';
@@ -141,9 +145,10 @@ type CapabilityAccess =
   'disabled' | 'client_publish' | 'admin_required' | 'admin_only';
 ```
 
-Only `astro_repo` was active in the first MVP. Post-MVP, `astro_orbitype` is an
-accepted selectable profile for enrollment (ADR-0045). `nuxt_orbitype` and
-`wordpress_rest` remain reserved names until their phases complete.
+Only `astro_repo` was active in the first MVP. Post-MVP, `astro_orbitype`
+(ADR-0045) and `shopify_liquid` (ADR-0059) are accepted selectable profiles.
+`nuxt_orbitype` and `wordpress_rest` remain reserved names until their phases
+complete. Shopify v1 enrollment does not require Vercel or Shopify Admin.
 
 ## Project manifest
 
@@ -343,8 +348,10 @@ See `docs/specs/update-menu.md` and ADR-0049. Profile `astro_orbitype` only.
 Input schema: `updateMenuInputSchema` (`collect` | `execute` modes). Telegram
 ingress accepts `documentArtifactKey` (PDF, max 10 MB). Reply actions:
 `toggle_menu_cta`, `select_all_menu_ctas`, `confirm_menu_selection`, `cancel` on
-the selection step (opt-in: `selectedCtaKeys` starts empty), then generic
-`confirm_plan` at plan confirm. `BlogFile.mime` includes `application/pdf` for versioned menu artifacts
+the selection step (opt-in: `selectedCtaKeys` starts empty; keyboard uses
+optional `TelegramReply.actionRows` — one CTA per row — without changing other
+tools’ single-row `actionTokens` layout), then generic `confirm_plan` at plan
+confirm. `BlogFile.mime` includes `application/pdf` for versioned menu artifacts
 under `public/documents/*.pdf`.
 
 ```ts
@@ -461,12 +468,17 @@ type EditTextStyleInput =
 
 Telegram command: `/edit_image`.
 
-See `docs/specs/edit-image.md` and ADR-0052. Profile `astro_orbitype` only.
-Input schema: `editImageInputSchema` (`collect` | `execute` modes). Reply actions:
-`pick_image_target`, `confirm_image_target`, `reject_image_target`,
-`confirm_image_plan`. Optional `photoUrl` on `TelegramReply` for current-image
-preview during target confirm. Preview actions: `approve_preview`, `cancel` only
-(no revision). Admin always required after client approve.
+See `docs/specs/edit-image.md` and ADR-0052 (`astro_orbitype`) and
+`docs/specs/edit-image-shopify.md` / ADR-0060 (`shopify_liquid`, capability
+`edit_image_shopify`). Shared input schema: `editImageInputSchema`
+(`collect` | `execute`). Reply actions: `pick_image_target`,
+`confirm_image_target`, `reject_image_target`, `confirm_image_plan`. Shopify
+browse-after-miss also uses `pick_image_page`, `deep_search_inventory`,
+`cancel_image_browse` and collection step `browse_pages` (optional `browseArea`,
+`pendingSearchQuery`, `deepSearchAttempted`). Optional `photoUrl` on
+`TelegramReply` for current-image preview during target confirm. Preview
+actions: `approve_preview`, `cancel` only (no revision). Admin always required
+after client approve. Inventory remap: ADR-0061.
 
 ```ts
 type EditImageInput =
@@ -475,10 +487,14 @@ type EditImageInput =
       projectId: string;
       collectionStep:
         | 'await_target'
+        | 'browse_pages'
         | 'disambiguate'
         | 'confirm_target'
         | 'await_replacement'
         | 'ready';
+      browseArea?: string;
+      deepSearchAttempted?: boolean;
+      pendingSearchQuery?: string;
       targetKey?: string;
       replacementArtifactKey?: string;
       replacementMime?: string;
@@ -846,6 +862,9 @@ POST   /api/v1/admin/enrollments/:id/activate
 POST   /api/v1/admin/enrollments/:id/suspend
 POST   /api/v1/admin/enrollments/:id/archive
 POST   /api/v1/admin/enrollments/:id/pairing-link
+POST   /api/v1/admin/enrollments/:id/piloter/pairing-link
+GET    /api/v1/admin/enrollments/:id/piloter
+PUT    /api/v1/admin/enrollments/:id/piloter/capabilities
 GET    /api/v1/admin/tickets
 GET    /api/v1/admin/tickets/:id
 PATCH  /api/v1/admin/tickets/:id
@@ -880,7 +899,26 @@ Request-scoped send after `admin_rejected` is deprecated for new rejects
 `GET /api/v1/admin/tickets/:id/message-target` return a redacted channel
 summary:
 `clientName`, `tenantKey`, `projectKey`, `botUsername`, `paired` — never chat
-IDs, tokens or ciphertext.
+IDs, tokens or ciphertext. When a Piloter is paired, enrollment- and
+ticket-scoped targets default to the **owner** identity (ADR-0057).
+
+### Piloter (ADR-0057)
+
+Target admin contracts (implementation lands with the feature):
+
+- `POST …/enrollments/:id/pairing-link` remains the **owner** pairing link
+  (activation path unchanged).
+- `POST …/enrollments/:id/piloter/pairing-link` issues a one-time Piloter
+  pairing URL (`{ pairingUrl, expiresAt }`); hash-only persistence; at most one
+  active Piloter per enrollment.
+- `GET …/enrollments/:id/piloter` returns redacted Piloter status (`paired`,
+  optional display labels) and the current capability subset ids.
+- `PUT …/enrollments/:id/piloter/capabilities` replaces the subset with a list of
+  capability ids that must already be project-bound; removing an id blocks
+  **new** Piloter starts for that tool only.
+
+Request and ticket projections expose durable actor `owner` | `piloter` (and
+opener identity on tickets) without chat IDs or secrets.
 
 ### Admin tickets (ADR-0055)
 

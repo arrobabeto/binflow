@@ -10,7 +10,8 @@ The LLM is never the control plane. It produces schema-constrained interpretatio
 
 ```mermaid
 flowchart TD
-    Client["Client Telegram user"] --> ClientBot["Client bot"]
+    Owner["Owner Telegram user"] --> ClientBot["Client bot"]
+    Piloter["Piloter Telegram user"] --> ClientBot
     Admin["Platform owner"] --> AdminBot["Admin bot"]
     Admin --> Dashboard["Admin dashboard"]
     ClientBot --> API["Fastify API"]
@@ -27,6 +28,10 @@ flowchart TD
     GitHub --> Webbin["Managed project repository"]
     Vercel --> Preview["Preview / production deployment"]
 ```
+
+The dedicated client bot may serve the primary **owner** and at most one
+optional **Piloter** as separate 1:1 chats; tenant resolution remains bot
+identity (ADR-0007, ADR-0057).
 
 ## Monorepo boundaries
 
@@ -199,3 +204,9 @@ Post-MVP profile `astro_orbitype` (ADR-0045) enrolls with a project-scoped
 Orbitype API-key credential and may activate with zero tool bindings. Content
 tools for that stack are added later without widening shared port defaults
 (ADR-0042).
+
+Post-MVP profile `shopify_liquid` (ADR-0059) enrolls Shopify Liquid themes via
+GitHub + OpenAI + Telegram + `productionDomain`, without Vercel or Shopify
+Admin API in v1. Empty catalog at ACTIVE is allowed. First content tool
+(`edit_image`) is inventory-driven (ADR-0058) and must not reuse Astro
+executors or widen shared ports (ADR-0042).

@@ -1,0 +1,31 @@
+edges:
+  - from: sync_inventory_images
+    to: validate_image_edit
+  - from: validate_image_edit
+    to: render_theme_image_patch
+  - from: render_theme_image_patch
+    to: open_image_edit_pr
+  - from: open_image_edit_pr
+    to: record_theme_preview
+  - from: record_theme_preview
+    to: awaiting_client_approval
+  - from: awaiting_client_approval
+    to: awaiting_admin_approval
+  - from: awaiting_admin_approval
+    to: merge_github
+  - from: merge_github
+    to: verify_production
+  - from: verify_production
+    to: completed
+nodes:
+  - id: sync_inventory_images
+  - id: validate_image_edit
+  - id: render_theme_image_patch
+  - id: open_image_edit_pr
+  - id: record_theme_preview
+  - id: awaiting_client_approval
+  - id: awaiting_admin_approval
+  - id: merge_github
+  - id: verify_production
+  - id: completed
+version: stacks/shopify-liquid/edit-image@1

@@ -1,0 +1,4 @@
+kind: compute
+label: Build GitHub theme image patch
+nodeKind: images.render_theme_patch@1
+acceptsClientCustomization: false

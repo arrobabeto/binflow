@@ -8,6 +8,7 @@ profile ships.
 |-----------------|---------|----------|
 | `astro-repo` | `astro_repo` | [astro-repo.md](astro-repo.md) |
 | `astro-orbitype` | `astro_orbitype` | [astro-orbitype.md](astro-orbitype.md) |
+| `shopify-liquid` | `shopify_liquid` | [shopify-liquid.md](shopify-liquid.md) |
 
 ## How new-stack updates these
 

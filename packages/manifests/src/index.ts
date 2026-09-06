@@ -25,6 +25,22 @@ export const astroOrbitypeGlobalProfile = {
   version: 'astro_orbitype@1',
 } as const satisfies GlobalProfileSummary;
 
+export const shopifyLiquidGlobalProfile = {
+  id: 'shopify_liquid',
+  supportedLocales: ['en', 'es', 'de'],
+  version: 'shopify_liquid@1',
+} as const satisfies GlobalProfileSummary;
+
+export type SelectableManifestProfile =
+  | 'astro_repo'
+  | 'astro_orbitype'
+  | 'shopify_liquid';
+
+export const allowsEmptyCapabilityCatalog = (
+  profile: string,
+): boolean =>
+  profile === 'astro_orbitype' || profile === 'shopify_liquid';
+
 export const webbinBudgetDefaults = {
   maxEstimatedCostCentsPerDay: 2_000,
   maxEstimatedCostCentsPerRequest: 500,
@@ -47,7 +63,7 @@ export const normalizeProductionOrigin = (value: string): string => {
 
 export const resolveManifestProductionOrigin = (
   configuration: EnrollmentConfiguration,
-  profile: 'astro_repo' | 'astro_orbitype',
+  profile: SelectableManifestProfile,
 ): string => {
   if (
     configuration.productionDomain !== undefined &&
@@ -69,7 +85,7 @@ export type VerifiedManifestBindings = Readonly<{
     installationId: string;
     repository: string;
   }>;
-  vercel: Readonly<{
+  vercel?: Readonly<{
     productionBranch: string;
     projectId: string;
     repository: string;
@@ -80,7 +96,7 @@ export type VerifiedManifestBindings = Readonly<{
 export type BuildManifestInput = Readonly<{
   configuration: EnrollmentConfiguration;
   id: string;
-  profile: 'astro_repo' | 'astro_orbitype';
+  profile: SelectableManifestProfile;
   projectId: string;
   projectKey: string;
   tenantKey: string;
@@ -167,11 +183,13 @@ function assertWebbinConfiguration(
 }
 
 const assertVerifiedBindings = (bindings: VerifiedManifestBindings): void => {
+  const vercel = bindings.vercel;
   if (
     bindings.github.repository !== 'arrobabeto/webbin' ||
     bindings.github.defaultBranch !== 'main' ||
-    bindings.vercel.repository !== 'arrobabeto/webbin' ||
-    bindings.vercel.productionBranch !== 'main'
+    vercel === undefined ||
+    vercel.repository !== 'arrobabeto/webbin' ||
+    vercel.productionBranch !== 'main'
   )
     throw new DomainError(
       'policy_denied',
@@ -180,9 +198,23 @@ const assertVerifiedBindings = (bindings: VerifiedManifestBindings): void => {
     );
 };
 
+const requireVercelBindings = (
+  bindings: VerifiedManifestBindings,
+): NonNullable<VerifiedManifestBindings['vercel']> => {
+  if (bindings.vercel === undefined)
+    throw new DomainError(
+      'credential_unavailable',
+      'Vercel verified binding evidence is unavailable.',
+      { code: 'vercel_binding_evidence_missing' },
+    );
+  return bindings.vercel;
+};
+
 export const buildProjectManifest = (
   input: BuildManifestInput,
 ): ProjectManifest => {
+  if (input.profile === 'shopify_liquid')
+    return buildShopifyLiquidManifest(input);
   if (input.profile === 'astro_orbitype')
     return buildAstroOrbitypeManifest(input);
   if (input.tenantKey !== 'webbin' || input.projectKey !== 'webbin')
@@ -351,12 +383,12 @@ export const buildProjectManifest = (
     deployment: {
       previewMode: 'git_integration',
       productionOrigin,
-      projectId: input.verifiedBindings.vercel.projectId,
+      projectId: requireVercelBindings(input.verifiedBindings).projectId,
       protectionMode: 'vercel_auth',
       provider: 'vercel',
-      ...(input.verifiedBindings.vercel.teamId === undefined
+      ...(requireVercelBindings(input.verifiedBindings).teamId === undefined
         ? {}
-        : { teamId: input.verifiedBindings.vercel.teamId }),
+        : { teamId: requireVercelBindings(input.verifiedBindings).teamId }),
     },
     enabledCapabilities: [...enabledCapabilities],
     fingerprint,
@@ -504,12 +536,12 @@ const buildAstroOrbitypeManifest = (
     deployment: {
       previewMode: 'git_integration',
       productionOrigin,
-      projectId: input.verifiedBindings.vercel.projectId,
+      projectId: requireVercelBindings(input.verifiedBindings).projectId,
       protectionMode: 'vercel_auth',
       provider: 'vercel',
-      ...(input.verifiedBindings.vercel.teamId === undefined
+      ...(requireVercelBindings(input.verifiedBindings).teamId === undefined
         ? {}
-        : { teamId: input.verifiedBindings.vercel.teamId }),
+        : { teamId: requireVercelBindings(input.verifiedBindings).teamId }),
     },
     enabledCapabilities: [...enabledCapabilities],
     fingerprint,
@@ -532,6 +564,158 @@ const buildAstroOrbitypeManifest = (
     translationPolicy: input.configuration.translationPolicy,
     validatedAt: input.validatedAt.toISOString(),
     validationProfileId: 'astro-orbitype@1',
+    version: input.version,
+  });
+};
+
+const buildShopifyLiquidManifest = (
+  input: BuildManifestInput,
+): ProjectManifest => {
+  if (
+    input.configuration.budgetPolicy === undefined ||
+    input.configuration.clientConversationLocale === undefined ||
+    input.configuration.contentLocales === undefined ||
+    input.configuration.defaultContentLocale === undefined ||
+    input.configuration.requiredLocales === undefined ||
+    input.configuration.slugLocale === undefined ||
+    input.configuration.translationPolicy === undefined
+  ) {
+    throw new DomainError(
+      'validation_error',
+      'shopify_liquid enrollment configuration is incomplete.',
+      { code: 'configuration_incomplete' },
+    );
+  }
+
+  const enabledCapabilities = resolveProjectCapabilityBindings(
+    input.configuration,
+    { allowEmpty: true },
+  );
+  const contentLocales = [...input.configuration.contentLocales];
+  const requiredContentLocales = [...input.configuration.requiredLocales];
+  if (
+    !contentLocales.includes(input.configuration.defaultContentLocale) ||
+    !contentLocales.includes(input.configuration.slugLocale) ||
+    requiredContentLocales.some((locale) => !contentLocales.includes(locale))
+  ) {
+    throw new DomainError(
+      'validation_error',
+      'shopify_liquid locale configuration is inconsistent.',
+      { code: 'locale_contract_invalid' },
+    );
+  }
+  if (
+    contentLocales.length === 1 &&
+    input.configuration.translationPolicy !== 'none'
+  ) {
+    throw new DomainError(
+      'policy_denied',
+      'Monolingual projects require translation policy none.',
+      { code: 'translation_policy_monolingual' },
+    );
+  }
+  if (
+    contentLocales.length > 1 &&
+    input.configuration.translationPolicy === 'none'
+  ) {
+    throw new DomainError(
+      'policy_denied',
+      'Multilingual projects cannot use translation policy none.',
+      { code: 'translation_policy_multilingual' },
+    );
+  }
+  const collections = Object.fromEntries(
+    contentLocales.map((locale) => [
+      locale,
+      {
+        directory: 'templates',
+        routePrefix: '/',
+      },
+    ]),
+  );
+  const productionOrigin = resolveManifestProductionOrigin(
+    input.configuration,
+    'shopify_liquid',
+  );
+  const dependencyDocument = {
+    budgetPolicy: input.configuration.budgetPolicy,
+    clientConversationLocale: input.configuration.clientConversationLocale,
+    contentLocales,
+    defaultContentLocale: input.configuration.defaultContentLocale,
+    enabledCapabilities: [...enabledCapabilities],
+    globalProfileVersion: shopifyLiquidGlobalProfile.version,
+    productionOrigin,
+    projectId: input.projectId,
+    requiredContentLocales,
+    slugLocale: input.configuration.slugLocale,
+    surfaceInventoryPath: 'binflow/surface-inventory.yaml',
+    translationPolicy: input.configuration.translationPolicy,
+    verifiedBindings: {
+      github: input.verifiedBindings.github,
+    },
+  };
+  const fingerprint = manifestFingerprint(dependencyDocument);
+  const [owner, name] = input.verifiedBindings.github.repository.split('/');
+  if (owner === undefined || name === undefined)
+    throw new DomainError(
+      'validation_error',
+      'Verified GitHub repository identity is malformed.',
+      { code: 'repository_identity_invalid' },
+    );
+
+  return projectManifestSchema.parse({
+    budgetPolicy: input.configuration.budgetPolicy,
+    content: {
+      blockedPaths: [
+        '.github/**',
+        'config/settings_schema.json',
+        'package.json',
+      ],
+      collections,
+      editablePaths: [
+        'assets/**',
+        'sections/**',
+        'snippets/**',
+        'templates/**',
+        'binflow/surface-inventory.yaml',
+      ],
+      frontmatterFields: ['title'],
+      imageDirectory: 'assets',
+      publicationTargets: ['github_theme'],
+      source: 'github',
+      surfaceInventoryPath: 'binflow/surface-inventory.yaml',
+    },
+    contentLocales,
+    conversationLocale: input.configuration.clientConversationLocale,
+    defaultContentLocale: input.configuration.defaultContentLocale,
+    deployment: {
+      previewMode: 'git_integration',
+      productionOrigin,
+      projectId: name,
+      protectionMode: 'public',
+      provider: 'shopify_theme',
+    },
+    enabledCapabilities: [...enabledCapabilities],
+    fingerprint,
+    globalProfileVersion: shopifyLiquidGlobalProfile.version,
+    graphVersion: 'stacks/shopify-liquid@0',
+    id: input.id,
+    profile: 'shopify_liquid',
+    projectId: input.projectId,
+    repository: {
+      branchPattern: `bot/${input.projectKey}/{capability}/{request-id}-{slug}`,
+      githubInstallationId: input.verifiedBindings.github.installationId,
+      name,
+      owner,
+      productionBranch: input.verifiedBindings.github.defaultBranch,
+    },
+    requiredContentLocales,
+    rulesVersion: 'shopify-liquid-theme@0',
+    slugLocale: input.configuration.slugLocale,
+    status: 'validated',
+    translationPolicy: input.configuration.translationPolicy,
+    validatedAt: input.validatedAt.toISOString(),
+    validationProfileId: 'shopify-liquid@1',
     version: input.version,
   });
 };

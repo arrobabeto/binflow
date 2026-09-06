@@ -27,7 +27,7 @@
   and PostgreSQL-backed session runtime can initialize; Caddy waits for this
   health check in production.
 
-Start durable dependencies with `docker compose -f infra/compose/local.yml up -d postgres redis minio clamav`, then apply migrations with `pnpm db:migrate`. Host `pnpm dev` needs those ports on localhost; it does not start PostgreSQL or Redis by itself. The same Compose file can build the current API, dashboard, worker and maintenance images; the CLI intentionally runs in the trusted host terminal so interactive secret input never traverses Compose configuration.
+Start durable dependencies with `docker compose -f infra/compose/local.yml up -d postgres redis minio clamav`, then apply migrations with `pnpm db:migrate`. Host `pnpm dev` needs those dependency ports on localhost; it does not start PostgreSQL or Redis by itself. Host processes use **dashboard `:6060`** and **API `:2040`** by default (`pnpm dev` / `pnpm run dev:live` set `PORT`, `BINFLOW_PUBLIC_URL=http://localhost:6060`, and `BINFLOW_INTERNAL_API_URL=http://localhost:2040`). Compose-built api/dashboard containers still listen on `8080`/`3000` internally. The same Compose file can build the current API, dashboard, worker and maintenance images; the CLI intentionally runs in the trusted host terminal so interactive secret input never traverses Compose configuration.
 
 #### Logfire / OpenTelemetry (local, optional)
 
@@ -305,6 +305,30 @@ evidence. It is additive and forces RLS for the runtime role. Stop workers while
 applying it; a full rollback restores the coordinated pre-release application
 and database backup rather than deleting similarity history manually.
 
+Migration `0032` adds Piloter support (ADR-0057): `client_users.kind`, pairing
+`purpose`, `piloter_capability_bindings`, and Owner|Piloter actor columns on
+requests/tickets. Apply with workers stopped; rollback requires restoring the
+pre-migration schema/backup because uniqueness and dual-identity assumptions
+change.
+
+When `shopify_liquid` enrollment ships (ADR-0059), expect a follow-on migration
+for the project-profile enum / DB check. Apply with enrollment writers stopped;
+document the exact migration id in this section at ship time. Shopify v1 does
+not require Vercel or Shopify Admin credentials at Validate.
+
+Migration `0033` records the `shopify_liquid` enrollment ship marker (profile is
+a text column; no enum alter). Migration `0034` registers
+`edit_image_shopify@1` (ADR-0060). Apply before dashboard assignment of the
+Shopify image tool. Rollback restores the prior application + DB backup rather
+than deleting capability definition history in place.
+
+Surface inventory freshness (ADR-0061): theme agents keep
+`binflow/surface-inventory.yaml` synced on push (see
+`docs/guides/surface-inventory-sync.md`). Telegram **Deep search** runs the
+same remap pipeline in the worker and may auto-merge an **inventory-only** PR.
+Signed GitHub App `push` webhook → remap enqueue remains gated on production
+webhook cutover; until then rely on the client agent gate + deep search.
+
 ### Live blog execution switch
 
 Keep `BINFLOW_LIVE_EXECUTION_ENABLED=false` while testing enrollment and the
@@ -349,7 +373,7 @@ extra process.
 
 The worker drains two notification event types on the same schedule:
 `admin.notification_requested` to the paired platform-owner chat and
-`client.notification_requested` to the requesting client's conversation. Both
+`client.notification_requested` to the intended client conversation. Both
 use bounded exponential backoff and mark an event `failed` after ten attempts.
 Before Telegram delivery, the worker atomically leases each pending outbox row
 (`available_at` lease) so concurrent workers (host + Compose, or send-only
@@ -357,11 +381,17 @@ replicas) cannot deliver the same notice more than once. Delivery is independent
 of workflow state, so a stopped worker delays notices without losing or
 reverting the transitions that produced them.
 
+Destination resolution for client notices uses the intended `userId` / role
+(ADR-0057): request-scoped → request user; enrollment- and ticket-scoped
+default → **owner** when a Piloter is also paired; Piloter-activity template
+notices → owner chat. Never deliver a client notice to the admin bot, and never
+pick an arbitrary project identity when two client chats exist.
+
 A client notice needs the client bot runtime, not the admin runtime. When the
-client bot is unpaired or its runtime is missing, the event stays `pending` and
-retries; it is never delivered to the admin chat as a fallback. Cancellations
-performed from the dashboard while the worker is stopped are therefore announced
-to the client once the worker returns.
+intended client identity is unpaired or its runtime is missing, the event stays
+`pending` and retries; it is never delivered to the admin chat or the wrong
+client chat as a fallback. Cancellations performed from the dashboard while the
+worker is stopped are therefore announced to the client once the worker returns.
 
 ### Webbin preview Deployment Protection
 
