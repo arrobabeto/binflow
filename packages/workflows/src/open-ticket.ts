@@ -80,7 +80,7 @@ const copy = {
     confirmSend: 'Ticket senden',
     customRequest: 'Individuelle Anfrage',
     greeting:
-      'Hallo! Schön, von dir zu hören. Sag Bescheid, wenn ich mit /tools oder /open_ticket helfen kann.',
+      'Hallo! Schön, von dir zu hören. Sag Bescheid, wenn ich mit /hey-binn, /tools oder /open_ticket helfen kann.',
     intentPrompt: 'Was schwebt dir vor? Beschreibe die Idee in eigenen Worten.',
     kindBug: 'Fehler',
     kindImprovement: 'Verbesserung',
@@ -94,7 +94,7 @@ const copy = {
     sent: (publicId: string) =>
       `Ticket ${publicId} wurde an das Admin-Team gesendet. Wir melden uns.`,
     summaryHeader: 'Zusammenfassung deiner Anfrage:',
-    thanks: 'Gerne! Wenn du etwas brauchst, nutze /tools oder /open_ticket.',
+    thanks: 'Gerne! Wenn du etwas brauchst, nutze /hey-binn, /tools oder /open_ticket.',
     urgencyHigh: 'Hoch',
     urgencyLow: 'Niedrig',
     urgencyNormal: 'Normal',
@@ -108,7 +108,7 @@ const copy = {
     confirmSend: 'Send ticket',
     customRequest: 'Custom request',
     greeting:
-      'Hi! Good to hear from you. Use /tools or /open_ticket whenever you need help.',
+      'Hi! Good to hear from you. Use /hey-binn, /tools, or /open_ticket whenever you need help.',
     intentPrompt: 'What do you have in mind? Describe the idea in your own words.',
     kindBug: 'Bug / error',
     kindImprovement: 'Improvement',
@@ -121,7 +121,7 @@ const copy = {
     sent: (publicId: string) =>
       `Ticket ${publicId} was sent to the admin team. We will follow up.`,
     summaryHeader: 'Summary of your request:',
-    thanks: 'You are welcome! Use /tools or /open_ticket anytime you need something.',
+    thanks: 'You are welcome! Use /hey-binn, /tools, or /open_ticket anytime you need something.',
     urgencyHigh: 'High',
     urgencyLow: 'Low',
     urgencyNormal: 'Normal',
@@ -135,7 +135,7 @@ const copy = {
     confirmSend: 'Enviar ticket',
     customRequest: 'Petición personalizada',
     greeting:
-      '¡Hola! Qué gusto saludarte. Cuando quieras, usa /tools o /open_ticket.',
+      '¡Hola! Qué gusto saludarte. Cuando quieras, usa /hey-binn, /tools o /open_ticket.',
     intentPrompt: '¿Qué tienes en mente? Cuéntalo con tus palabras.',
     kindBug: 'Error',
     kindImprovement: 'Mejora',
@@ -148,7 +148,7 @@ const copy = {
     sent: (publicId: string) =>
       `Ticket ${publicId} enviado al equipo admin. Te contactaremos.`,
     summaryHeader: 'Resumen de tu petición:',
-    thanks: '¡Con gusto! Cuando necesites algo, usa /tools o /open_ticket.',
+    thanks: '¡Con gusto! Cuando necesites algo, usa /hey-binn, /tools o /open_ticket.',
     urgencyHigh: 'Alta',
     urgencyLow: 'Baja',
     urgencyNormal: 'Normal',

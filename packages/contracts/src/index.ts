@@ -1416,6 +1416,7 @@ export const capabilityIdSchema = z.enum([
   'edit_image_shopify',
   'edit_text',
   'edit_text_style',
+  'hey_binn',
   'open_ticket',
   'update_menu',
 ]);
@@ -1962,6 +1963,8 @@ const telegramActionTokenSchema = z
       'pick_ticket_urgency',
       'pick_ticket_kind',
       'confirm_ticket_send',
+      'confirm_binn_handoff',
+      'cancel_binn_handoff',
       'cancel',
       'approve_publish',
       'reject',
@@ -2416,6 +2419,8 @@ export const usageResponseSchema = z
     costOverTime: z.array(usageCostDaySchema),
     distinctRequestCount: z.number().int().nonnegative(),
     efficiency: z.array(usageEfficiencySchema),
+    /** Per-client spend attributable only to `hey_binn` (ADR-0062). */
+    heyBinnByClient: z.array(usageByClientSchema),
     range: usageRangeSchema,
     rangeEnd: z.string().datetime(),
     rangeStart: z.string().datetime().nullable(),

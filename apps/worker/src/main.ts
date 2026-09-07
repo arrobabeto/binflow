@@ -9,7 +9,7 @@ import pino from 'pino';
 import { v7 as uuidv7 } from 'uuid';
 
 import { workflowResumeSignalSchema } from '@binflow/contracts';
-import { createOpenAIBlogGenerationPort, createOpenAIProjectGenerationPort, createOpenAITicketEstimatePort } from '@binflow/ai';
+import { createOpenAIBlogGenerationPort, createOpenAIHeyBinnPort, createOpenAIProjectGenerationPort, createOpenAITicketEstimatePort, HEY_BINN_CHAT_MODEL } from '@binflow/ai';
 import { S3ArtifactStore } from '@binflow/artifacts';
 import { BlogExecutor, DeleteBlogExecutor, orbitypeBlogPublicationStages, type ContentCatalogPort } from '@binflow/blog';
 import { UpdateMenuExecutor } from '@binflow/menu';
@@ -62,6 +62,8 @@ import {
   EditImageExecutor,
   EditThemeImageExecutor,
   DEFAULT_SURFACE_INVENTORY_PATH,
+  listInventoryImageAreas,
+  parseSurfaceInventoryImages,
   resolveThemeAssetPreviewUrlFromManifest,
   runThemeInventoryRemap,
 } from '@binflow/images';
@@ -87,10 +89,12 @@ import {
   type DeleteBlogCatalogLoader,
   type DeleteProjectCatalogLoader,
   type EditImageContentLoader,
+  type HeyBinnSiteContextLoader,
   type ThemeAssetPreviewUrlResolver,
   type ThemeImageInventoryLoader,
   type ThemeInventoryRemapRunner,
   type UpdateMenuPagesLoader,
+  HEY_BINN_INVENTORY_CAP,
 } from '@binflow/workflows';
 
 const deleteNoticeContentKind = (
@@ -205,6 +209,259 @@ const loadDeleteBlogCatalog: DeleteBlogCatalogLoader = async ({
   } finally {
     masterKey.fill(0);
   }
+};
+
+/**
+ * ADR-0062 / ADR-0042: deterministic GitHub (+ optional CMS) reads for Hey Binn.
+ * Never exposed as LLM tools — inventory is injected into the chat prompt.
+ */
+const loadHeyBinnSiteContext: HeyBinnSiteContextLoader = async ({
+  database: scoped,
+  projectId,
+  tenantId,
+}) => {
+  const [manifestRow] = await scoped
+    .select({ document: schema.projectManifestVersions.document })
+    .from(schema.projectManifestVersions)
+    .where(
+      and(
+        eq(schema.projectManifestVersions.projectId, projectId),
+        eq(schema.projectManifestVersions.tenantId, tenantId),
+        inArray(schema.projectManifestVersions.status, [
+          'validated',
+          'active',
+        ]),
+      ),
+    )
+    .orderBy(desc(schema.projectManifestVersions.version))
+    .limit(1);
+  if (manifestRow === undefined)
+    throw new DomainError(
+      'policy_denied',
+      'No active manifest for Hey Binn site context.',
+    );
+  const manifest = manifestRow.document;
+  const collections = Object.entries(manifest.content.collections).flatMap(
+    ([locale, collection]) =>
+      collection === undefined
+        ? []
+        : [
+            {
+              directory: collection.directory,
+              locale,
+              routePrefix: collection.routePrefix,
+            },
+          ],
+  );
+
+  const items: Array<{
+    category?: string;
+    kind: 'blog' | 'page' | 'portfolio' | 'surface';
+    locale?: string;
+    slug?: string;
+    sourceId?: string;
+    title: string;
+  }> = [];
+  let source: 'github' | 'github+cms' | 'cms' | 'manifest_only' = 'manifest_only';
+  const notes: string[] = [];
+
+  const masterKey = await loadRuntimeMasterKeyFile(defaultMasterKeyPath());
+  try {
+    try {
+      const { binding, github } = await loadProjectGithubApp(scoped, projectId);
+      const hasBlogCollections = collections.some((collection) =>
+        /blog|articulo|post/iu.test(
+          `${collection.directory} ${collection.routePrefix}`,
+        ),
+      );
+      const hasPortfolioCollections = collections.some((collection) =>
+        /proyecto|portfolio|project/iu.test(
+          `${collection.directory} ${collection.routePrefix}`,
+        ),
+      );
+
+      const syncBlog =
+        hasBlogCollections ||
+        manifest.profile === 'astro_repo' ||
+        manifest.profile === 'astro_orbitype';
+      const syncPortfolio =
+        hasPortfolioCollections || manifest.profile === 'astro_repo';
+
+      if (syncBlog) {
+        const blogPort = createCapabilityCatalogPort('delete_blog', {
+          credential: github,
+          installationId: binding.installationId,
+          masterKey,
+          repositoryId: binding.repositoryId,
+        });
+        const synchronized = await blogPort.sync({ manifest });
+        await persistDeleteBlogCatalogSync(scoped, {
+          items: synchronized.items,
+          manifest,
+          projectId,
+          revision: synchronized.revision,
+          tenantId,
+        });
+        const blogs = filterBlogCatalogItems(synchronized.items, manifest);
+        for (const item of blogs.slice(0, HEY_BINN_INVENTORY_CAP)) {
+          items.push({
+            category: item.category,
+            kind: 'blog',
+            locale: item.locale,
+            slug: item.slug,
+            sourceId: item.sourceId,
+            title: item.title,
+          });
+        }
+        notes.push(`GitHub blog catalog: ${blogs.length} item(s).`);
+        source = 'github';
+      }
+
+      if (syncPortfolio) {
+        const projectPort = createCapabilityCatalogPort('delete_project', {
+          credential: github,
+          installationId: binding.installationId,
+          masterKey,
+          repositoryId: binding.repositoryId,
+        });
+        const synchronized = await projectPort.sync({ manifest });
+        await persistDeleteProjectCatalogSync(scoped, {
+          items: synchronized.items,
+          manifest,
+          projectId,
+          revision: synchronized.revision,
+          tenantId,
+        });
+        const portfolio = filterPortfolioCatalogItems(
+          synchronized.items,
+          manifest,
+        );
+        for (const item of portfolio.slice(0, HEY_BINN_INVENTORY_CAP)) {
+          items.push({
+            category: item.category,
+            kind: 'portfolio',
+            locale: item.locale,
+            slug: item.slug,
+            sourceId: item.sourceId,
+            title: item.title,
+          });
+        }
+        notes.push(`GitHub portfolio catalog: ${portfolio.length} item(s).`);
+        source = 'github';
+      }
+
+      const inventoryPath =
+        manifest.content.surfaceInventoryPath ?? DEFAULT_SURFACE_INVENTORY_PATH;
+      if (
+        manifest.profile === 'shopify_liquid' ||
+        manifest.content.surfaceInventoryPath !== undefined
+      ) {
+        const repository = createGitHubRepositoryPublicationPort({
+          credential: github,
+          installationId: binding.installationId,
+          masterKey,
+          repositoryId: binding.repositoryId,
+        });
+        const file = await repository.readFileAtRef({
+          path: inventoryPath,
+          ref: manifest.repository.productionBranch,
+        });
+        if (file !== null) {
+          const yaml = Buffer.from(file).toString('utf8');
+          const areas = listInventoryImageAreas(
+            parseSurfaceInventoryImages(yaml),
+          );
+          for (const area of areas.slice(0, HEY_BINN_INVENTORY_CAP)) {
+            items.push({ kind: 'surface', title: area });
+          }
+          notes.push(
+            `Surface inventory areas: ${areas.length} (path ${inventoryPath}).`,
+          );
+          source = 'github';
+        }
+      }
+    } catch (error) {
+      if (
+        error instanceof DomainError &&
+        error.category === 'credential_unavailable'
+      )
+        throw error;
+      throw error;
+    }
+
+    const [orbitypeRow] = await scoped
+      .select({ id: schema.providerCredentials.id })
+      .from(schema.providerCredentials)
+      .where(
+        and(
+          eq(schema.providerCredentials.projectId, projectId),
+          eq(schema.providerCredentials.kind, 'orbitype-api'),
+          eq(schema.providerCredentials.status, 'active'),
+        ),
+      )
+      .limit(1);
+    if (orbitypeRow !== undefined) {
+      const orbitype = await getCredentialForVerification(
+        scoped,
+        orbitypeRow.id,
+      );
+      if (orbitype !== undefined) {
+        const configuration = orbitype.configuration as {
+          baseUrl?: unknown;
+          pagesTable?: unknown;
+        };
+        if (typeof configuration.baseUrl === 'string') {
+          const plaintext = decryptSecret(
+            orbitype.envelope,
+            masterKey,
+            orbitype.secretContext,
+          );
+          try {
+            const secret = JSON.parse(plaintext.toString('utf8')) as {
+              apiKey?: unknown;
+            };
+            if (typeof secret.apiKey === 'string') {
+              const pagesPort = createOrbitypeMenuPagesPort({
+                apiKey: secret.apiKey,
+                baseUrl: configuration.baseUrl,
+                ...(typeof configuration.pagesTable === 'string'
+                  ? { pagesTable: configuration.pagesTable }
+                  : {}),
+              });
+              const pages = await pagesPort.listPages();
+              for (const page of pages.slice(0, HEY_BINN_INVENTORY_CAP)) {
+                const title =
+                  typeof page.title === 'string' && page.title.trim().length > 0
+                    ? page.title.trim()
+                    : page.slug;
+                items.push({
+                  kind: 'page',
+                  slug: page.slug,
+                  title,
+                });
+              }
+              notes.push(`Orbitype pages: ${pages.length}.`);
+              source = source === 'github' ? 'github+cms' : 'cms';
+            }
+          } finally {
+            plaintext.fill(0);
+          }
+        }
+      }
+    }
+  } finally {
+    masterKey.fill(0);
+  }
+
+  if (items.length === 0 && notes.length === 0)
+    notes.push('No catalog items found for allowlisted paths.');
+
+  return {
+    collections,
+    items: items.slice(0, HEY_BINN_INVENTORY_CAP * 2),
+    notes: notes.join(' '),
+    source,
+  };
 };
 
 const loadDeleteProjectCatalog: DeleteProjectCatalogLoader = async ({
@@ -602,6 +859,59 @@ const workflowService = new WorkflowService(
       return fallbackTicketEstimate(input);
     }
   },
+  async (input) => {
+    const masterKey = await loadRuntimeMasterKeyFile(defaultMasterKeyPath());
+    try {
+      const credential = await withPlatformSystemScope(
+        database,
+        'hey_binn.load_openai',
+        async (scoped) => {
+          const [row] = await scoped
+            .select({ id: schema.providerCredentials.id })
+            .from(schema.providerCredentials)
+            .where(
+              and(
+                eq(schema.providerCredentials.kind, 'openai'),
+                eq(schema.providerCredentials.status, 'active'),
+                eq(schema.providerCredentials.tenantId, input.tenantId),
+              ),
+            )
+            .limit(1);
+          if (row === undefined) return undefined;
+          return getCredentialForVerification(scoped, row.id);
+        },
+      );
+      if (credential === undefined)
+        throw new DomainError(
+          'credential_unavailable',
+          'OpenAI credential is missing for Hey Binn.',
+        );
+      const plaintext = decryptSecret(
+        credential.envelope,
+        masterKey,
+        credential.secretContext,
+      );
+      try {
+        const secret = JSON.parse(plaintext.toString('utf8')) as {
+          apiKey?: unknown;
+        };
+        if (typeof secret.apiKey !== 'string')
+          throw new DomainError(
+            'credential_unavailable',
+            'OpenAI API key is missing for Hey Binn.',
+          );
+        return await createOpenAIHeyBinnPort({
+          apiKey: secret.apiKey,
+          model: HEY_BINN_CHAT_MODEL,
+        })(input);
+      } finally {
+        plaintext.fill(0);
+      }
+    } finally {
+      masterKey.fill(0);
+    }
+  },
+  loadHeyBinnSiteContext,
 );
 const connection = new Redis(redisUrl, { maxRetriesPerRequest: null });
 // BullMQ Worker blocks on `connection`; keep polling-lock commands on a

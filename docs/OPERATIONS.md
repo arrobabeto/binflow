@@ -32,6 +32,10 @@ Start durable dependencies with `docker compose -f infra/compose/local.yml up -d
 #### Logfire / OpenTelemetry (local, optional)
 
 Analytics cost KPIs use Postgres via `GET /api/v1/usage` (ADR-0056). Separately,
+dashboard **Binn AI** attributes `hey_binn` usage/spend from
+`binn_usage_events` (migration `0035_hey_binn`, ADR-0062), merged into the same
+Usage response (`byCapability`, `heyBinnByClient`). Logfire remains ops telemetry
+only.
 API and worker may export OpenTelemetry spans to a **single platform** Logfire
 project for ops debugging:
 

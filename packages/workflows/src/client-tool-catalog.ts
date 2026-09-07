@@ -337,7 +337,13 @@ export const formatToolsListMessage = (
       : locale === 'de'
         ? '/open_ticket — Individuelle Anfrage (Ticket an Admin)'
         : '/open_ticket — Custom request (ticket to admin)';
-  return `${heading}\n${lines.join('\n')}\n${openTicketLine}\n\n${footer}`;
+  const heyBinnLine =
+    locale === 'es'
+      ? '/hey-binn — Ideas y ayuda (solo lectura)'
+      : locale === 'de'
+        ? '/hey-binn — Ideenhilfe (nur lesen)'
+        : '/hey-binn — Ideas and help (read-only)';
+  return `${heading}\n${lines.join('\n')}\n${heyBinnLine}\n${openTicketLine}\n\n${footer}`;
 };
 
 export const formatInfoChooserMessage = (
@@ -397,6 +403,9 @@ export const buildTelegramClientCommands = (
       ? [
           { command: '/tools', description: 'Ver herramientas disponibles' },
           { command: '/info', description: 'Detalle y alcance de una tool' },
+          { command: '/hey-binn', description: 'Ideas y ayuda (solo lectura)' },
+          { command: '/bye-binn', description: 'Cerrar la charla con Binn' },
+          { command: '/open_ticket', description: 'Petición personalizada al admin' },
           { command: '/help', description: 'Cómo usar el bot' },
           { command: '/status', description: 'Estado de tu última solicitud' },
           { command: '/cancel', description: 'Cancelar la solicitud activa' },
@@ -405,6 +414,9 @@ export const buildTelegramClientCommands = (
         ? [
             { command: '/tools', description: 'Verfügbare Tools anzeigen' },
             { command: '/info', description: 'Details und Umfang eines Tools' },
+            { command: '/hey-binn', description: 'Ideenhilfe (nur lesen)' },
+            { command: '/bye-binn', description: 'Binn-Chat beenden' },
+            { command: '/open_ticket', description: 'Individuelle Anfrage an Admin' },
             { command: '/help', description: 'Hilfe zur Bot-Nutzung' },
             { command: '/status', description: 'Status der letzten Anfrage' },
             { command: '/cancel', description: 'Aktive Anfrage abbrechen' },
@@ -412,6 +424,9 @@ export const buildTelegramClientCommands = (
         : [
             { command: '/tools', description: 'List available tools' },
             { command: '/info', description: 'Tool detail and scope' },
+            { command: '/hey-binn', description: 'Ideas and help (read-only)' },
+            { command: '/bye-binn', description: 'End Binn chat' },
+            { command: '/open_ticket', description: 'Custom request to admin' },
             { command: '/help', description: 'How to use the bot' },
             { command: '/status', description: 'Status of your latest request' },
             { command: '/cancel', description: 'Cancel the active request' },

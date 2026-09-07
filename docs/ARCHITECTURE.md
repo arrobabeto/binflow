@@ -107,6 +107,10 @@ Provider payloads must not cross into domain interfaces. Adapters normalize them
 ### Worker
 
 - Owns the TypeScript workflow coordinator and capability executors.
+- Runs **Hey Binn** (`hey_binn`) as a platform meta Telegram advisor: read-only
+  context load + OpenAI chat without creating mutate workflow requests
+  (ADR-0062).
+- Polls or receives provider webhooks according to environment.
 - Loads frozen request configuration and secrets only when required.
 - Executes deterministic adapters and records each node run.
 - Pauses for input, preview or approval through graph interrupts.

@@ -234,8 +234,9 @@ stuck states, and customization asks. Pilot reference:
 ### Telegram/input
 
 - `/tools` lists only enabled bindings as `command — displayName`, adds
-  `/open_ticket`, and points to `/info`; `/info` shows scope; unmatched text
-  offers custom request vs tools; greetings use heuristics (ADR-0054 / ADR-0055).
+  `/open_ticket` and `/hey-binn`, and points to `/info`; `/info` shows scope;
+  unmatched text offers custom request vs tools; greetings use heuristics;
+  Binn NL greetings route only to `hey_binn` (ADR-0054 / ADR-0055 / ADR-0062).
   See `packages/workflows/test/client-tool-catalog.test.ts` and
   `packages/workflows/test/open-ticket.test.ts`.
 - Natural-language request resolves correctly.

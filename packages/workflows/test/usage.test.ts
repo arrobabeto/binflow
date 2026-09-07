@@ -95,6 +95,7 @@ describe('buildUsageResponse', () => {
     );
     expect(response.alerts).toHaveLength(0);
     expect(response.efficiency[0]?.score).toBeGreaterThanOrEqual(0);
+    expect(response.heyBinnByClient).toEqual([]);
   });
 
   it('emits critical budget alerts when utilization exceeds 100%', () => {

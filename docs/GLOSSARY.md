@@ -2,6 +2,7 @@
 
 | Term             | Meaning                                                                                                      |
 | ---------------- | ------------------------------------------------------------------------------------------------------------ |
+| Binn             | Read-only Telegram advisor (`hey_binn` / `/hey-binn`); suggests tools and typed handoffs; does not mutate (ADR-0062). |
 | Approval         | Permission from an authorized user bound to one exact request version and preview artifact.                  |
 | Artifact         | Versioned output such as Markdown, image, diff, screenshot or CMS draft.                                     |
 | bf_id            | Stable dotted Editable Surface id (e.g. `home.hero.heading`); never rename after ship (ADR-0058).            |

@@ -5,6 +5,9 @@
 Binflow is a private, AI-assisted WebOps control plane. Authorized clients and administrators request bounded website changes through Telegram. Binflow interprets the request, applies deterministic policy, creates a typed and versioned draft, produces an exact preview, collects approvals and publishes through the website's existing source of truth.
 
 Binflow is not a general coding agent, a CMS replacement or a natural-language shell.
+**Binn** is an optional read-only Telegram advisor that may read enrolled project
+content and suggest tools; it must not mutate, publish, or invoke tools on the
+client’s behalf (ADR-0062).
 
 ## Problem
 
@@ -27,6 +30,8 @@ Small but frequent content changes require clients to understand a CMS, reposito
 - Review the real result rather than an abstract text response.
 - Request revisions without losing history.
 - Publish approved low/medium-risk content without learning GitHub or Vercel.
+- Use **Binn** (`/hey-binn`) for read-only ideation and typed tool handoffs
+  without Binn mutating the site (ADR-0062).
 
 ### Platform
 

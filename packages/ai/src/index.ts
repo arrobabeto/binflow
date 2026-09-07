@@ -1022,3 +1022,9 @@ export {
   type OpenAITicketEstimateInput,
   type OpenAITicketEstimateResult,
 } from './ticket-estimate.js';
+export {
+  createOpenAIHeyBinnPort,
+  HEY_BINN_CHAT_MODEL,
+  type OpenAIHeyBinnInput,
+  type OpenAIHeyBinnResult,
+} from './hey-binn.js';

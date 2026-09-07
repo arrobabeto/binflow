@@ -92,8 +92,10 @@ Unpaired users receive a localized access-denied message and cannot discover pro
 | Command        | Behavior                                                                                                     |
 | -------------- | ------------------------------------------------------------------------------------------------------------ |
 | `/start`       | Pair or show current connection status.                                                                      |
-| `/tools`       | List enabled tools as `command — displayName`, plus platform `/open_ticket`, and a footer pointing to `/info`. For Piloter: intersection with the assigned subset (ADR-0057). |
+| `/tools`       | List enabled tools as `command — displayName`, plus platform `/open_ticket` and `/hey-binn`, and a footer pointing to `/info`. For Piloter: intersection with the assigned subset (ADR-0057); platform meta commands remain listed. |
 | `/open_ticket` | Start a custom-request interview (not a catalog tool); available to every paired client (owner and Piloter). |
+| `/hey-binn`    | Start the read-only Binn advisor (not a catalog tool); all paired clients; suggests tools + typed handoff; never mutates (ADR-0062). Deterministic code injects allowlisted site inventory (blogs/portfolio/pages) into context. |
+| `/bye-binn`    | End the Binn chat thread (also: Adiós/Bye/Gracias Binn). Idle threads expire after 10 minutes. |
 | `/info`        | Without args: short list + ask which tool. With arg: scope/detail for one enabled tool (does not start it).  |
 | `/create_blog` | Start the blog capability; arguments are optional.                                                           |
 | `/status`      | Show active/recent request states for this user/project.                                                     |
@@ -109,9 +111,12 @@ may use localized one-line summaries from the client tool catalog. Internal node
 such as translation never appear as commands. `/tools` lists only enabled
 bindings visible to the actor (owner: full project catalog; Piloter: subset);
 `/info` details only those bindings (ADR-0054, ADR-0057). `/info` never creates
-a request. Platform command `/open_ticket` appears in `/tools` and `/help` for
-all paired clients (ADR-0055). Unmatched free-text offers custom request or
-`/tools`; greeting/thanks use a heuristic polite reply.
+a request. Platform commands `/open_ticket` and `/hey-binn` appear in `/tools`
+and `/help` for every paired client without Dashboard capability assignment
+(ADR-0055, ADR-0062). Unmatched free-text offers custom request or `/tools`;
+greeting/thanks use a heuristic polite reply. Natural-language greetings that
+address Binn (Hola/Hi/Hallo/Hey Binn, etc.) route to `hey_binn` and must not
+steal unrelated tool intents.
 
 ## Natural-language routing
 
@@ -119,6 +124,12 @@ A normal message is evaluated only against enabled capabilities. The planner ret
 
 For the local MVP router:
 
+- **Hey Binn / Binn:** Natural-language greetings that address Binn
+  (Hola/Hi/Hallo/Hey Binn, etc.) or `/hey-binn` start the read-only advisor
+  (ADR-0062); they must not steal blog/menu/edit intents. Deterministic worker
+  code injects allowlisted GitHub/CMS inventory into the prompt (no LLM tools).
+  End with `/bye-binn` or addressed goodbyes (Adiós/Bye/Gracias Binn); idle
+  threads expire after 10 minutes.
 - **Blog:** messages mentioning *blog*, *article*, *artículo*, *Beitrag*, *post*, etc. start the project's assigned create-blog capability (`create_blog_draft` on `astro_repo`, `create_blog_orbitype` on `astro_orbitype`).
 - **Menu update (`astro_orbitype`):** messages mentioning *menú*, *carta*, *Speisekarte*, *update menu*, *upload menu*, etc. start `update_menu` when assigned.
 - **Text edit (`astro_orbitype`):** messages mentioning *editar texto*, *cambiar texto*, *edit text*, *Text ändern*, etc. start `edit_text` when assigned.

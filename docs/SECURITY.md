@@ -50,6 +50,7 @@ provider secrets.
 | Prompt injection                 | Treat external text as data, bounded capability context, output validation outside model                            |
 | Customization markdown injection | Size/token caps, template section validation, malware scan, compose as untrusted style layer; path/schema/approval guards remain code-owned |
 | LLM proposes forbidden operation | Tool registry allowlist and deterministic policy rejection                                                          |
+| Hey Binn over-reads or mutates   | Read-only ports only; no mutate/invoke tools on the model; project allowlists; budgets (ADR-0062)                  |
 | Cross-tenant disclosure          | RLS, scoped repositories, tenant artifact prefixes, isolation tests                                                 |
 | Secret leakage                   | Envelope encryption, redaction, no secrets in queue/checkpoint/log/model contexts                                   |
 | Orbitype API key misuse          | Project-scoped credential, read-only enrollment verify, no CMS mutation at onboard, never LLM-visible (ADR-0045)   |

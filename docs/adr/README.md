@@ -67,5 +67,6 @@ ADRs preserve why durable decisions exist. Accepted ADRs are binding until a lat
 | [0059](0059-shopify-liquid-enrollment.md)                            | Shopify Liquid enrollment (`shopify_liquid`)                 | Accepted |
 | [0060](0060-edit-image-shopify.md)                                   | Edit theme image for Shopify Liquid (`edit_image_shopify`)   | Accepted |
 | [0061](0061-surface-inventory-sync-and-deep-search.md)               | Surface inventory sync on push + deep search (amends 0058/0060) | Accepted |
+| [0062](0062-hey-binn.md)                                             | Hey Binn (`hey_binn`) read-only Telegram advisor + Binn AI UI | Accepted |
 
 Use [0000-template.md](0000-template.md) for new decisions.
