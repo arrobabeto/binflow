@@ -1724,6 +1724,102 @@ export const usageRecords = pgTable(
   ],
 ).enableRLS();
 
+/** Ephemeral Hey Binn chat thread marker (no message memory; ADR-0062). */
+export const binnThreads = pgTable(
+  'binn_threads',
+  {
+    conversationId: text('conversation_id')
+      .primaryKey()
+      .references(() => conversations.id),
+    tenantId: text('tenant_id').notNull(),
+    projectId: text('project_id').notNull(),
+    userId: text('user_id').notNull(),
+    lastActivityAt: timestamp('last_activity_at', { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+    createdAt: timestamp('created_at', { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (table) => [
+    index('binn_threads_project_activity_idx').on(
+      table.projectId,
+      table.lastActivityAt,
+    ),
+    pgPolicy('binn_threads_tenant_isolation', {
+      for: 'all',
+      using: sql`${table.tenantId} = nullif(current_setting('app.tenant_id', true), '') OR current_setting('app.platform_owner', true) = 'true'`,
+      withCheck: sql`${table.tenantId} = nullif(current_setting('app.tenant_id', true), '') OR current_setting('app.platform_owner', true) = 'true'`,
+    }),
+  ],
+).enableRLS();
+
+/** Telegram action tokens for Hey Binn handoff (no workflow request FK). */
+export const binnActions = pgTable(
+  'binn_actions',
+  {
+    id: text('id').primaryKey(),
+    tenantId: text('tenant_id').notNull(),
+    projectId: text('project_id').notNull(),
+    userId: text('user_id').notNull(),
+    conversationId: text('conversation_id')
+      .notNull()
+      .references(() => conversations.id),
+    action: text('action').notNull(),
+    tokenHash: text('token_hash').notNull(),
+    payload: jsonb('payload').notNull().default({}),
+    expiresAt: timestamp('expires_at', { withTimezone: true }).notNull(),
+    consumedAt: timestamp('consumed_at', { withTimezone: true }),
+    revokedAt: timestamp('revoked_at', { withTimezone: true }),
+    createdAt: timestamp('created_at', { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (table) => [
+    uniqueIndex('binn_actions_token_hash_unique').on(table.tokenHash),
+    index('binn_actions_conversation_idx').on(table.conversationId),
+    pgPolicy('binn_actions_tenant_isolation', {
+      for: 'all',
+      using: sql`${table.tenantId} = nullif(current_setting('app.tenant_id', true), '') OR current_setting('app.platform_owner', true) = 'true'`,
+      withCheck: sql`${table.tenantId} = nullif(current_setting('app.tenant_id', true), '') OR current_setting('app.platform_owner', true) = 'true'`,
+    }),
+  ],
+).enableRLS();
+
+/** Hey Binn model usage without workflow requests (ADR-0062 / ADR-0056). */
+export const binnUsageEvents = pgTable(
+  'binn_usage_events',
+  {
+    id: text('id').primaryKey(),
+    tenantId: text('tenant_id').notNull(),
+    projectId: text('project_id').notNull(),
+    capabilityId: text('capability_id').notNull().default('hey_binn'),
+    provider: text('provider').notNull(),
+    model: text('model').notNull(),
+    inputTokens: integer('input_tokens').notNull().default(0),
+    outputTokens: integer('output_tokens').notNull().default(0),
+    estimatedCostCents: integer('estimated_cost_cents').notNull().default(0),
+    latencyMs: integer('latency_ms').notNull(),
+    status: text('status').notNull(),
+    providerRequestId: text('provider_request_id'),
+    createdAt: timestamp('created_at', { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (table) => [
+    index('binn_usage_events_project_created_idx').on(
+      table.projectId,
+      table.createdAt,
+    ),
+    index('binn_usage_events_created_idx').on(table.createdAt),
+    pgPolicy('binn_usage_events_tenant_isolation', {
+      for: 'all',
+      using: sql`${table.tenantId} = nullif(current_setting('app.tenant_id', true), '') OR current_setting('app.platform_owner', true) = 'true'`,
+      withCheck: sql`${table.tenantId} = nullif(current_setting('app.tenant_id', true), '') OR current_setting('app.platform_owner', true) = 'true'`,
+    }),
+  ],
+).enableRLS();
+
 export const credentialEvents = pgTable(
   'credential_events',
   {

@@ -22,6 +22,7 @@ Node defaults:
 | ---------------------------------------------------------------- | ------------------------ |
 | Intent, extraction, category, similarity classification          | `gpt-5.6-luna`           |
 | Research synthesis, editorial generation, translation, rationale | `gpt-5.6-terra`          |
+| Hey Binn advisor chat (`hey_binn`, ADR-0062)                     | code-owned allowlisted chat model (declare at implement) |
 | Embeddings                                                       | `text-embedding-3-small` |
 | Image generation/editing                                         | `gpt-image-2`            |
 
@@ -37,6 +38,9 @@ Requirements:
 - Primary/official sources prioritized for current or sensitive claims.
 - Usage, provider request ID, tokens, image dimensions, cost and latency recorded.
 - Stable safety identifier when supported.
+- **Hey Binn** uses the project OpenAI credential with explicit `hey_binn` scope
+  (ADR-0042 / ADR-0062); site content enters the model only through deterministic
+  read allowlists.
 
 The production adapter uses the Responses API with strict structured output
 for article generation and translation, `/v1/embeddings` for catalog vectors,

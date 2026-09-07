@@ -173,12 +173,24 @@ import {
   ticketPriorityFromUrgency,
   type TicketEstimatePort,
 } from './open-ticket.js';
+import {
+  consumeHeyBinnAction,
+  endHeyBinnConversation,
+  hasActiveHeyBinnThread,
+  matchHeyBinnCommand,
+  matchHeyBinnExit,
+  matchHeyBinnGreeting,
+  runHeyBinnTurn,
+  type HeyBinnChatPort,
+  type HeyBinnSiteContextLoader,
+} from './hey-binn.js';
 import { TicketService } from './tickets.js';
 import { enqueuePiloterOwnerSuccessNotice } from './piloter-owner-notice.js';
 
 export * from './blog-runtime.js';
 export * from './client-tool-catalog.js';
 export * from './open-ticket.js';
+export * from './hey-binn.js';
 export * from './tickets.js';
 export * from './delete-blog-catalog.js';
 export * from './delete-blog-runtime.js';
@@ -291,10 +303,10 @@ const copy = {
       'Plan bereit für Portfolio-Projekt: Katalog synchronisieren, Ähnlichkeit prüfen, zweisprachige Fallstudie erzeugen, Cover vorbereiten und Preview bauen.',
     projectCollecting:
       'Wir sammeln noch Projektdaten. Antworte mit dem nächsten fehlenden Fakt.',
-    help: 'Nutze /tools für die Tool-Liste, /info <tool> für Details und /open_ticket für eine individuelle Anfrage. Weitere Befehle: /status, /cancel, /help.',
+    help: 'Nutze /tools für die Tool-Liste, /info <tool> für Details, /hey-binn für Ideenhilfe und /open_ticket für eine individuelle Anfrage. Weitere Befehle: /status, /cancel, /help.',
     noRequests: 'Es gibt noch keine Anfragen.',
     paired:
-      'Verbindung hergestellt. Nutze /tools, /info oder /open_ticket.',
+      'Verbindung hergestellt. Nutze /tools, /info, /hey-binn oder /open_ticket.',
     previewApproved:
       'Vorschau genehmigt. Die Veröffentlichung wurde sicher in die Warteschlange gestellt.',
     adminPending:
@@ -356,10 +368,10 @@ const copy = {
       'Plan ready for portfolio project: sync catalog, check similarity, generate bilingual case study, prepare cover and build preview.',
     projectCollecting:
       'Still collecting project facts. Reply with the next missing detail.',
-    help: 'Use /tools for the tool list, /info <tool> for details, and /open_ticket for a custom request. Other commands: /status, /cancel, /help.',
+    help: 'Use /tools for the tool list, /info <tool> for details, /hey-binn for idea help, and /open_ticket for a custom request. Other commands: /status, /cancel, /help.',
     noRequests: 'There are no requests yet.',
     paired:
-      'Pairing complete. Use /tools, /info, or /open_ticket.',
+      'Pairing complete. Use /tools, /info, /hey-binn, or /open_ticket.',
     previewApproved: 'Preview approved. Publication was queued safely.',
     adminPending:
       'Preview approved. The new category is now waiting for admin approval.',
@@ -423,10 +435,10 @@ const copy = {
       'Plan listo para proyecto de portafolio: sincronizar catálogo, revisar similitud, generar case study bilingüe, preparar portada y construir preview.',
     projectCollecting:
       'Seguimos recopilando datos del proyecto. Responde con el siguiente dato que falta.',
-    help: 'Usa /tools para ver las tools, /info <tool> para el detalle y /open_ticket para una petición personalizada. Otros: /status, /cancel, /help.',
+    help: 'Usa /tools para ver las tools, /info <tool> para el detalle, /hey-binn para ideas y /open_ticket para una petición personalizada. Otros: /status, /cancel, /help.',
     noRequests: 'Todavía no hay solicitudes.',
     paired:
-      'Vinculación completada. Usa /tools, /info o /open_ticket.',
+      'Vinculación completada. Usa /tools, /info, /hey-binn o /open_ticket.',
     previewApproved:
       'Preview aprobado. La publicación quedó encolada de forma segura.',
     adminPending:
@@ -595,6 +607,13 @@ export class WorkflowService {
     private readonly themeAssetPreviewUrlResolver?: ThemeAssetPreviewUrlResolver,
     private readonly ticketEstimate: TicketEstimatePort = async (input) =>
       fallbackTicketEstimate(input),
+    private readonly heyBinnChat: HeyBinnChatPort = async () => {
+      throw new DomainError(
+        'provider_final',
+        'Hey Binn OpenAI port is not configured.',
+      );
+    },
+    private readonly heyBinnSiteContext?: HeyBinnSiteContextLoader,
   ) {}
 
   public async handleTelegramUpdate(
@@ -1979,6 +1998,34 @@ export class WorkflowService {
         ...(seed.length > 0 ? { seedText: seed } : {}),
       });
     }
+    const heyBinnCommand = matchHeyBinnCommand(text);
+    if (heyBinnCommand !== null) {
+      const enabled = await this.listEnabledCapabilities(
+        database,
+        identity.projectId,
+        identity,
+      );
+      return runHeyBinnTurn({
+        chat: this.heyBinnChat,
+        database,
+        enabledTools: enabled,
+        identity,
+        ...(this.heyBinnSiteContext === undefined
+          ? {}
+          : { loadSiteContext: this.heyBinnSiteContext }),
+        message: heyBinnCommand.seed,
+        now: this.clock.now(),
+        reply: this.reply.bind(this),
+        welcomeOnly: heyBinnCommand.seed.length === 0,
+      });
+    }
+    if (matchHeyBinnExit(text)) {
+      return endHeyBinnConversation({
+        database,
+        identity,
+        reply: this.reply.bind(this),
+      });
+    }
     if (/^\/status(?:@\w+)?$/u.test(text)) {
       const latest = await this.latestRequest(database, identity);
       return this.reply(
@@ -2691,6 +2738,65 @@ export class WorkflowService {
         return this.reply(identity.locale, localeCopy.messageTooLong, null);
       return this.createRequest(database, identity, brief);
     }
+    const heyBinnGreeting = matchHeyBinnGreeting(text);
+    if (heyBinnGreeting !== null) {
+      const enabled = await this.listEnabledCapabilities(
+        database,
+        identity.projectId,
+        identity,
+      );
+      return runHeyBinnTurn({
+        chat: this.heyBinnChat,
+        database,
+        enabledTools: enabled,
+        identity,
+        ...(this.heyBinnSiteContext === undefined
+          ? {}
+          : { loadSiteContext: this.heyBinnSiteContext }),
+        message: heyBinnGreeting.seed,
+        now: this.clock.now(),
+        reply: this.reply.bind(this),
+        welcomeOnly: heyBinnGreeting.seed.length === 0,
+      });
+    }
+
+    if (matchHeyBinnExit(text)) {
+      return endHeyBinnConversation({
+        database,
+        identity,
+        reply: this.reply.bind(this),
+      });
+    }
+
+    if (
+      !text.startsWith('/') &&
+      text.trim().length > 0 &&
+      text.trim().length <= 4_000 &&
+      (await hasActiveHeyBinnThread({
+        conversationId: identity.conversationId,
+        database,
+        now: this.clock.now(),
+      }))
+    ) {
+      const enabled = await this.listEnabledCapabilities(
+        database,
+        identity.projectId,
+        identity,
+      );
+      return runHeyBinnTurn({
+        chat: this.heyBinnChat,
+        database,
+        enabledTools: enabled,
+        identity,
+        ...(this.heyBinnSiteContext === undefined
+          ? {}
+          : { loadSiteContext: this.heyBinnSiteContext }),
+        message: text.trim(),
+        now: this.clock.now(),
+        reply: this.reply.bind(this),
+      });
+    }
+
     const courtesy = matchConversationalCourtesy(text);
     if (courtesy !== null)
       return this.reply(
@@ -4544,6 +4650,15 @@ export class WorkflowService {
     identity: ResolvedIdentity,
     token: string,
   ): Promise<TelegramReply> {
+    const binnReply = await consumeHeyBinnAction({
+      database,
+      identity,
+      now: this.clock.now(),
+      reply: this.reply.bind(this),
+      token,
+    });
+    if (binnReply !== null) return binnReply;
+
     const now = this.clock.now();
     const [action] = await database
       .select()

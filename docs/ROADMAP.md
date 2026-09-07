@@ -117,6 +117,9 @@ Every capability reuses the same policy, translation, version, preview, approval
 
 ## Phase 8 — Product expansion
 
+- **Hey Binn** (`hey_binn`): read-only Telegram advisor + dashboard Binn AI
+  (ADR-0062 / `docs/specs/hey-binn.md`) — may ship earlier as a docs-first slice
+  once contracts and read ports are ready.
 - Multiple projects and additional client users per tenant beyond owner + one
   Piloter (Piloter itself is ADR-0057 / in-scope expansion).
 - Granular roles, global provider grants and additional channels.

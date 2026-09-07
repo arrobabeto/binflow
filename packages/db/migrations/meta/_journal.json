@@ -239,6 +239,13 @@
       "when": 1788900000000,
       "tag": "0034_edit_image_shopify_capability",
       "breakpoints": true
+    },
+    {
+      "idx": 35,
+      "version": "7",
+      "when": 1789000000000,
+      "tag": "0035_hey_binn",
+      "breakpoints": true
     }
   ]
 }

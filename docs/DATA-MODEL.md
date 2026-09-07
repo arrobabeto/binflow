@@ -325,7 +325,11 @@ Tenant/project/request/capability/node/provider/model dimensions and reported/ca
 `GET /api/v1/usage` (ADR-0056) aggregates `model_calls` (spend, tokens, latency,
 node, provider/model) and joins `usage_records.capabilityId` plus active
 manifest budget ceilings for Analytics. Logfire/OTel is not a substitute for
-these rows.
+these rows. **Hey Binn** (`hey_binn`) records model usage in
+`binn_usage_events` without a content workflow request (ADR-0062 / migration
+`0035_hey_binn`); ephemeral `binn_threads` / `binn_actions` support live chat
+and typed handoff. Binn AI dashboard panels attribute spend via usage
+`byCapability` and `heyBinnByClient`.
 
 ### `audit_events`
 

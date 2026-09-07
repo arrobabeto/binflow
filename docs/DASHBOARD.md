@@ -12,7 +12,7 @@ The first-MVP dashboard UI is English.
 Sidebar
   Main: Home · Clients · Requests · Tickets
   Tools: Catalog · Customizations
-  System: Integrations · Operations · Analytics
+  System: Integrations · Operations · Analytics · Binn AI
   (footer) email · Sign out
 ```
 
@@ -23,11 +23,11 @@ Zones:
 - **Main:** Home, Clients, Requests, Tickets — daily operations.
 - **Tools:** Catalog (`/tools`) and Customizations — capability and voice
   configuration (direct sidebar links, not a dropdown).
-- **System:** Integrations, Operations, and Analytics — platform readiness and
-  metrics (direct links). Login, two-factor, and Security use the auth layout
-  without the shell. Security is not listed in the System menu; it remains
-  reachable for mandatory TOTP enrollment and session management when the auth
-  flow requires it.
+- **System:** Integrations, Operations, Analytics, and **Binn AI** — platform
+  readiness, metrics, and the Hey Binn advisor surface (ADR-0062). Login,
+  two-factor, and Security use the auth layout without the shell. Security is
+  not listed in the System menu; it remains reachable for mandatory TOTP
+  enrollment and session management when the auth flow requires it.
 
 Approvals are not a separate top-level page; pending admin approvals surface on
 Home and in the top section of Requests.
@@ -167,6 +167,21 @@ dollars, vendors, or tool names.
 
 Cost and latency panels never invent dollars. When Usage returns zeros or empty
 series, show those empties. Logfire is not a source for Analytics (ADR-0056).
+
+## Binn AI
+
+**Binn AI** (`/binn-ai`) sits in System navigation directly below Analytics
+(ADR-0062). It is the operator surface for the Hey Binn advisor:
+
+- What Binn is and that it is read-only / does not start tools.
+- Configured chat model id/version (code-owned config).
+- Usage volume and estimated spend attributable to `hey_binn` (usage ledger).
+- Per-client consumption breakdown.
+- Operator-visible rules (allowlists, forbid mutate/invoke).
+- Behavior markdown (code-owned doc rendered read-only).
+
+It must not invent metrics; empty ledger → empty panels. It is not a chat UI for
+the platform owner in v1.
 
 ## Clients and projects
 

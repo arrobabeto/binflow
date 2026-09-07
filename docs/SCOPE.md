@@ -36,6 +36,9 @@
   subset of already-bound tools; Piloter pairs via a one-time link; owner
   receives template notices of Piloter success; requests/tickets record
   Owner | Piloter (ADR-0057).
+- **Hey Binn** (`hey_binn` / `/hey-binn`): platform meta read-only advisor on
+  every paired client bot (all stacks, default on); suggests tools and typed
+  handoffs; does not mutate or start tools (ADR-0062).
 - Post-MVP: `shopify_liquid` enrollment for Shopify Liquid themes (GitHub theme
   repo; no Shopify Admin API in v1); first content tool family is inventory-
   driven `edit_image` (ADR-0059 / ADR-0058).
@@ -103,3 +106,4 @@ The following remain out of scope unless a separate product and security design 
 | Capability requiring a new executor                 | Product development proposal and ADR if architectural. |
 | General code/layout/infrastructure request          | Human development brief; never automatic execution.    |
 | Out-of-catalog custom ask (ticket)                  | Admin ticket queue; no invented capability run.        |
+| Read-only ideation / typed tool handoff (Binn)      | `/hey-binn` advisor; client activates tools (ADR-0062). |

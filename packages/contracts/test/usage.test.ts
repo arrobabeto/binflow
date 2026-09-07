@@ -25,6 +25,7 @@ describe('usage contracts', () => {
       costOverTime: [],
       distinctRequestCount: 0,
       efficiency: [],
+      heyBinnByClient: [],
       range: '7d',
       rangeEnd: '2026-08-31T18:00:00.000Z',
       rangeStart: '2026-08-25T00:00:00.000Z',
@@ -32,6 +33,7 @@ describe('usage contracts', () => {
       totalSpendCents: 0,
     });
     expect(empty.totalSpendCents).toBe(0);
+    expect(empty.heyBinnByClient).toEqual([]);
     expect(empty.rangeStart).toMatch(/2026-08-25/);
   });
 });

@@ -4,6 +4,24 @@ All notable changes to product behavior, architecture, contracts, security, oper
 
 ## Unreleased
 
+### Hey Binn (`hey_binn`) — implementation (ADR-0062)
+
+- Platform meta Telegram advisor: `/hey-binn` + Binn-addressed greetings;
+  read-only OpenAI chat; typed handoff after client confirm; no workflow
+  `requests` for chat; usage via `binn_usage_events` (migration `0035_hey_binn`).
+- Dashboard **Binn AI** (`/binn-ai`) under System; `GET /api/v1/usage` adds
+  `heyBinnByClient`. Listed in `/tools` and `/help`.
+- Allowlisted GitHub/CMS inventory injected into chat context (blog/portfolio
+  catalogs, optional Orbitype pages / surface areas); LLM still has no tools.
+- End chat: `/bye-binn` or addressed goodbyes; idle thread TTL 10 minutes.
+
+### Hey Binn (`hey_binn`) — docs/ADR (ADR-0062)
+
+- Platform meta read-only Telegram advisor: `/hey-binn` + NL greetings; suggests
+  tools and emits typed handoff; client activates tools; no workflow `requests`
+  for chat v1; dashboard **Binn AI** under System. Spec:
+  `docs/specs/hey-binn.md`.
+
 ### edit_image_shopify: useful confirm photo; no fake preview links
 
 - Client approval notice: Approve/Cancel only (no Preview / Pull Request

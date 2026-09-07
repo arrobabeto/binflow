@@ -579,6 +579,21 @@ type ManifestPortfolio = {
 
 Publication with `publicationIntent: 'publish'` requires `url` on the bundle.
 
+## `hey_binn` (platform meta)
+
+Telegram command: `/hey-binn` (also NL greetings addressing Binn).
+
+See `docs/specs/hey-binn.md` and ADR-0062. Not a catalog-assigned capability.
+Available on every paired client bot. Chat does **not** create workflow
+`requests` in v1. Telegram action ids: `confirm_binn_handoff`,
+`cancel_binn_handoff` (via `binn_actions`, not `request_actions`). Exit:
+`/bye-binn` and addressed goodbyes (`Adiós Binn`, `Bye Binn`, `Gracias Binn`,
+…). Idle thread TTL: 10 minutes. Deterministic worker loads allowlisted
+GitHub/CMS inventory into the model prompt (ADR-0042 `hey_binn` scope); the
+LLM never receives read/write tools. Usage via `binn_usage_events` with
+`capabilityId: hey_binn`, merged into `GET /api/v1/usage` (`byCapability`,
+`heyBinnByClient`). Dashboard Binn AI reads those aggregates.
+
 ## `create_blog_draft`
 
 Telegram command: `/create_blog`.
@@ -814,6 +829,15 @@ type UsageResponse = {
     spendCents: number;
     modelCalls: number;
     avgLatencyMs: number | null;
+  }>;
+  /** Per-client spend for capability hey_binn only (ADR-0062). */
+  heyBinnByClient: ReadonlyArray<{
+    projectId: string;
+    tenantId: string;
+    spendCents: number;
+    modelCalls: number;
+    budgetCentsPerDay: number | null;
+    budgetUtilizationPercent: number | null;
   }>;
   byNode: ReadonlyArray<{
     node: string;

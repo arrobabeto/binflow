@@ -8,6 +8,10 @@ signal using the graph run ID as job identity. PostgreSQL remains authoritative
 if Redis is lost. Checkpoints are append-only stage records; a retryable failure
 re-enters the executor from the beginning of the current resume command.
 
+**Hey Binn** (`hey_binn`, ADR-0062) is **not** a mutate capability graph: it does
+not advance these request states for the chat itself. Content tools still use
+the states below when the **client** starts them after a Binn handoff.
+
 ## Request states
 
 ```text

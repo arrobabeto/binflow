@@ -158,6 +158,44 @@ export const buildUsageResponse = (input: {
     })
     .sort((a, b) => b.spendCents - a.spendCents);
 
+  const heyBinnClientMap = new Map<
+    string,
+    { modelCalls: number; projectId: string; spendCents: number; tenantId: string }
+  >();
+  for (const call of calls) {
+    const capabilityId =
+      capabilityByVersion.get(call.requestVersionId) ?? 'unknown';
+    if (capabilityId !== 'hey_binn') continue;
+    const key = call.projectId;
+    const current = heyBinnClientMap.get(key) ?? {
+      modelCalls: 0,
+      projectId: call.projectId,
+      spendCents: 0,
+      tenantId: call.tenantId,
+    };
+    current.modelCalls += 1;
+    current.spendCents += call.estimatedCostCents;
+    heyBinnClientMap.set(key, current);
+  }
+  const heyBinnByClient = [...heyBinnClientMap.values()]
+    .map((row) => {
+      const budget = budgetByProject.get(row.projectId);
+      const budgetCentsPerDay = budget?.maxEstimatedCostCentsPerDay ?? null;
+      const budgetUtilizationPercent =
+        budgetCentsPerDay === null
+          ? null
+          : (row.spendCents / (budgetCentsPerDay * days)) * 100;
+      return {
+        budgetCentsPerDay,
+        budgetUtilizationPercent,
+        modelCalls: row.modelCalls,
+        projectId: row.projectId,
+        spendCents: row.spendCents,
+        tenantId: row.tenantId,
+      };
+    })
+    .sort((a, b) => b.spendCents - a.spendCents);
+
   const capabilityMap = new Map<
     string,
     { latencies: number[]; modelCalls: number; spendCents: number }
@@ -298,6 +336,7 @@ export const buildUsageResponse = (input: {
     costOverTime,
     distinctRequestCount,
     efficiency,
+    heyBinnByClient,
     range: input.range,
     rangeEnd: now.toISOString(),
     rangeStart: rangeStart === null ? null : rangeStart.toISOString(),
@@ -439,10 +478,52 @@ export class UsageService {
           )
           .where(isNotNull(schema.projects.activeManifestVersion));
 
+        const binnQuery = scoped
+          .select({
+            capabilityId: schema.binnUsageEvents.capabilityId,
+            createdAt: schema.binnUsageEvents.createdAt,
+            estimatedCostCents: schema.binnUsageEvents.estimatedCostCents,
+            id: schema.binnUsageEvents.id,
+            inputTokens: schema.binnUsageEvents.inputTokens,
+            latencyMs: schema.binnUsageEvents.latencyMs,
+            model: schema.binnUsageEvents.model,
+            outputTokens: schema.binnUsageEvents.outputTokens,
+            projectId: schema.binnUsageEvents.projectId,
+            provider: schema.binnUsageEvents.provider,
+            tenantId: schema.binnUsageEvents.tenantId,
+          })
+          .from(schema.binnUsageEvents);
+        const binnEvents =
+          rangeStart === null
+            ? await binnQuery
+            : await binnQuery.where(
+                gte(schema.binnUsageEvents.createdAt, rangeStart),
+              );
+        const binnCalls: UsageCallRow[] = binnEvents.map((event) => ({
+          createdAt: event.createdAt,
+          estimatedCostCents: event.estimatedCostCents,
+          inputTokens: event.inputTokens,
+          latencyMs: event.latencyMs,
+          model: event.model,
+          node: 'hey_binn',
+          outputTokens: event.outputTokens,
+          projectId: event.projectId,
+          provider: event.provider,
+          requestId: event.id,
+          requestVersionId: event.id,
+          tenantId: event.tenantId,
+        }));
+        const binnCapabilities: UsageCapabilityRow[] = binnEvents.map(
+          (event) => ({
+            capabilityId: event.capabilityId,
+            requestVersionId: event.id,
+          }),
+        );
+
         return buildUsageResponse({
           budgets,
-          calls,
-          capabilities: capabilityRows,
+          calls: [...calls, ...binnCalls],
+          capabilities: [...capabilityRows, ...binnCapabilities],
           now,
           range,
         });
