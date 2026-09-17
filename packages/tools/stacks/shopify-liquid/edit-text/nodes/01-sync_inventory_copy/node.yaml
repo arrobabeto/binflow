@@ -1,0 +1,6 @@
+kind: effect
+label: Sync inventory copy allowlist
+nodeKind: text.sync_inventory_copy@1
+acceptsClientCustomization: false
+permissions:
+  - github:metadata:read

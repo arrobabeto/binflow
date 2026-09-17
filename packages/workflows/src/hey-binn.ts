@@ -10,13 +10,18 @@ import { DomainError } from '@binflow/domain';
 import { and, desc, eq, gt, inArray, isNull } from 'drizzle-orm';
 
 export const HEY_BINN_CAPABILITY_ID = 'hey_binn' as const;
-export const HEY_BINN_COMMAND = '/hey-binn' as const;
+/** Canonical Telegram command (underscore — valid for setMyCommands). */
+export const HEY_BINN_COMMAND = '/hey_binn' as const;
 /** Idle thread timeout — after this, free-text no longer routes to Binn. */
 export const HEY_BINN_THREAD_TTL_MS = 10 * 60 * 1_000;
 export const HEY_BINN_ACTION_TTL_MS = 10 * 60 * 1_000;
 export const HEY_BINN_DEFAULT_MODEL = 'gpt-5.6-luna' as const;
 /** Cap allowlisted inventory rows injected into the model context. */
 export const HEY_BINN_INVENTORY_CAP = 80 as const;
+/** Max characters of excerpt per inventory item. */
+export const HEY_BINN_EXCERPT_CHARS = 1_200 as const;
+/** Soft total budget for all excerpts in one turn. */
+export const HEY_BINN_EXCERPT_TOTAL_CHARS = 40_000 as const;
 
 const digest = (value: string): string =>
   createHash('sha256').update(value).digest('hex');
@@ -40,6 +45,8 @@ type ReplyFn = (
 
 export type HeyBinnInventoryItem = Readonly<{
   category?: string;
+  /** Truncated allowlisted body/page copy (optional). */
+  excerpt?: string;
   kind: 'blog' | 'page' | 'portfolio' | 'surface';
   locale?: string;
   slug?: string;
@@ -108,7 +115,7 @@ const copy = {
     approveHandoff: 'Nachricht vorbereiten',
     cancelHandoff: 'Weiter chatten',
     farewell:
-      'Tschüss! Die Binn-Unterhaltung ist beendet. Schreib /hey-binn, wenn du wieder Ideen brauchst.',
+      'Tschüss! Die Binn-Unterhaltung ist beendet. Schreib /hey_binn, wenn du wieder Ideen brauchst.',
     handoffDelivered: (command: string, typed: string) =>
       `Hier ist deine vorbereitete Nachricht für ${command}. Starte das Tool selbst und füge sie ein:\n\n${typed}`,
     handoffPrompt: (command: string) =>
@@ -120,13 +127,13 @@ const copy = {
     rejectHandoff:
       'Alles klar — wir bleiben im Chat. Frag weiter oder nutze /tools.',
     welcome:
-      'Hallo, ich bin Binn. Ich lese dein Projekt (z. B. Blog-Titel) und helfe bei Ideen — ohne selbst etwas zu ändern. Beenden mit /bye-binn oder „Tschüss Binn“. Womit starten?',
+      'Hallo, ich bin Binn. Ich lese dein Projekt (Blogs und Seiten-Copy) und helfe bei Ideen — ohne selbst etwas zu ändern. Beenden mit /bye_binn oder „Tschüss Binn“. Womit starten?',
   },
   en: {
     approveHandoff: 'Prepare message',
     cancelHandoff: 'Keep chatting',
     farewell:
-      'Bye! Binn chat is closed. Use /hey-binn whenever you want ideas again.',
+      'Bye! Binn chat is closed. Use /hey_binn whenever you want ideas again.',
     handoffDelivered: (command: string, typed: string) =>
       `Here is your prepared message for ${command}. Start the tool yourself and paste it in:\n\n${typed}`,
     handoffPrompt: (command: string) =>
@@ -137,13 +144,13 @@ const copy = {
       'Binn is unavailable right now (OpenAI is missing for this project). Use /tools or /open_ticket.',
     rejectHandoff: 'Okay — staying in chat. Ask more or use /tools.',
     welcome:
-      'Hi, I am Binn. I read your project (e.g. blog titles) and help with ideas — without changing anything myself. End with /bye-binn or “Bye Binn”. What should we work on?',
+      'Hi, I am Binn. I read your project (blog and page copy) and help with ideas — without changing anything myself. End with /bye_binn or “Bye Binn”. What should we work on?',
   },
   es: {
     approveHandoff: 'Preparar mensaje',
     cancelHandoff: 'Seguir chateando',
     farewell:
-      '¡Hasta luego! La charla con Binn quedó cerrada. Usa /hey-binn cuando quieras ideas otra vez.',
+      '¡Hasta luego! La charla con Binn quedó cerrada. Usa /hey_binn cuando quieras ideas otra vez.',
     handoffDelivered: (command: string, typed: string) =>
       `Aquí tienes el mensaje preparado para ${command}. Tú activas la tool y lo pegas:\n\n${typed}`,
     handoffPrompt: (command: string) =>
@@ -154,7 +161,7 @@ const copy = {
       'Binn no está disponible ahora (falta OpenAI en este proyecto). Usa /tools o /open_ticket.',
     rejectHandoff: 'De acuerdo — seguimos en el chat. Pregunta más o usa /tools.',
     welcome:
-      'Hola, soy Binn. Leo tu proyecto (p. ej. títulos de blog) y ayudo con ideas — sin cambiar nada yo. Termina con /bye-binn o “Adiós Binn”. ¿En qué trabajamos?',
+      'Hola, soy Binn. Leo tu proyecto (copy de blogs y páginas) y ayudo con ideas — sin cambiar nada yo. Termina con /bye_binn o “Adiós Binn”. ¿En qué trabajamos?',
   },
 } as const;
 
@@ -163,9 +170,9 @@ const BINN_GREETING_RE =
   /^(?:hey\s+binn|hi\s+binn|hello\s+binn|hola\s+binn|hallo\s+binn|buen[oa]s?\s+(?:d[ií]as?\s+)?binn|guten\s+(?:tag|morgen|abend)\s+binn)(?:\s*[,!.?]+\s*([\s\S]{0,4000}))?$/iu;
 
 const BINN_COMMAND_RE =
-  /^\/hey-binn(?:@\w+)?(?:\s+([\s\S]{1,4000}))?$/iu;
+  /^\/hey[_-]binn(?:@\w+)?(?:\s+([\s\S]{1,4000}))?$/iu;
 
-const BINN_BYE_COMMAND_RE = /^\/bye-binn(?:@\w+)?$/iu;
+const BINN_BYE_COMMAND_RE = /^\/bye[_-]binn(?:@\w+)?$/iu;
 
 /** Explicit goodbye addressed to Binn — not bare thanks/hola. */
 const BINN_EXIT_NL_RE =
@@ -202,6 +209,87 @@ export const isHeyBinnIngress = (text: string): boolean =>
   matchHeyBinnCommand(text) !== null ||
   matchHeyBinnGreeting(text) !== null ||
   matchHeyBinnExit(text);
+
+/**
+ * Free-text claims that must beat tool natural-language matchers in
+ * `WorkflowService.route`. Slash tool commands are never claimed (escape hatch).
+ */
+export type HeyBinnFreeTextClaim =
+  | { kind: 'greeting'; seed: string }
+  | { kind: 'exit' }
+  | { kind: 'active_thread'; message: string };
+
+export const claimHeyBinnFreeTextRoute = (input: {
+  hasActiveThread: boolean;
+  text: string;
+}): HeyBinnFreeTextClaim | null => {
+  const text = input.text;
+  if (matchHeyBinnExit(text)) return { kind: 'exit' };
+  const greeting = matchHeyBinnGreeting(text);
+  if (greeting !== null) return { kind: 'greeting', seed: greeting.seed };
+  const trimmed = text.trim();
+  if (
+    !text.startsWith('/') &&
+    trimmed.length > 0 &&
+    trimmed.length <= 4_000 &&
+    input.hasActiveThread
+  ) {
+    return { kind: 'active_thread', message: trimmed };
+  }
+  return null;
+};
+
+/** Deterministic owner when Binn free-text competes with tool NL. */
+export const resolveFreeTextRouteOwner = (input: {
+  hasActiveHeyBinnThread: boolean;
+  text: string;
+  toolNaturalLanguageMatches: boolean;
+}): 'hey_binn' | 'tool_nl' | 'unclaimed' => {
+  if (
+    claimHeyBinnFreeTextRoute({
+      hasActiveThread: input.hasActiveHeyBinnThread,
+      text: input.text,
+    }) !== null
+  ) {
+    return 'hey_binn';
+  }
+  if (input.toolNaturalLanguageMatches) return 'tool_nl';
+  return 'unclaimed';
+};
+
+/** Strip YAML frontmatter from markdown; return body text. */
+export const stripMarkdownFrontmatter = (raw: string): string => {
+  const trimmed = raw.replace(/^\uFEFF/u, '');
+  if (!trimmed.startsWith('---')) return trimmed.trim();
+  const end = trimmed.indexOf('\n---', 3);
+  if (end === -1) return trimmed.trim();
+  const after = trimmed.slice(end + '\n---'.length).replace(/^\r?\n/u, '');
+  return after.trim();
+};
+
+export const truncateHeyBinnExcerpt = (
+  value: string,
+  maxChars: number = HEY_BINN_EXCERPT_CHARS,
+): string => {
+  const normalized = value.replace(/\s+/gu, ' ').trim();
+  if (normalized.length <= maxChars) return normalized;
+  return `${normalized.slice(0, Math.max(0, maxChars - 1)).trimEnd()}…`;
+};
+
+export const allocateHeyBinnExcerpt = (input: Readonly<{
+  budgetRemaining: number;
+  text: string;
+  maxPerItem?: number;
+}>): { excerpt: string | undefined; spent: number } => {
+  if (input.budgetRemaining <= 0) return { excerpt: undefined, spent: 0 };
+  const maxPerItem = input.maxPerItem ?? HEY_BINN_EXCERPT_CHARS;
+  const capped = truncateHeyBinnExcerpt(
+    input.text,
+    Math.min(maxPerItem, input.budgetRemaining),
+  );
+  if (capped.length === 0) return { excerpt: undefined, spent: 0 };
+  return { excerpt: capped, spent: capped.length };
+};
 
 const touchThread = async (input: Readonly<{
   database: ScopedDatabase;

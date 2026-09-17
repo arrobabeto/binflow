@@ -175,6 +175,30 @@ export const clientToolCatalog: readonly ClientToolCatalogEntry[] =
       },
     ),
     entry(
+      'edit_text_shopify',
+      '/edit_text',
+      {
+        de: 'Theme-Text ändern',
+        en: 'Edit theme text',
+        es: 'Editar texto del theme',
+      },
+      {
+        de: 'Ersetzt erlaubten Theme-Text wortgetreu; Freigabe vor dem Live-Gang.',
+        en: 'Replaces allowlisted theme copy literally; approval before it goes live.',
+        es: 'Sustituye copy permitido del theme de forma literal; aprobación antes de ir en vivo.',
+      },
+      {
+        de: 'Starte mit /edit_text oder schreibe „Text ändern …“.',
+        en: 'Start with /edit_text or say “edit text …”.',
+        es: 'Empieza con /edit_text o di “cambiar texto …”.',
+      },
+      {
+        de: 'Was es macht: Findet eine erlaubte Textstelle, ersetzt sie 1:1, Freigeben/Abbrechen, dann Admin-Merge.\nWas es nicht macht: Keine Storefront-Vorschau-Links, Shopify Admin, Vercel, Stiländerungen.\nGrenzen: eine Stelle pro Anfrage; Allowlist erforderlich.\nBeispiel: „Ändere den Intro-Text“',
+        en: 'What it does: Finds an allowlisted text slot, replaces it literally, Approve/Cancel, then admin merge.\nWhat it does not do: Storefront preview links, Shopify Admin, Vercel, style changes.\nLimits: one slot per request; allowlist required.\nExample: “Change the intro text”',
+        es: 'Qué hace: Encuentra un texto permitido, lo sustituye literalmente, Aprobar/Cancelar, luego merge admin.\nQué no hace: Links de preview de tienda, Shopify Admin, Vercel, cambios de estilo.\nLímites: un texto por solicitud; allowlist obligatorio.\nEjemplo: “Cambia el texto de intro”',
+      },
+    ),
+    entry(
       'edit_text_style',
       '/edit_text_style',
       {
@@ -339,10 +363,10 @@ export const formatToolsListMessage = (
         : '/open_ticket — Custom request (ticket to admin)';
   const heyBinnLine =
     locale === 'es'
-      ? '/hey-binn — Ideas y ayuda (solo lectura)'
+      ? '/hey_binn — Ideas y ayuda (solo lectura)'
       : locale === 'de'
-        ? '/hey-binn — Ideenhilfe (nur lesen)'
-        : '/hey-binn — Ideas and help (read-only)';
+        ? '/hey_binn — Ideenhilfe (nur lesen)'
+        : '/hey_binn — Ideas and help (read-only)';
   return `${heading}\n${lines.join('\n')}\n${heyBinnLine}\n${openTicketLine}\n\n${footer}`;
 };
 
@@ -403,8 +427,8 @@ export const buildTelegramClientCommands = (
       ? [
           { command: '/tools', description: 'Ver herramientas disponibles' },
           { command: '/info', description: 'Detalle y alcance de una tool' },
-          { command: '/hey-binn', description: 'Ideas y ayuda (solo lectura)' },
-          { command: '/bye-binn', description: 'Cerrar la charla con Binn' },
+          { command: '/hey_binn', description: 'Ideas y ayuda (solo lectura)' },
+          { command: '/bye_binn', description: 'Cerrar la charla con Binn' },
           { command: '/open_ticket', description: 'Petición personalizada al admin' },
           { command: '/help', description: 'Cómo usar el bot' },
           { command: '/status', description: 'Estado de tu última solicitud' },
@@ -414,8 +438,8 @@ export const buildTelegramClientCommands = (
         ? [
             { command: '/tools', description: 'Verfügbare Tools anzeigen' },
             { command: '/info', description: 'Details und Umfang eines Tools' },
-            { command: '/hey-binn', description: 'Ideenhilfe (nur lesen)' },
-            { command: '/bye-binn', description: 'Binn-Chat beenden' },
+            { command: '/hey_binn', description: 'Ideenhilfe (nur lesen)' },
+            { command: '/bye_binn', description: 'Binn-Chat beenden' },
             { command: '/open_ticket', description: 'Individuelle Anfrage an Admin' },
             { command: '/help', description: 'Hilfe zur Bot-Nutzung' },
             { command: '/status', description: 'Status der letzten Anfrage' },
@@ -424,8 +448,8 @@ export const buildTelegramClientCommands = (
         : [
             { command: '/tools', description: 'List available tools' },
             { command: '/info', description: 'Tool detail and scope' },
-            { command: '/hey-binn', description: 'Ideas and help (read-only)' },
-            { command: '/bye-binn', description: 'End Binn chat' },
+            { command: '/hey_binn', description: 'Ideas and help (read-only)' },
+            { command: '/bye_binn', description: 'End Binn chat' },
             { command: '/open_ticket', description: 'Custom request to admin' },
             { command: '/help', description: 'How to use the bot' },
             { command: '/status', description: 'Status of your latest request' },

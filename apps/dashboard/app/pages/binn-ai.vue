@@ -11,12 +11,12 @@ const HEY_BINN_MODEL = 'gpt-5.6-luna';
 
 const BINN_RULES = [
   'Read-only advisor — never mutates GitHub, CMS, Vercel, or Shopify.',
-  'Loads allowlisted site inventory (blog/portfolio/pages/surfaces) into context; LLM has no read/write tools.',
+  'Loads allowlisted site inventory with truncated blog/page/theme copy into context; LLM has no read/write tools.',
   'Never invokes tools, opens tickets, merges, or publishes.',
   'Suggests enabled tools or /open_ticket; client activates them.',
   'Typed handoff only after explicit in-chat client approval.',
   'No workflow requests for chat v1; usage via binn_usage_events.',
-  'Idle thread ends after 10 minutes; also /bye-binn or “Adiós Binn” / “Bye Binn” / “Gracias Binn”.',
+  'Idle thread ends after 10 minutes; also /bye_binn or “Adiós Binn” / “Bye Binn” / “Gracias Binn”.',
 ] as const;
 
 const BINN_BEHAVIOR_MD = `# Hey Binn behavior
@@ -26,7 +26,8 @@ input for an enabled tool. The client starts the tool; Binn does not.
 
 ## Ingress
 
-- \`/hey-binn\` and greetings that address Binn (Hey Binn, Hola Binn, …).
+- \`/hey_binn\` (alias \`/hey-binn\`) and greetings that address Binn (Hey Binn, Hola Binn, …).
+- Context includes truncated allowlisted site copy (blogs, pages, theme text).
 - Does not steal bare courtesy or unrelated tool natural language.
 
 ## Model
@@ -42,7 +43,7 @@ input for an enabled tool. The client starts the tool; Binn does not.
 
 ## End chat
 
-- \`/bye-binn\` or addressed goodbye (\`Adiós Binn\`, \`Bye Binn\`, \`Gracias Binn\`, …).
+- \`/bye_binn\` or addressed goodbye (\`Adiós Binn\`, \`Bye Binn\`, \`Gracias Binn\`, …).
 - Idle thread ends after 10 minutes.
 
 See also \`docs/guides/hey-binn-behavior.md\` and ADR-0062.

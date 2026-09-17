@@ -48,7 +48,7 @@ describe('client tool catalog (ADR-0054)', () => {
         'Tools disponibles:',
         '/edit_text — Edit page text',
         '/update_menu — Update menu',
-        '/hey-binn — Ideas y ayuda (solo lectura)',
+        '/hey_binn — Ideas y ayuda (solo lectura)',
         '/open_ticket — Petición personalizada (ticket al admin)',
         '',
         'Más detalle de una tool: /info edit_text',
@@ -75,8 +75,8 @@ describe('client tool catalog (ADR-0054)', () => {
     ]);
     expect(commands.some((item) => item.command === '/tools')).toBe(true);
     expect(commands.some((item) => item.command === '/info')).toBe(true);
-    expect(commands.some((item) => item.command === '/hey-binn')).toBe(true);
-    expect(commands.some((item) => item.command === '/bye-binn')).toBe(true);
+    expect(commands.some((item) => item.command === '/hey_binn')).toBe(true);
+    expect(commands.some((item) => item.command === '/bye_binn')).toBe(true);
     expect(commands.some((item) => item.command === '/open_ticket')).toBe(true);
     const createBlog = commands.filter((item) => item.command === '/create_blog');
     expect(createBlog).toHaveLength(1);

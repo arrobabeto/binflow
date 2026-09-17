@@ -44,6 +44,9 @@ for a later implementation session.
 - [ ] **new-stack (this skill):** write
       `.cursor/skills/create-tool/references/stacks/<stack>.md` from
       `templates/stack-tool-contract.md` and index it — **before** create-tool
+- [ ] **new-stack (this skill):** write `docs/briefs/bsi/<stack>.md` from
+      `templates/bsi-stack-brief.md`, index `docs/briefs/bsi/README.md`, and
+      link BSI from the stack tool contract
 - [ ] Link or create `docs/guides/<stack>-tool-implementation.md` when the first
       tool ships (Orbitype reference:
       `docs/guides/astro-orbitype-tool-implementation.md`)
@@ -59,5 +62,6 @@ for a later implementation session.
 
 - [ ] Spec, ADR, canonical docs, CHANGELOG (Phase 3) — verify still accurate after impl
 - [ ] Stack tool contract file + stacks README index row
+- [ ] BSI stack brief + `docs/briefs/bsi/README.md` index row
 - [ ] Point operators to `docs/ENROLLMENT.md` section B
-- [ ] Readiness handoff lists contract path and create-tool/test-tool next steps
+- [ ] Readiness handoff lists contract path, BSI brief path, and create-tool/test-tool next steps

@@ -704,6 +704,9 @@ importers:
       '@binflow/menu':
         specifier: workspace:*
         version: link:../menu
+      yaml:
+        specifier: 2.8.2
+        version: 2.8.2
     devDependencies:
       '@types/node':
         specifier: 24.13.3

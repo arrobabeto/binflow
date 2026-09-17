@@ -42,7 +42,9 @@ each profile.
    (`astro_orbitype`) remain valid without an inventory. Executors may keep
    heuristic discovery. When an inventory is present, tools **should prefer**
    inventory + markers over name scraping; migrating pilots is optional and
-   out of scope of this ADR.
+   out of scope of this ADR. Platform naming and per-stack implementer briefs
+   are clarified in [ADR-0064](0064-optional-bsi-astro.md) (**Binflow Surface
+   Inventory / BSI**); Astro enrollment does not require BSI.
 
 4. **Layering.** The contract sits **above** stack-specific
    `editablePaths` / CMS schemas. It does not replace manifests, publication

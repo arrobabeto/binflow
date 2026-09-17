@@ -7,6 +7,7 @@ import {
   deleteProjectAstroInputSchema,
   editImageInputSchema,
   editTextInputSchema,
+  editTextShopifyInputSchema,
   editTextStyleInputSchema,
   updateMenuInputSchema,
   type CapabilityBinding,
@@ -33,6 +34,7 @@ export type CapabilityDefinition = Readonly<{
     | typeof deleteProjectAstroInputSchema
     | typeof editImageInputSchema
     | typeof editTextInputSchema
+    | typeof editTextShopifyInputSchema
     | typeof editTextStyleInputSchema
     | typeof updateMenuInputSchema;
   requiredPermissions: readonly string[];
@@ -346,6 +348,35 @@ export const editImageShopifyDefinition: CapabilityDefinition = Object.freeze({
   version: 1,
 });
 
+export const editTextShopifyDefinition: CapabilityDefinition = Object.freeze({
+  approvalPolicyId: 'shopify-liquid-text-edit@1',
+  budget: Object.freeze({
+    maxEstimatedCostCents: 25,
+    maxModelCalls: 1,
+    maxTokens: 500,
+  }),
+  command: '/edit_text',
+  displayName: 'Edit theme text',
+  executorId: 'workflow.edit_text_shopify@1',
+  id: 'edit_text_shopify',
+  inputSchema: editTextShopifyInputSchema,
+  requiredPermissions: Object.freeze([
+    'github:metadata:read',
+    'github:contents:write',
+    'github:pull_requests:write',
+    'github:checks:read',
+    'github:statuses:read',
+  ]),
+  requiresPreview: true,
+  retryPolicy: Object.freeze({
+    maxAttempts: 3,
+    retryableErrors: Object.freeze(['provider_retryable']),
+  }),
+  riskClass: 'medium',
+  timeoutSeconds: 1_800,
+  version: 1,
+});
+
 export const updateMenuDefinition: CapabilityDefinition = Object.freeze({
   approvalPolicyId: 'astro-orbitype-menu-update@1',
   budget: Object.freeze({
@@ -393,6 +424,7 @@ export const capabilityRegistry = Object.freeze([
   editImageDefinition,
   editImageShopifyDefinition,
   editTextDefinition,
+  editTextShopifyDefinition,
   editTextStyleDefinition,
   updateMenuDefinition,
 ] as const);

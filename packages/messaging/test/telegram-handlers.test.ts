@@ -543,6 +543,26 @@ describe('Telegram client reply rendering', () => {
     expect(buttonIds(notice)).toHaveLength(2);
   });
 
+  it('renders Shopify theme text approval without preview or PR links', async () => {
+    const { renderThemeTextApprovalNotice } = await import('../src/index.js');
+    const notice = renderThemeTextApprovalNotice({
+      locale: 'es',
+      slotLabel: 'home.intro.heading',
+      tokens: {
+        approve: 'a'.repeat(32),
+        cancel: 'c'.repeat(32),
+      },
+    });
+    const encoded = JSON.stringify(notice);
+    expect(encoded).toContain('Aprobar');
+    expect(encoded).toContain('home.intro.heading');
+    expect(encoded).toContain('texto');
+    expect(encoded).not.toContain('binflow_preview');
+    expect(encoded).not.toContain('github.com');
+    expect(linkUrls(notice)).toEqual([]);
+    expect(buttonIds(notice)).toHaveLength(2);
+  });
+
   it('posts publication complete as live-origin URL buttons', () => {
     const notice = renderPublicationCompleteNotice({
       locale: 'es',

@@ -234,7 +234,7 @@ stuck states, and customization asks. Pilot reference:
 ### Telegram/input
 
 - `/tools` lists only enabled bindings as `command — displayName`, adds
-  `/open_ticket` and `/hey-binn`, and points to `/info`; `/info` shows scope;
+  `/open_ticket` and `/hey_binn`, and points to `/info`; `/info` shows scope;
   unmatched text offers custom request vs tools; greetings use heuristics;
   Binn NL greetings route only to `hey_binn` (ADR-0054 / ADR-0055 / ADR-0062).
   See `packages/workflows/test/client-tool-catalog.test.ts` and
@@ -264,6 +264,20 @@ stuck states, and customization asks. Pilot reference:
 - **`/edit_text`** (astro_orbitype) — substring target, disambiguation, literal
   whole-field replacement, preview Approve/Cancel, admin before merge; see
   `docs/specs/edit-text.md` and `packages/text/test/`.
+- **`/edit_text`** (`shopify_liquid` → `edit_text_shopify`) — inventory
+  `kind: copy`, normalized search on live schema default / template instance /
+  sample (home **and** story/bio/pdp), Astro-like miss retry (no browse/Deep
+  search), literal whole-field replace of Liquid schema `"default"`, client
+  Approve/Cancel only (no storefront preview / PR buttons), admin before merge.
+  Smoke: rebuild `@binflow/text` (`pnpm --filter @binflow/text build`), restart
+  worker, then paste exactly `Nature’s quiet defense` (bio body) or
+  `Sicily to Switzerland` (story eyebrow) — expect confirm. Paste
+  `The olive held a secret` (style H1) — expect style-only miss, not generic
+  not-found. Elayva: backfill `sample` on story/bio/pdp `copy` + `style_target`
+  in `binflow/surface-inventory.yaml` and merge to `productionBranch`.
+  See `docs/specs/edit-text-shopify.md`, ADR-0063,
+  `packages/text/test/edit-theme-text.test.ts`,
+  `packages/workflows/test/edit-text-shopify.test.ts`.
 - **`/edit_text_style`** (astro_orbitype) — same targeting as text edit; stepped
   weight/size/color interview (multi OK, ≥1); one fieldKind; HEX ≤2 retries;
   target-not-found retry; wrap excerpt in styled span; isolated CTAs; preview +

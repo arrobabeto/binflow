@@ -14,12 +14,15 @@ import {
 describe('@binflow/tools catalog', () => {
   it('loads Astro tools with matching executor stages', async () => {
     const tools = await listTools();
-    expect(tools).toHaveLength(10);
+    expect(tools).toHaveLength(11);
     const blog = tools.find((tool) => tool.tool.id === 'create_blog_draft');
     const blogOrbitype = tools.find(
       (tool) => tool.tool.id === 'create_blog_orbitype',
     );
     const editText = tools.find((tool) => tool.tool.id === 'edit_text');
+    const editTextShopify = tools.find(
+      (tool) => tool.tool.id === 'edit_text_shopify',
+    );
     const editTextStyle = tools.find(
       (tool) => tool.tool.id === 'edit_text_style',
     );
@@ -36,6 +39,7 @@ describe('@binflow/tools catalog', () => {
     expect(blog?.tool.profile).toBe('astro_repo');
     expect(blogOrbitype?.tool.profile).toBe('astro_orbitype');
     expect(editText?.tool.profile).toBe('astro_orbitype');
+    expect(editTextShopify?.tool.profile).toBe('shopify_liquid');
     expect(editTextStyle?.tool.profile).toBe('astro_orbitype');
     expect(editImage?.tool.profile).toBe('astro_orbitype');
     expect(editImageShopify?.tool.profile).toBe('shopify_liquid');
@@ -51,6 +55,9 @@ describe('@binflow/tools catalog', () => {
       'stacks/astro-orbitype/update-menu@1',
     );
     expect(editText?.graph.version).toBe('stacks/astro-orbitype/edit-text@1');
+    expect(editTextShopify?.graph.version).toBe(
+      'stacks/shopify-liquid/edit-text@1',
+    );
     expect(editTextStyle?.graph.version).toBe(
       'stacks/astro-orbitype/edit-text-style@1',
     );
@@ -60,6 +67,7 @@ describe('@binflow/tools catalog', () => {
     );
     expect(editImage?.tool.requiresPreview).toBe(true);
     expect(editImageShopify?.tool.requiresPreview).toBe(true);
+    expect(editTextShopify?.tool.requiresPreview).toBe(true);
     expect(editTextStyle?.tool.requiresPreview).toBe(true);
     expect(
       editImage?.graph.edges.some(
@@ -78,7 +86,13 @@ describe('@binflow/tools catalog', () => {
       editImageShopify?.nodes.some((node) => node.id === 'sync_inventory_images'),
     ).toBe(true);
     expect(
+      editTextShopify?.nodes.some((node) => node.id === 'sync_inventory_copy'),
+    ).toBe(true);
+    expect(
       editImageShopify?.nodes.some((node) => node.id === 'wait_preview'),
+    ).toBe(false);
+    expect(
+      editTextShopify?.nodes.some((node) => node.id === 'wait_preview'),
     ).toBe(false);
     expect(
       editText?.graph.edges.some(

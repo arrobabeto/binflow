@@ -1,0 +1,4 @@
+kind: compute
+label: Validate inventory target and replacement text
+nodeKind: text.validate_theme_edit@1
+acceptsClientCustomization: false

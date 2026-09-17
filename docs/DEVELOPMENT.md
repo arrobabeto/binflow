@@ -43,20 +43,25 @@ A change is complete only when:
 
 Documentation may not be deferred to a follow-up issue or PR.
 
-## Client site builds (Editable Surface)
+## Client site builds (Editable Surface / BSI)
 
-When an agent or engineer builds a **new** storefront or theme intended for
-Binflow (before `/new-stack` or the first content tool):
+1. Read [Binflow Surface Inventory (BSI)](guides/binflow-surface-inventory.md)
+   (ADR-0058 / ADR-0064).
+2. Open the **stack BSI brief** under [briefs/bsi/](briefs/bsi/README.md) for
+   the catalog stack (`astro-repo`, `astro-orbitype`, `shopify-liquid`, …).
+3. Follow [Editable Surface Contract](guides/editable-surface-contract.md) for
+   schema (`bf_id`, kinds, YAML shape).
 
-1. Read [Editable Surface Contract](guides/editable-surface-contract.md)
-   (ADR-0058).
-2. Ship `binflow/surface-inventory.yaml` plus `data-bf-*` markers for declared
-   surfaces.
-3. Use a project brief when one exists (e.g.
-   [Shopify beverage theme](briefs/shopify-beverage-theme-agent-brief.md)).
+**Shopify Liquid** content tools require inventory for allowlisted edits.
+**Astro** profiles: BSI is optional at enrollment — without it, heuristics stay;
+with it, inventory-aware tools prefer BSI.
+
+Product-shaped example: [Shopify beverage theme](briefs/shopify-beverage-theme-agent-brief.md).
+
+`new-stack` must add `docs/briefs/bsi/<stack>.md` for every new catalog stack.
 
 Do not invent parallel tag systems. Existing pilots without an inventory remain
-valid (grandfathered).
+valid.
 
 ## Agent skills (repo)
 

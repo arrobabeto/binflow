@@ -150,6 +150,17 @@ import {
   type ThemeInventoryRemapRunner,
 } from './edit-image-shopify-collection.js';
 import {
+  continueEditTextShopifyCollection,
+  consumeEditTextShopifyPlanConfirm,
+  consumeEditTextShopifyTargetConfirm,
+  consumeEditTextShopifyTargetPick,
+  consumeEditTextShopifyTargetReject,
+  createEditTextShopifyRequest,
+  type ThemeTextInventoryBundle,
+  type ThemeTextInventoryLoader,
+  type ThemeTextInventoryRemapRunner,
+} from './edit-text-shopify-collection.js';
+import {
   formatInfoChooserMessage,
   formatInfoDetailMessage,
   formatInfoMissMessage,
@@ -176,10 +187,10 @@ import {
 import {
   consumeHeyBinnAction,
   endHeyBinnConversation,
+  claimHeyBinnFreeTextRoute,
   hasActiveHeyBinnThread,
   matchHeyBinnCommand,
   matchHeyBinnExit,
-  matchHeyBinnGreeting,
   runHeyBinnTurn,
   type HeyBinnChatPort,
   type HeyBinnSiteContextLoader,
@@ -198,10 +209,13 @@ export * from './delete-project-runtime.js';
 export * from './edit-image-collection.js';
 export * from './edit-image-shopify-collection.js';
 export * from './edit-image-ingress.js';
+export * from './edit-text-shopify-collection.js';
+export * from './edit-text-shopify-ingress.js';
 export * from './edit-text-style-collection.js';
 export * from './edit-text-style-ingress.js';
 export * from './image-runtime.js';
 export * from './theme-image-runtime.js';
+export * from './theme-text-runtime.js';
 export * from './menu-runtime.js';
 export * from './project-runtime.js';
 export * from './text-runtime.js';
@@ -229,6 +243,11 @@ export type {
   ThemeImageInventoryLoader,
   ThemeInventoryRemapRunner,
 } from './edit-image-shopify-collection.js';
+export type {
+  ThemeTextInventoryBundle,
+  ThemeTextInventoryLoader,
+  ThemeTextInventoryRemapRunner,
+} from './edit-text-shopify-collection.js';
 export type { EditTextPagesLoader } from './edit-text-collection.js';
 export type { UpdateMenuPagesLoader } from './update-menu-collection.js';
 export {
@@ -303,10 +322,10 @@ const copy = {
       'Plan bereit für Portfolio-Projekt: Katalog synchronisieren, Ähnlichkeit prüfen, zweisprachige Fallstudie erzeugen, Cover vorbereiten und Preview bauen.',
     projectCollecting:
       'Wir sammeln noch Projektdaten. Antworte mit dem nächsten fehlenden Fakt.',
-    help: 'Nutze /tools für die Tool-Liste, /info <tool> für Details, /hey-binn für Ideenhilfe und /open_ticket für eine individuelle Anfrage. Weitere Befehle: /status, /cancel, /help.',
+    help: 'Nutze /tools für die Tool-Liste, /info <tool> für Details, /hey_binn für Ideenhilfe und /open_ticket für eine individuelle Anfrage. Weitere Befehle: /status, /cancel, /help.',
     noRequests: 'Es gibt noch keine Anfragen.',
     paired:
-      'Verbindung hergestellt. Nutze /tools, /info, /hey-binn oder /open_ticket.',
+      'Verbindung hergestellt. Nutze /tools, /info, /hey_binn oder /open_ticket.',
     previewApproved:
       'Vorschau genehmigt. Die Veröffentlichung wurde sicher in die Warteschlange gestellt.',
     adminPending:
@@ -368,10 +387,10 @@ const copy = {
       'Plan ready for portfolio project: sync catalog, check similarity, generate bilingual case study, prepare cover and build preview.',
     projectCollecting:
       'Still collecting project facts. Reply with the next missing detail.',
-    help: 'Use /tools for the tool list, /info <tool> for details, /hey-binn for idea help, and /open_ticket for a custom request. Other commands: /status, /cancel, /help.',
+    help: 'Use /tools for the tool list, /info <tool> for details, /hey_binn for idea help, and /open_ticket for a custom request. Other commands: /status, /cancel, /help.',
     noRequests: 'There are no requests yet.',
     paired:
-      'Pairing complete. Use /tools, /info, /hey-binn, or /open_ticket.',
+      'Pairing complete. Use /tools, /info, /hey_binn, or /open_ticket.',
     previewApproved: 'Preview approved. Publication was queued safely.',
     adminPending:
       'Preview approved. The new category is now waiting for admin approval.',
@@ -435,10 +454,10 @@ const copy = {
       'Plan listo para proyecto de portafolio: sincronizar catálogo, revisar similitud, generar case study bilingüe, preparar portada y construir preview.',
     projectCollecting:
       'Seguimos recopilando datos del proyecto. Responde con el siguiente dato que falta.',
-    help: 'Usa /tools para ver las tools, /info <tool> para el detalle, /hey-binn para ideas y /open_ticket para una petición personalizada. Otros: /status, /cancel, /help.',
+    help: 'Usa /tools para ver las tools, /info <tool> para el detalle, /hey_binn para ideas y /open_ticket para una petición personalizada. Otros: /status, /cancel, /help.',
     noRequests: 'Todavía no hay solicitudes.',
     paired:
-      'Vinculación completada. Usa /tools, /info, /hey-binn o /open_ticket.',
+      'Vinculación completada. Usa /tools, /info, /hey_binn o /open_ticket.',
     previewApproved:
       'Preview aprobado. La publicación quedó encolada de forma segura.',
     adminPending:
@@ -605,6 +624,8 @@ export class WorkflowService {
     private readonly themeImageInventoryLoader?: ThemeImageInventoryLoader,
     private readonly themeInventoryRemapRunner?: ThemeInventoryRemapRunner,
     private readonly themeAssetPreviewUrlResolver?: ThemeAssetPreviewUrlResolver,
+    private readonly themeTextInventoryLoader?: ThemeTextInventoryLoader,
+    private readonly themeTextInventoryRemapRunner?: ThemeTextInventoryRemapRunner,
     private readonly ticketEstimate: TicketEstimatePort = async (input) =>
       fallbackTicketEstimate(input),
     private readonly heyBinnChat: HeyBinnChatPort = async () => {
@@ -2123,6 +2144,29 @@ export class WorkflowService {
           text: text.trim(),
           version: await this.currentRequestVersion(database, latestCollecting),
         });
+      if (latestCollecting.capabilityId === 'edit_text_shopify') {
+        const version = await this.currentRequestVersion(
+          database,
+          latestCollecting,
+        );
+        return continueEditTextShopifyCollection({
+          createAction: (db, request, requestVersionId, userId, action) =>
+            this.createAction(db, request, requestVersionId, userId, action),
+          database,
+          identity,
+          loadInventory: (args) =>
+            this.loadThemeTextInventory(
+              args.database,
+              args.manifest,
+              args.projectId,
+              args.tenantId,
+            ),
+          reply: this.reply.bind(this),
+          request: latestCollecting,
+          text: text.trim(),
+          version,
+        });
+      }
       if (latestCollecting.capabilityId === 'edit_text_style')
         return continueEditTextStyleCollection({
           createAction: (db, request, requestVersionId, userId, action) =>
@@ -2261,6 +2305,54 @@ export class WorkflowService {
       );
     }
 
+    const heyBinnWithoutThread = claimHeyBinnFreeTextRoute({
+      hasActiveThread: false,
+      text,
+    });
+    const heyBinnFreeText =
+      heyBinnWithoutThread ??
+      claimHeyBinnFreeTextRoute({
+        hasActiveThread: await hasActiveHeyBinnThread({
+          conversationId: identity.conversationId,
+          database,
+          now: this.clock.now(),
+        }),
+        text,
+      });
+    if (heyBinnFreeText !== null) {
+      if (heyBinnFreeText.kind === 'exit') {
+        return endHeyBinnConversation({
+          database,
+          identity,
+          reply: this.reply.bind(this),
+        });
+      }
+      const enabled = await this.listEnabledCapabilities(
+        database,
+        identity.projectId,
+        identity,
+      );
+      const message =
+        heyBinnFreeText.kind === 'greeting'
+          ? heyBinnFreeText.seed
+          : heyBinnFreeText.message;
+      return runHeyBinnTurn({
+        chat: this.heyBinnChat,
+        database,
+        enabledTools: enabled,
+        identity,
+        ...(this.heyBinnSiteContext === undefined
+          ? {}
+          : { loadSiteContext: this.heyBinnSiteContext }),
+        message,
+        now: this.clock.now(),
+        reply: this.reply.bind(this),
+        welcomeOnly:
+          heyBinnFreeText.kind === 'greeting' &&
+          heyBinnFreeText.seed.length === 0,
+      });
+    }
+
     const deleteBlogRoute = capabilityIngressRoutes.find(
       (route) => route.handlerKind === 'delete_blog',
     );
@@ -2278,6 +2370,9 @@ export class WorkflowService {
     );
     const editTextRoute = capabilityIngressRoutes.find(
       (route) => route.handlerKind === 'edit_text',
+    );
+    const editTextShopifyRoute = capabilityIngressRoutes.find(
+      (route) => route.handlerKind === 'edit_text_shopify',
     );
     const editTextStyleRoute = capabilityIngressRoutes.find(
       (route) => route.handlerKind === 'edit_text_style',
@@ -2309,9 +2404,9 @@ export class WorkflowService {
         ? null
         : updateMenuRoute.commandPattern.exec(text);
     const editTextCommand =
-      editTextRoute === undefined
+      editTextRoute === undefined && editTextShopifyRoute === undefined
         ? null
-        : editTextRoute.commandPattern.exec(text);
+        : (editTextRoute ?? editTextShopifyRoute)!.commandPattern.exec(text);
     const editTextStyleCommand =
       editTextStyleRoute === undefined
         ? null
@@ -2331,7 +2426,9 @@ export class WorkflowService {
     const naturalUpdateMenu =
       updateMenuRoute?.naturalLanguage?.(text) ?? false;
     const naturalEditText =
-      editTextRoute?.naturalLanguage?.(text) ?? false;
+      editTextRoute?.naturalLanguage?.(text) ??
+      editTextShopifyRoute?.naturalLanguage?.(text) ??
+      false;
     const naturalEditTextStyle =
       editTextStyleRoute?.naturalLanguage?.(text) ?? false;
     const naturalEditImage =
@@ -2381,6 +2478,15 @@ export class WorkflowService {
             database,
             identity.projectId,
             editTextRoute.capabilityId,
+            identity,
+          );
+    const editTextShopifyEnabled =
+      editTextShopifyRoute === undefined
+        ? false
+        : await this.hasCapability(
+            database,
+            identity.projectId,
+            editTextShopifyRoute.capabilityId,
             identity,
           );
     const editTextStyleEnabled =
@@ -2486,6 +2592,29 @@ export class WorkflowService {
     }
 
     if (editTextCommand !== null) {
+      if (editTextShopifyEnabled) {
+        return createEditTextShopifyRequest({
+          createAction: (db, request, requestVersionId, userId, action) =>
+            this.createAction(db, request, requestVersionId, userId, action),
+          database,
+          hasCapability: (db, projectId, capabilityId) =>
+            this.hasCapability(db, projectId, capabilityId, identity),
+          identity,
+          ...(editTextCommand[1]?.trim()
+            ? {
+                initialQuery: editTextCommand[1].trim(),
+                loadInventory: (args) =>
+                  this.loadThemeTextInventory(
+                    args.database,
+                    args.manifest,
+                    args.projectId,
+                    args.tenantId,
+                  ),
+              }
+            : {}),
+          reply: this.reply.bind(this),
+        });
+      }
       return createEditTextRequest({
         createAction: (db, request, requestVersionId, userId, action) =>
           this.createAction(db, request, requestVersionId, userId, action),
@@ -2591,7 +2720,7 @@ export class WorkflowService {
     }
 
     if (
-      editTextEnabled &&
+      (editTextEnabled || editTextShopifyEnabled) &&
       naturalEditText &&
       blogCommand === null &&
       deleteBlogCommand === null &&
@@ -2608,6 +2737,17 @@ export class WorkflowService {
       !naturalEditImage &&
       !naturalEditTextStyle
     ) {
+      if (editTextShopifyEnabled) {
+        return createEditTextShopifyRequest({
+          createAction: (db, request, requestVersionId, userId, action) =>
+            this.createAction(db, request, requestVersionId, userId, action),
+          database,
+          hasCapability: (db, projectId, capabilityId) =>
+            this.hasCapability(db, projectId, capabilityId, identity),
+          identity,
+          reply: this.reply.bind(this),
+        });
+      }
       return createEditTextRequest({
         createAction: (db, request, requestVersionId, userId, action) =>
           this.createAction(db, request, requestVersionId, userId, action),
@@ -2738,65 +2878,6 @@ export class WorkflowService {
         return this.reply(identity.locale, localeCopy.messageTooLong, null);
       return this.createRequest(database, identity, brief);
     }
-    const heyBinnGreeting = matchHeyBinnGreeting(text);
-    if (heyBinnGreeting !== null) {
-      const enabled = await this.listEnabledCapabilities(
-        database,
-        identity.projectId,
-        identity,
-      );
-      return runHeyBinnTurn({
-        chat: this.heyBinnChat,
-        database,
-        enabledTools: enabled,
-        identity,
-        ...(this.heyBinnSiteContext === undefined
-          ? {}
-          : { loadSiteContext: this.heyBinnSiteContext }),
-        message: heyBinnGreeting.seed,
-        now: this.clock.now(),
-        reply: this.reply.bind(this),
-        welcomeOnly: heyBinnGreeting.seed.length === 0,
-      });
-    }
-
-    if (matchHeyBinnExit(text)) {
-      return endHeyBinnConversation({
-        database,
-        identity,
-        reply: this.reply.bind(this),
-      });
-    }
-
-    if (
-      !text.startsWith('/') &&
-      text.trim().length > 0 &&
-      text.trim().length <= 4_000 &&
-      (await hasActiveHeyBinnThread({
-        conversationId: identity.conversationId,
-        database,
-        now: this.clock.now(),
-      }))
-    ) {
-      const enabled = await this.listEnabledCapabilities(
-        database,
-        identity.projectId,
-        identity,
-      );
-      return runHeyBinnTurn({
-        chat: this.heyBinnChat,
-        database,
-        enabledTools: enabled,
-        identity,
-        ...(this.heyBinnSiteContext === undefined
-          ? {}
-          : { loadSiteContext: this.heyBinnSiteContext }),
-        message: text.trim(),
-        now: this.clock.now(),
-        reply: this.reply.bind(this),
-      });
-    }
-
     const courtesy = matchConversationalCourtesy(text);
     if (courtesy !== null)
       return this.reply(
@@ -3313,6 +3394,26 @@ export class WorkflowService {
         { code: 'surface_inventory_missing' },
       );
     return this.themeImageInventoryLoader({
+      database,
+      manifest,
+      projectId,
+      tenantId,
+    });
+  }
+
+  private async loadThemeTextInventory(
+    database: ScopedDatabase,
+    manifest: (typeof schema.projectManifestVersions.$inferSelect)['document'],
+    projectId: string,
+    tenantId: string,
+  ) {
+    if (this.themeTextInventoryLoader === undefined)
+      throw new DomainError(
+        'validation_error',
+        'Theme text inventory loader is not configured.',
+        { code: 'surface_inventory_missing' },
+      );
+    return this.themeTextInventoryLoader({
       database,
       manifest,
       projectId,
@@ -5312,13 +5413,27 @@ export class WorkflowService {
     if (action.action.startsWith('pick_image_target:')) {
       if (
         (request.capabilityId !== 'edit_image' &&
-          request.capabilityId !== 'edit_image_shopify') ||
+          request.capabilityId !== 'edit_image_shopify' &&
+          request.capabilityId !== 'edit_text_shopify') ||
         request.state !== 'NEEDS_INPUT'
       )
         throw new DomainError(
           'conflict_error',
-          'Request is not waiting for image target selection.',
+          request.capabilityId === 'edit_text_shopify'
+            ? 'Request is not waiting for theme text target selection.'
+            : 'Request is not waiting for image target selection.',
         );
+      if (request.capabilityId === 'edit_text_shopify')
+        return consumeEditTextShopifyTargetPick({
+          createAction: (db, req, requestVersionId, userId, actionName) =>
+            this.createAction(db, req, requestVersionId, userId, actionName),
+          database,
+          identity,
+          reply: this.reply.bind(this),
+          request,
+          targetKey: action.action.slice('pick_image_target:'.length),
+          version: currentVersion,
+        });
       if (request.capabilityId === 'edit_image_shopify')
         return consumeEditImageShopifyTargetPick({
           createAction: (db, req, requestVersionId, userId, actionName) =>
@@ -5347,13 +5462,24 @@ export class WorkflowService {
     if (action.action === 'confirm_image_target') {
       if (
         (request.capabilityId !== 'edit_image' &&
-          request.capabilityId !== 'edit_image_shopify') ||
+          request.capabilityId !== 'edit_image_shopify' &&
+          request.capabilityId !== 'edit_text_shopify') ||
         request.state !== 'NEEDS_INPUT'
       )
         throw new DomainError(
           'conflict_error',
-          'Request is not waiting for image target confirmation.',
+          request.capabilityId === 'edit_text_shopify'
+            ? 'Request is not waiting for theme text target confirmation.'
+            : 'Request is not waiting for image target confirmation.',
         );
+      if (request.capabilityId === 'edit_text_shopify')
+        return consumeEditTextShopifyTargetConfirm({
+          database,
+          identity,
+          reply: this.reply.bind(this),
+          request,
+          version: currentVersion,
+        });
       if (request.capabilityId === 'edit_image_shopify')
         return consumeEditImageShopifyTargetConfirm({
           database,
@@ -5373,13 +5499,24 @@ export class WorkflowService {
     if (action.action === 'reject_image_target') {
       if (
         (request.capabilityId !== 'edit_image' &&
-          request.capabilityId !== 'edit_image_shopify') ||
+          request.capabilityId !== 'edit_image_shopify' &&
+          request.capabilityId !== 'edit_text_shopify') ||
         request.state !== 'NEEDS_INPUT'
       )
         throw new DomainError(
           'conflict_error',
-          'Request is not waiting for image target confirmation.',
+          request.capabilityId === 'edit_text_shopify'
+            ? 'Request is not waiting for theme text target confirmation.'
+            : 'Request is not waiting for image target confirmation.',
         );
+      if (request.capabilityId === 'edit_text_shopify')
+        return consumeEditTextShopifyTargetReject({
+          database,
+          identity,
+          reply: this.reply.bind(this),
+          request,
+          version: currentVersion,
+        });
       if (request.capabilityId === 'edit_image_shopify')
         return consumeEditImageShopifyTargetReject({
           database,
@@ -5399,17 +5536,22 @@ export class WorkflowService {
     if (action.action === 'confirm_image_plan') {
       if (
         (request.capabilityId !== 'edit_image' &&
-          request.capabilityId !== 'edit_image_shopify') ||
+          request.capabilityId !== 'edit_image_shopify' &&
+          request.capabilityId !== 'edit_text_shopify') ||
         request.state !== 'NEEDS_INPUT'
       )
         throw new DomainError(
           'conflict_error',
-          'Request is not waiting for image plan confirmation.',
+          request.capabilityId === 'edit_text_shopify'
+            ? 'Request is not waiting for theme text plan confirmation.'
+            : 'Request is not waiting for image plan confirmation.',
         );
       const planConfirm =
-        request.capabilityId === 'edit_image_shopify'
-          ? consumeEditImageShopifyPlanConfirm
-          : consumeEditImagePlanConfirm;
+        request.capabilityId === 'edit_text_shopify'
+          ? consumeEditTextShopifyPlanConfirm
+          : request.capabilityId === 'edit_image_shopify'
+            ? consumeEditImageShopifyPlanConfirm
+            : consumeEditImagePlanConfirm;
       return planConfirm({
         database,
         graphVersion: await graphVersionForCapability(request.capabilityId),
@@ -5824,6 +5966,7 @@ export class WorkflowService {
       });
       const needsAdmin =
         request.capabilityId === 'edit_text' ||
+        request.capabilityId === 'edit_text_shopify' ||
         request.capabilityId === 'edit_text_style' ||
         request.capabilityId === 'edit_image' ||
         request.capabilityId === 'edit_image_shopify' ||
@@ -5873,7 +6016,8 @@ export class WorkflowService {
             ? 'image edit approval required'
             : request.capabilityId === 'edit_text_style'
               ? 'text style approval required'
-              : request.capabilityId === 'edit_text'
+              : request.capabilityId === 'edit_text' ||
+                  request.capabilityId === 'edit_text_shopify'
                 ? 'text edit approval required'
                 : 'new blog category approval required';
         const terminal =
@@ -5937,7 +6081,8 @@ export class WorkflowService {
           ? localeCopy.adminPendingImageEdit
           : request.capabilityId === 'edit_text_style'
             ? localeCopy.adminPendingTextStyleEdit
-            : request.capabilityId === 'edit_text'
+            : request.capabilityId === 'edit_text' ||
+                request.capabilityId === 'edit_text_shopify'
               ? localeCopy.adminPendingTextEdit
               : localeCopy.adminPending;
       return this.reply(

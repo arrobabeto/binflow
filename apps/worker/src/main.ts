@@ -13,7 +13,8 @@ import { createOpenAIBlogGenerationPort, createOpenAIHeyBinnPort, createOpenAIPr
 import { S3ArtifactStore } from '@binflow/artifacts';
 import { BlogExecutor, DeleteBlogExecutor, orbitypeBlogPublicationStages, type ContentCatalogPort } from '@binflow/blog';
 import { UpdateMenuExecutor } from '@binflow/menu';
-import { EditTextExecutor, EditTextStyleExecutor } from '@binflow/text';
+import { EditTextExecutor, EditTextStyleExecutor, EditThemeTextExecutor, discoverEditableCopy, parseSurfaceInventoryCopy, pickInventoryCopyDisplayValue } from '@binflow/text';
+import type { SupportedLocale } from '@binflow/contracts';
 import {
   createOrbitypeBlogPublicationPort,
   createOrbitypeImagesPort,
@@ -49,6 +50,7 @@ import {
   renderPublicationCompleteNotice,
   renderRevisionPlanNotice,
   renderThemeImageApprovalNotice,
+  renderThemeTextApprovalNotice,
   previewUrlButtons,
   type TelegramRuntime,
 } from '@binflow/messaging';
@@ -62,8 +64,6 @@ import {
   EditImageExecutor,
   EditThemeImageExecutor,
   DEFAULT_SURFACE_INVENTORY_PATH,
-  listInventoryImageAreas,
-  parseSurfaceInventoryImages,
   resolveThemeAssetPreviewUrlFromManifest,
   runThemeInventoryRemap,
 } from '@binflow/images';
@@ -77,6 +77,7 @@ import {
   TextStyleWorkflowRuntime,
   TextWorkflowRuntime,
   ThemeImageWorkflowRuntime,
+  ThemeTextWorkflowRuntime,
   WorkflowService,
   filterBlogCatalogItems,
   filterPortfolioCatalogItems,
@@ -93,8 +94,13 @@ import {
   type ThemeAssetPreviewUrlResolver,
   type ThemeImageInventoryLoader,
   type ThemeInventoryRemapRunner,
+  type ThemeTextInventoryLoader,
+  type ThemeTextInventoryRemapRunner,
   type UpdateMenuPagesLoader,
   HEY_BINN_INVENTORY_CAP,
+  HEY_BINN_EXCERPT_TOTAL_CHARS,
+  allocateHeyBinnExcerpt,
+  stripMarkdownFrontmatter,
 } from '@binflow/workflows';
 
 const deleteNoticeContentKind = (
@@ -213,7 +219,8 @@ const loadDeleteBlogCatalog: DeleteBlogCatalogLoader = async ({
 
 /**
  * ADR-0062 / ADR-0042: deterministic GitHub (+ optional CMS) reads for Hey Binn.
- * Never exposed as LLM tools — inventory is injected into the chat prompt.
+ * Never exposed as LLM tools — inventory (titles + truncated copy) is injected
+ * into the chat prompt.
  */
 const loadHeyBinnSiteContext: HeyBinnSiteContextLoader = async ({
   database: scoped,
@@ -256,6 +263,7 @@ const loadHeyBinnSiteContext: HeyBinnSiteContextLoader = async ({
 
   const items: Array<{
     category?: string;
+    excerpt?: string;
     kind: 'blog' | 'page' | 'portfolio' | 'surface';
     locale?: string;
     slug?: string;
@@ -264,11 +272,29 @@ const loadHeyBinnSiteContext: HeyBinnSiteContextLoader = async ({
   }> = [];
   let source: 'github' | 'github+cms' | 'cms' | 'manifest_only' = 'manifest_only';
   const notes: string[] = [];
+  let excerptBudget = HEY_BINN_EXCERPT_TOTAL_CHARS;
+
+  const takeExcerpt = (text: string): string | undefined => {
+    const allocated = allocateHeyBinnExcerpt({
+      budgetRemaining: excerptBudget,
+      text,
+    });
+    excerptBudget -= allocated.spent;
+    return allocated.excerpt;
+  };
 
   const masterKey = await loadRuntimeMasterKeyFile(defaultMasterKeyPath());
   try {
     try {
       const { binding, github } = await loadProjectGithubApp(scoped, projectId);
+      const repository = createGitHubRepositoryPublicationPort({
+        credential: github,
+        installationId: binding.installationId,
+        masterKey,
+        repositoryId: binding.repositoryId,
+      });
+      const productionBranch = manifest.repository.productionBranch;
+
       const hasBlogCollections = collections.some((collection) =>
         /blog|articulo|post/iu.test(
           `${collection.directory} ${collection.routePrefix}`,
@@ -287,6 +313,25 @@ const loadHeyBinnSiteContext: HeyBinnSiteContextLoader = async ({
       const syncPortfolio =
         hasPortfolioCollections || manifest.profile === 'astro_repo';
 
+      const attachMarkdownExcerpt = async (
+        sourceId: string,
+      ): Promise<string | undefined> => {
+        try {
+          const bytes = await repository.readFileAtRef({
+            path: sourceId,
+            ref: productionBranch,
+          });
+          if (bytes === null) return undefined;
+          const body = stripMarkdownFrontmatter(
+            Buffer.from(bytes).toString('utf8'),
+          );
+          if (body.length === 0) return undefined;
+          return takeExcerpt(body);
+        } catch {
+          return undefined;
+        }
+      };
+
       if (syncBlog) {
         const blogPort = createCapabilityCatalogPort('delete_blog', {
           credential: github,
@@ -303,9 +348,13 @@ const loadHeyBinnSiteContext: HeyBinnSiteContextLoader = async ({
           tenantId,
         });
         const blogs = filterBlogCatalogItems(synchronized.items, manifest);
+        let withExcerpt = 0;
         for (const item of blogs.slice(0, HEY_BINN_INVENTORY_CAP)) {
+          const excerpt = await attachMarkdownExcerpt(item.sourceId);
+          if (excerpt !== undefined) withExcerpt += 1;
           items.push({
             category: item.category,
+            ...(excerpt === undefined ? {} : { excerpt }),
             kind: 'blog',
             locale: item.locale,
             slug: item.slug,
@@ -313,7 +362,9 @@ const loadHeyBinnSiteContext: HeyBinnSiteContextLoader = async ({
             title: item.title,
           });
         }
-        notes.push(`GitHub blog catalog: ${blogs.length} item(s).`);
+        notes.push(
+          `GitHub blog catalog: ${blogs.length} item(s), ${withExcerpt} with body excerpt.`,
+        );
         source = 'github';
       }
 
@@ -336,9 +387,13 @@ const loadHeyBinnSiteContext: HeyBinnSiteContextLoader = async ({
           synchronized.items,
           manifest,
         );
+        let withExcerpt = 0;
         for (const item of portfolio.slice(0, HEY_BINN_INVENTORY_CAP)) {
+          const excerpt = await attachMarkdownExcerpt(item.sourceId);
+          if (excerpt !== undefined) withExcerpt += 1;
           items.push({
             category: item.category,
+            ...(excerpt === undefined ? {} : { excerpt }),
             kind: 'portfolio',
             locale: item.locale,
             slug: item.slug,
@@ -346,7 +401,9 @@ const loadHeyBinnSiteContext: HeyBinnSiteContextLoader = async ({
             title: item.title,
           });
         }
-        notes.push(`GitHub portfolio catalog: ${portfolio.length} item(s).`);
+        notes.push(
+          `GitHub portfolio catalog: ${portfolio.length} item(s), ${withExcerpt} with body excerpt.`,
+        );
         source = 'github';
       }
 
@@ -356,28 +413,45 @@ const loadHeyBinnSiteContext: HeyBinnSiteContextLoader = async ({
         manifest.profile === 'shopify_liquid' ||
         manifest.content.surfaceInventoryPath !== undefined
       ) {
-        const repository = createGitHubRepositoryPublicationPort({
-          credential: github,
-          installationId: binding.installationId,
-          masterKey,
-          repositoryId: binding.repositoryId,
-        });
-        const file = await repository.readFileAtRef({
-          path: inventoryPath,
-          ref: manifest.repository.productionBranch,
-        });
-        if (file !== null) {
-          const yaml = Buffer.from(file).toString('utf8');
-          const areas = listInventoryImageAreas(
-            parseSurfaceInventoryImages(yaml),
-          );
-          for (const area of areas.slice(0, HEY_BINN_INVENTORY_CAP)) {
-            items.push({ kind: 'surface', title: area });
+        try {
+          const executor = new EditThemeTextExecutor(repository, {
+            async listFiles(prefixes) {
+              return repository.listBlobPaths({
+                prefixes,
+                ref: productionBranch,
+              });
+            },
+            async readFile(path) {
+              const fileBytes = await repository.readFileAtRef({
+                path,
+                ref: productionBranch,
+              });
+              return fileBytes === null
+                ? null
+                : new TextDecoder().decode(fileBytes);
+            },
+          });
+          const inventory = await executor.loadInventory(inventoryPath);
+          const copyRows = inventory.rows;
+          let withExcerpt = 0;
+          for (const row of copyRows.slice(0, HEY_BINN_INVENTORY_CAP)) {
+            const display =
+              pickInventoryCopyDisplayValue(row) ?? row.sample ?? row.area;
+            const excerpt = takeExcerpt(display);
+            if (excerpt !== undefined) withExcerpt += 1;
+            items.push({
+              ...(excerpt === undefined ? {} : { excerpt }),
+              kind: 'surface',
+              sourceId: row.locator,
+              title: `${row.area} · ${row.locator}`,
+            });
           }
           notes.push(
-            `Surface inventory areas: ${areas.length} (path ${inventoryPath}).`,
+            `Shopify surface copy: ${copyRows.length} row(s), ${withExcerpt} with excerpt.`,
           );
           source = 'github';
+        } catch {
+          notes.push('Shopify surface copy inventory unavailable.');
         }
       }
     } catch (error) {
@@ -429,18 +503,42 @@ const loadHeyBinnSiteContext: HeyBinnSiteContextLoader = async ({
                   : {}),
               });
               const pages = await pagesPort.listPages();
+              const locales = manifest.contentLocales as SupportedLocale[];
+              const contentLocale =
+                manifest.defaultContentLocale as SupportedLocale;
+              const candidates = discoverEditableCopy(
+                pages,
+                locales,
+                contentLocale,
+              );
+              const bySlug = new Map<string, string[]>();
+              for (const candidate of candidates) {
+                const list = bySlug.get(candidate.pageSlug) ?? [];
+                list.push(
+                  `${candidate.field}: ${candidate.currentValue}`,
+                );
+                bySlug.set(candidate.pageSlug, list);
+              }
+              let withExcerpt = 0;
               for (const page of pages.slice(0, HEY_BINN_INVENTORY_CAP)) {
                 const title =
                   typeof page.title === 'string' && page.title.trim().length > 0
                     ? page.title.trim()
                     : page.slug;
+                const joined = (bySlug.get(page.slug) ?? []).join('\n');
+                const excerpt =
+                  joined.length > 0 ? takeExcerpt(joined) : undefined;
+                if (excerpt !== undefined) withExcerpt += 1;
                 items.push({
+                  ...(excerpt === undefined ? {} : { excerpt }),
                   kind: 'page',
                   slug: page.slug,
                   title,
                 });
               }
-              notes.push(`Orbitype pages: ${pages.length}.`);
+              notes.push(
+                `Orbitype pages: ${pages.length}, ${withExcerpt} with copy excerpt.`,
+              );
               source = source === 'github' ? 'github+cms' : 'cms';
             }
           } finally {
@@ -551,7 +649,7 @@ const loadUpdateMenuPages: UpdateMenuPagesLoader = async ({
           ? { pagesTable: configuration.pagesTable }
           : {}),
       });
-      return port.listPages();
+      return await port.listPages();
     } finally {
       plaintext.fill(0);
     }
@@ -720,7 +818,73 @@ const loadThemeImageInventory: ThemeImageInventoryLoader = async ({
           : new TextDecoder().decode(fileBytes);
       },
     });
-    return executor.loadInventory(inventoryPath);
+    // Await before finally: masterKey.fill(0) must not run while loadInventory
+    // still decrypts GitHub credentials for enrich reads.
+    return await executor.loadInventory(inventoryPath);
+  } finally {
+    masterKey.fill(0);
+  }
+};
+
+const loadThemeTextInventory: ThemeTextInventoryLoader = async ({
+  database: scoped,
+  manifest,
+  projectId,
+}) => {
+  const githubBinding = await resolveActiveProjectGithubAppBinding(
+    scoped,
+    projectId,
+  );
+  if (githubBinding === undefined)
+    throw new DomainError(
+      'credential_unavailable',
+      'Active GitHub App binding is unavailable for theme text inventory.',
+    );
+  const github = await getCredentialForVerification(
+    scoped,
+    githubBinding.credentialId,
+  );
+  if (github === undefined)
+    throw new DomainError(
+      'credential_unavailable',
+      'GitHub credential material is unavailable.',
+    );
+  const masterKey = await loadRuntimeMasterKeyFile(defaultMasterKeyPath());
+  try {
+    const repository = createGitHubRepositoryPublicationPort({
+      credential: github,
+      installationId: githubBinding.installationId,
+      masterKey,
+      repositoryId: githubBinding.repositoryId,
+    });
+    const inventoryPath =
+      manifest.content.surfaceInventoryPath ?? DEFAULT_SURFACE_INVENTORY_PATH;
+    const bytes = await repository.readFileAtRef({
+      path: inventoryPath,
+      ref: manifest.repository.productionBranch,
+    });
+    if (bytes === null)
+      throw new DomainError(
+        'validation_error',
+        'Surface inventory is missing; text allowlist is empty.',
+        { code: 'surface_inventory_missing' },
+      );
+    // Do not call listBlobPaths here: recursive GitHub trees stall Telegram
+    // collection. Area-scoped templates + Liquid schema reads cover story/bio/pdp.
+    const executor = new EditThemeTextExecutor(repository, {
+      async readFile(path) {
+        const fileBytes = await repository.readFileAtRef({
+          path,
+          ref: manifest.repository.productionBranch,
+        });
+        return fileBytes === null
+          ? null
+          : new TextDecoder().decode(fileBytes);
+      },
+    });
+    // Await before finally: masterKey.fill(0) must not run while loadInventory
+    // still decrypts GitHub credentials for enrich reads.
+    return await executor.loadInventory(inventoryPath);
   } finally {
     masterKey.fill(0);
   }
@@ -795,6 +959,75 @@ const runThemeInventoryRemapJob: ThemeInventoryRemapRunner = async ({
   }
 };
 
+const runThemeTextInventoryRemapJob: ThemeTextInventoryRemapRunner = async ({
+  autoMerge,
+  database: scoped,
+  manifest,
+  projectId,
+  requestId,
+}) => {
+  const githubBinding = await resolveActiveProjectGithubAppBinding(
+    scoped,
+    projectId,
+  );
+  if (githubBinding === undefined)
+    throw new DomainError(
+      'credential_unavailable',
+      'Active GitHub App binding is unavailable for text inventory remap.',
+      { code: 'inventory_remap_failed' },
+    );
+  const github = await getCredentialForVerification(
+    scoped,
+    githubBinding.credentialId,
+  );
+  if (github === undefined)
+    throw new DomainError(
+      'credential_unavailable',
+      'GitHub credential material is unavailable.',
+      { code: 'inventory_remap_failed' },
+    );
+  const masterKey = await loadRuntimeMasterKeyFile(defaultMasterKeyPath());
+  try {
+    const repository = createGitHubRepositoryPublicationPort({
+      credential: github,
+      installationId: githubBinding.installationId,
+      masterKey,
+      repositoryId: githubBinding.repositoryId,
+    });
+    const inventoryPath =
+      manifest.content.surfaceInventoryPath ?? DEFAULT_SURFACE_INVENTORY_PATH;
+    const result = await runThemeInventoryRemap({
+      autoMerge,
+      inventoryPath,
+      locales: manifest.contentLocales,
+      productionBranch: manifest.repository.productionBranch,
+      projectKey: manifest.repository.name,
+      repository,
+      requestId,
+      tree: {
+        async listBlobPaths({ prefixes, ref }) {
+          return repository.listBlobPaths({ prefixes, ref });
+        },
+        async readFile(path, ref) {
+          const fileBytes = await repository.readFileAtRef({ path, ref });
+          return fileBytes === null
+            ? null
+            : new TextDecoder().decode(fileBytes);
+        },
+      },
+    });
+    return {
+      changed: result.remap.changed,
+      copyRows: parseSurfaceInventoryCopy(result.remap.yaml),
+      ...(result.publication === undefined
+        ? {}
+        : { pullRequestUrl: result.publication.pullRequestUrl }),
+    };
+  } finally {
+    masterKey.fill(0);
+  }
+};
+
 const resolveThemeAssetPreviewUrl: ThemeAssetPreviewUrlResolver = async ({
   assetPath,
   manifest,
@@ -811,6 +1044,8 @@ const workflowService = new WorkflowService(
   loadThemeImageInventory,
   runThemeInventoryRemapJob,
   resolveThemeAssetPreviewUrl,
+  loadThemeTextInventory,
+  runThemeTextInventoryRemapJob,
   async (input) => {
     try {
       const masterKey = await loadRuntimeMasterKeyFile(defaultMasterKeyPath());
@@ -1028,6 +1263,7 @@ const loadExecutionContext = async (
         openaiRow === undefined ||
         githubBinding === undefined ||
         (request.capabilityId !== 'edit_image_shopify' &&
+          request.capabilityId !== 'edit_text_shopify' &&
           vercelRow === undefined)
       )
         throw new Error('Active execution credentials are incomplete.');
@@ -1050,7 +1286,9 @@ const loadExecutionContext = async (
       if (
         openai === undefined ||
         github === undefined ||
-        (request.capabilityId !== 'edit_image_shopify' && vercel === undefined)
+        (request.capabilityId !== 'edit_image_shopify' &&
+          request.capabilityId !== 'edit_text_shopify' &&
+          vercel === undefined)
       )
         throw new Error('Execution credential material is unavailable.');
       if (
@@ -1272,6 +1510,7 @@ const processWorkflowJob = async (name: string, data: unknown) => {
           });
     if (
       capabilityRuntime.kind !== 'edit_image_shopify' &&
+      capabilityRuntime.kind !== 'edit_text_shopify' &&
       deployments === undefined
     )
       throw new DomainError(
@@ -1337,6 +1576,58 @@ const processWorkflowJob = async (name: string, data: unknown) => {
               database,
               artifactStore,
               new EditThemeImageExecutor(repository, reader),
+            );
+          })()
+        : capabilityRuntime.kind === 'edit_text_shopify'
+        ? await (async () => {
+            const productionBranch =
+              (await withPlatformSystemScope(
+                database,
+                'workflow.theme_text_read_ref',
+                async (scoped) => {
+                  const [row] = await scoped
+                    .select({
+                      document: schema.projectManifestVersions.document,
+                    })
+                    .from(schema.requestVersions)
+                    .innerJoin(
+                      schema.projectManifestVersions,
+                      eq(
+                        schema.projectManifestVersions.id,
+                        schema.requestVersions.manifestVersionId,
+                      ),
+                    )
+                    .where(
+                      eq(
+                        schema.requestVersions.id,
+                        signal.requestVersionId,
+                      ),
+                    )
+                    .limit(1);
+                  return (
+                    row?.document as
+                      | {
+                          repository?: { productionBranch?: string };
+                        }
+                      | undefined
+                  )?.repository?.productionBranch;
+                },
+              )) ?? 'main';
+            const reader = {
+              async readFile(path: string) {
+                const bytes = await repository.readFileAtRef({
+                  path,
+                  ref: productionBranch,
+                });
+                return bytes === null
+                  ? null
+                  : new TextDecoder().decode(bytes);
+              },
+            };
+            return new ThemeTextWorkflowRuntime(
+              database,
+              artifactStore,
+              new EditThemeTextExecutor(repository, reader),
             );
           })()
         : capabilityRuntime.kind === 'edit_image'
@@ -1740,6 +2031,24 @@ const processWorkflowJob = async (name: string, data: unknown) => {
               : { photoUrl: themeResult.result.replacementSourceUrl }),
           }),
         );
+      } else if (capabilityRuntime.kind === 'edit_text_shopify') {
+        const themeTextResult = await (
+          runtime as ThemeTextWorkflowRuntime
+        ).execute(signal);
+        const slotLabel =
+          themeTextResult.result.patch.candidate.label ||
+          themeTextResult.result.patch.candidate.key;
+        await notifyClient(
+          signal.requestId,
+          renderThemeTextApprovalNotice({
+            locale,
+            slotLabel,
+            tokens: {
+              approve: themeTextResult.actions.approve,
+              cancel: themeTextResult.actions.cancel,
+            },
+          }),
+        );
       } else {
         const result = await (
           runtime as BlogWorkflowRuntime | ProjectWorkflowRuntime
@@ -1851,6 +2160,17 @@ const processWorkflowJob = async (name: string, data: unknown) => {
             urls: result.urls,
           }),
         );
+      } else if (capabilityRuntime.kind === 'edit_text_shopify') {
+        const result = await (
+          runtime as ThemeTextWorkflowRuntime
+        ).publish(signal);
+        await notifyClient(
+          signal.requestId,
+          renderPublicationCompleteNotice({
+            locale,
+            urls: result.urls,
+          }),
+        );
       } else {
         const result = await (
           runtime as BlogWorkflowRuntime | ProjectWorkflowRuntime
@@ -1868,6 +2188,8 @@ const processWorkflowJob = async (name: string, data: unknown) => {
         await (runtime as ImageWorkflowRuntime).restorePreview(signal);
       } else if (capabilityRuntime.kind === 'edit_image_shopify') {
         await (runtime as ThemeImageWorkflowRuntime).restorePreview(signal);
+      } else if (capabilityRuntime.kind === 'edit_text_shopify') {
+        await (runtime as ThemeTextWorkflowRuntime).restorePreview(signal);
       } else if (capabilityRuntime.kind === 'edit_text') {
         await (runtime as TextWorkflowRuntime).restorePreview(signal);
       } else if (capabilityRuntime.kind === 'edit_text_style') {

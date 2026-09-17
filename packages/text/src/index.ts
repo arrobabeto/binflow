@@ -23,6 +23,38 @@ export {
   type TextEditCandidate,
 } from './edit-text.js';
 export {
+  EditThemeTextExecutor,
+  enrichInventoryCopyRows,
+  enrichInventoryStyleHints,
+  patchLiquidSchemaDefault,
+  readLiquidSchemaDefault,
+  type ThemeTextInventoryLoadResult,
+  type ThemeTextPatchArtifact,
+  type ThemeTextPreviewResult,
+  type ThemeTextPublishResult,
+  type ThemeTextReadPort,
+} from './edit-theme-text.js';
+export {
+  DEFAULT_SURFACE_INVENTORY_PATH,
+  inventoryCopyForArea,
+  inventoryRowToTextEditCandidate,
+  isShopifyTranslationKey,
+  listInventoryCopyAreas,
+  matchesInventoryStyleHint,
+  normalizeInventoryCopyText,
+  parseSurfaceInventoryCopy,
+  parseSurfaceInventoryStyleHints,
+  parseSurfaceInventoryStyleTargets,
+  pickInventoryCopyDisplayValue,
+  resolveInventoryCopyCandidate,
+  searchInventoryCopy,
+  settingIdFromLocator,
+  stripInventoryHtml,
+  type SurfaceInventoryCopyRow,
+  type SurfaceInventoryStyleHint,
+  type SurfaceInventoryStyleTargetRow,
+} from './surface-inventory-copy.js';
+export {
   EditTextStyleExecutor,
   adjustHexLightness,
   applyTextStylePatch,
