@@ -1,0 +1,4 @@
+kind: compute
+label: Record theme text preview binding
+nodeKind: text.record_theme_preview@1
+acceptsClientCustomization: false

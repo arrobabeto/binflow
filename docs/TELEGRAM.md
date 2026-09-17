@@ -92,10 +92,10 @@ Unpaired users receive a localized access-denied message and cannot discover pro
 | Command        | Behavior                                                                                                     |
 | -------------- | ------------------------------------------------------------------------------------------------------------ |
 | `/start`       | Pair or show current connection status.                                                                      |
-| `/tools`       | List enabled tools as `command — displayName`, plus platform `/open_ticket` and `/hey-binn`, and a footer pointing to `/info`. For Piloter: intersection with the assigned subset (ADR-0057); platform meta commands remain listed. |
+| `/tools`       | List enabled tools as `command — displayName`, plus platform `/open_ticket` and `/hey_binn`, and a footer pointing to `/info`. For Piloter: intersection with the assigned subset (ADR-0057); platform meta commands remain listed. |
 | `/open_ticket` | Start a custom-request interview (not a catalog tool); available to every paired client (owner and Piloter). |
-| `/hey-binn`    | Start the read-only Binn advisor (not a catalog tool); all paired clients; suggests tools + typed handoff; never mutates (ADR-0062). Deterministic code injects allowlisted site inventory (blogs/portfolio/pages) into context. |
-| `/bye-binn`    | End the Binn chat thread (also: Adiós/Bye/Gracias Binn). Idle threads expire after 10 minutes. |
+| `/hey_binn`    | Start the read-only Binn advisor (not a catalog tool); all paired clients; suggests tools + typed handoff; never mutates (ADR-0062). Deterministic code injects allowlisted site inventory including truncated blog/page copy. Alias: `/hey-binn`. |
+| `/bye_binn`    | End the Binn chat thread (also: Adiós/Bye/Gracias Binn; alias `/bye-binn`). Idle threads expire after 10 minutes. |
 | `/info`        | Without args: short list + ask which tool. With arg: scope/detail for one enabled tool (does not start it).  |
 | `/create_blog` | Start the blog capability; arguments are optional.                                                           |
 | `/status`      | Show active/recent request states for this user/project.                                                     |
@@ -111,7 +111,7 @@ may use localized one-line summaries from the client tool catalog. Internal node
 such as translation never appear as commands. `/tools` lists only enabled
 bindings visible to the actor (owner: full project catalog; Piloter: subset);
 `/info` details only those bindings (ADR-0054, ADR-0057). `/info` never creates
-a request. Platform commands `/open_ticket` and `/hey-binn` appear in `/tools`
+a request. Platform commands `/open_ticket` and `/hey_binn` appear in `/tools`
 and `/help` for every paired client without Dashboard capability assignment
 (ADR-0055, ADR-0062). Unmatched free-text offers custom request or `/tools`;
 greeting/thanks use a heuristic polite reply. Natural-language greetings that
@@ -125,16 +125,27 @@ A normal message is evaluated only against enabled capabilities. The planner ret
 For the local MVP router:
 
 - **Hey Binn / Binn:** Natural-language greetings that address Binn
-  (Hola/Hi/Hallo/Hey Binn, etc.) or `/hey-binn` start the read-only advisor
-  (ADR-0062); they must not steal blog/menu/edit intents. Deterministic worker
+  (Hola/Hi/Hallo/Hey Binn, etc.) or `/hey_binn` start the read-only advisor
+  (ADR-0062). While a Binn thread is active (10-minute idle TTL), free-text
+  stays with Hey Binn and must not be stolen by tool natural-language matchers
+  (e.g. “analiza el blog” continues the advisor, it does not start
+  `create_blog_*`). Explicit slash tool commands (`/create_blog`, `/edit_text`,
+  …) still start tools during a Binn thread. Binn greetings must not steal
+  unrelated bare tool intents when no Binn thread is open. Deterministic worker
   code injects allowlisted GitHub/CMS inventory into the prompt (no LLM tools).
-  End with `/bye-binn` or addressed goodbyes (Adiós/Bye/Gracias Binn); idle
+  End with `/bye_binn` or addressed goodbyes (Adiós/Bye/Gracias Binn); idle
   threads expire after 10 minutes.
-- **Blog:** messages mentioning *blog*, *article*, *artículo*, *Beitrag*, *post*, etc. start the project's assigned create-blog capability (`create_blog_draft` on `astro_repo`, `create_blog_orbitype` on `astro_orbitype`).
+- **Blog:** messages mentioning *blog*, *article*, *artículo*, *Beitrag*, *post*, etc. start the project's assigned create-blog capability (`create_blog_draft` on `astro_repo`, `create_blog_orbitype` on `astro_orbitype`) when no active Binn thread claims the turn.
 - **Menu update (`astro_orbitype`):** messages mentioning *menú*, *carta*, *Speisekarte*, *update menu*, *upload menu*, etc. start `update_menu` when assigned.
 - **Text edit (`astro_orbitype`):** messages mentioning *editar texto*, *cambiar texto*, *edit text*, *Text ändern*, etc. start `edit_text` when assigned.
+- **Text edit (`shopify_liquid`):** same `/edit_text` / NL phrases start
+  `edit_text_shopify` when assigned (inventory `kind: copy`; literal whole-field
+  replacement; client Approve/Cancel only — no fake storefront preview buttons).
+  Astro Orbitype `edit_text` is unchanged (ADR-0063).
 - **Text style (`astro_orbitype`):** messages mentioning *cambiar estilo*, *tamaño del texto*, *negrita*, *color del texto*, *edit text style*, *Schriftgröße*, etc. start `edit_text_style` when assigned (not `edit_text`).
 - **Image edit (`astro_orbitype`):** messages mentioning *cambiar imagen*, *change image*, *Bild ändern*, *edit image*, *portada*, *cover*, etc. start `edit_image` when assigned. Target confirm may include the current image photo; replacement accepts a photo attachment or HTTPS URL.
+- **Image edit (`shopify_liquid`):** same phrases start `edit_image_shopify` when
+  assigned (inventory image slots + deep search on miss).
 - **Portfolio project:** messages mentioning *proyecto*, *portafolio*, *portfolio*, *case study*, etc., or briefs with at least two structural cues (`Stack:`, `Rol:`, `Estado:`, `confidencial`, …), start `create_project_astro` when assigned — with or without the `/create_project` prefix.
 - **`/create_project <brief>`** always routes to the portfolio tool when it is enabled.
 - Portfolio collection (ADR-0035/0037): new project requests enter `NEEDS_INPUT`

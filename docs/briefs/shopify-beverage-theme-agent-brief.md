@@ -1,7 +1,10 @@
 # Agent brief: Shopify beverage theme (Binflow-ready)
 
 Paste this entire brief into the agent session that builds the Shopify theme.
-Canonical vocabulary: [Editable Surface Contract](../guides/editable-surface-contract.md)
+**BSI (required vocabulary for this stack):**
+[Binflow Surface Inventory](../guides/binflow-surface-inventory.md) +
+[BSI implementer brief — shopify-liquid](bsi/shopify-liquid.md).
+Schema: [Editable Surface Contract](../guides/editable-surface-contract.md)
 ([ADR-0058](../adr/0058-editable-surface-contract.md)).
 
 ---

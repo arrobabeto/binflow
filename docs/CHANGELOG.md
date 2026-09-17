@@ -4,20 +4,89 @@ All notable changes to product behavior, architecture, contracts, security, oper
 
 ## Unreleased
 
+### Binflow Surface Inventory (BSI) — general + per-stack briefs
+
+- Platform guide: `docs/guides/binflow-surface-inventory.md` (name **BSI**;
+  opt-in rules; shared vocabulary).
+- Per-stack implementer briefs: `docs/briefs/bsi/` (`astro-repo`,
+  `astro-orbitype`, `shopify-liquid`). Schema remains
+  `docs/guides/editable-surface-contract.md`.
+- ADR-0064 amended: BSI is Binflow-wide; every catalog stack must ship a BSI
+  brief; `new-stack` requires it alongside the stack tool contract.
+- Astro enrollment still optional for BSI; Shopify content tools unchanged
+  (inventory allowlist). Containers + `presentation: background` remain
+  declare-only for identification.
+
+### edit_text_shopify discovery UX (Astro parity)
+
+- Search: enrich inventory copy with live Liquid schema `"default"`, then
+  normalized substring match on that text (not `bf_id` / path haystack).
+- Miss: stay on `await_target` with Astro not-found copy; **no** browse-by-area
+  or Deep search (image Shopify unchanged). Confirm/disambiguate show
+  `«currentValue»`. ADR-0063 §6 amended; contracts drop `browse_pages`.
+- Follow-up fix: path-cached enrichment, keep inventory `sample` when live
+  reads fail, resolve Shopify `t:` schema defaults via
+  `locales/en.default.schema.json`, prefer human copy over raw `t:` keys,
+  surface inventory load errors to Telegram instead of silent no-op.
+- Search also indexes **all** `templates/*.json` instance settings (via GitHub
+  tree list), strips HTML for richtext, and explains when the query matches a
+  `style_target` heading (not editable via `/edit_text`). Fixes home-only
+  matches when area names differ from template slugs (e.g. `bio` →
+  `page.biophenols.json`).
+- Follow-up: stop blocking inventory search on recursive GitHub
+  `listBlobPaths`. Always index FALLBACK templates (story/bio/pdp) in parallel
+  so non-home copy advances past `await_target` instead of hanging in
+  NEEDS_INPUT.
+- Follow-up: area-scoped template reads + bounded concurrency; do not swallow
+  GitHub errors as missing files (that left only home `sample`s searchable).
+  Fail closed with `surface_inventory_enrichment_failed` when story/bio/pdp
+  inventory rows enrich to zero.
+- Worker fix: `loadThemeTextInventory` / `loadThemeImageInventory` must
+  `return await loadInventory(...)` so `masterKey.fill(0)` in `finally` does
+  not wipe the key while enrich still decrypts GitHub credentials (was
+  `Unsupported state or unable to authenticate data` → Needs input).
+- Style-target miss UX: enrich `style_target` live Liquid/template text so
+  headings without YAML `sample` (Story/Bio) trigger the style-only message
+  instead of generic not-found. Not-found copy mentions non-home catalog areas
+  when present. Themes must still backfill unique `sample`s on copy +
+  style_target (Elayva story/bio/pdp).
+
+### edit_text_shopify audit follow-ups
+
+- Policies registry test expects 11 capabilities; `/info` catalog and Telegram
+  guidance no longer promise storefront preview/PR links or expose `bf_id`.
+- `docs/TESTING.md` documents Shopify `/edit_text`; stack contract Telegram §
+  matches Approve/Cancel-only client notice (ADR-0063).
+
+### edit_text_shopify — theme copy for Shopify Liquid (ADR-0063)
+
+- Capability `edit_text_shopify@1` / `workflow.edit_text_shopify@1` on
+  `shopify_liquid`: inventory `kind: copy` → GitHub PR patches Liquid schema
+  `"default"` for the locator setting id. Command `/edit_text` with profile
+  dispatch (Astro Orbitype `edit_text` unchanged).
+- Collection: Astro-like text search + miss retry; literal whole-field
+  replacement; client Approve/Cancel only (no fake preview/PR buttons).
+- Migration `0036_edit_text_shopify_capability`. Spec:
+  `docs/specs/edit-text-shopify.md`.
+
 ### Hey Binn (`hey_binn`) — implementation (ADR-0062)
 
-- Platform meta Telegram advisor: `/hey-binn` + Binn-addressed greetings;
-  read-only OpenAI chat; typed handoff after client confirm; no workflow
-  `requests` for chat; usage via `binn_usage_events` (migration `0035_hey_binn`).
+- Platform meta Telegram advisor: `/hey_binn` (+ `/hey-binn` alias) and
+  Binn-addressed greetings; read-only OpenAI chat; typed handoff after client
+  confirm; no workflow `requests` for chat; usage via `binn_usage_events`
+  (migration `0035_hey_binn`).
 - Dashboard **Binn AI** (`/binn-ai`) under System; `GET /api/v1/usage` adds
   `heyBinnByClient`. Listed in `/tools` and `/help`.
-- Allowlisted GitHub/CMS inventory injected into chat context (blog/portfolio
-  catalogs, optional Orbitype pages / surface areas); LLM still has no tools.
-- End chat: `/bye-binn` or addressed goodbyes; idle thread TTL 10 minutes.
+- Allowlisted GitHub/CMS inventory injected into chat context with truncated
+  blog/page/theme **copy excerpts** (not titles only); LLM still has no tools.
+- End chat: `/bye_binn` or addressed goodbyes; idle thread TTL 10 minutes.
+- Active Binn free-text and Binn greetings claim the turn **before** tool
+  natural-language matchers (create-blog NL no longer steals “analiza el blog”).
+  Explicit slash tools still work during a Binn thread.
 
 ### Hey Binn (`hey_binn`) — docs/ADR (ADR-0062)
 
-- Platform meta read-only Telegram advisor: `/hey-binn` + NL greetings; suggests
+- Platform meta read-only Telegram advisor: `/hey_binn` + NL greetings; suggests
   tools and emits typed handoff; client activates tools; no workflow `requests`
   for chat v1; dashboard **Binn AI** under System. Spec:
   `docs/specs/hey-binn.md`.

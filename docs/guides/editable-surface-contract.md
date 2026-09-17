@@ -29,10 +29,11 @@ Figma → agent brief → site repo + Surface Inventory
 | Term | Meaning |
 |------|---------|
 | **Editable Surface** | Versioned set of fields Binflow may mutate for one project |
-| **Surface Inventory** | Machine-readable map of every declared field (see schema below) |
+| **Surface Inventory** | Machine-readable map of every declared field (see schema below); public name **Binflow Surface Inventory (BSI)** |
 | **bf_id** | Stable dotted id, e.g. `home.hero.heading`; never rename after ship |
-| **field kind** | `copy` \| `style_target` \| `image` \| `chrome_denied` \| `catalog_bound` |
+| **field kind** | `copy` \| `style_target` \| `image` \| `chrome_denied` \| `catalog_bound` \| `video` \| `overlay` \| `container` |
 | **Publication target** | Where truth lives for a row (GitHub path, Shopify Admin Article, Orbitype page, …) — declared per stack |
+| **BSI** | Abbreviation for Binflow Surface Inventory — `binflow/surface-inventory.yaml` + `data-bf-*` (ADR-0064) |
 
 ### Field kinds
 
@@ -40,9 +41,12 @@ Figma → agent brief → site repo + Surface Inventory
 |------|-------------------|---------------------------|
 | `copy` | Atomic prose; **whole-field** literal replace | `edit_text` |
 | `style_target` | Text node eligible for typographic wrap (excerpt + style marker) | `edit_text_style` |
-| `image` | Replaceable asset slot (not logo/nav by default) | `edit_image` |
+| `image` | Replaceable asset slot (`<img>`, `<picture>`, or CSS `background-image` on a div/section); optional inventory `presentation` | `edit_image` |
+| `container` | Identifiable section / wrapper div shell (scopes children) | declare-only / future layout tools |
 | `chrome_denied` | Visible UI chrome (CTA label/URL, nav, footer, aria); not body copy tools | none / specialized later |
 | `catalog_bound` | Native catalog objects (product title/price, collection title, article title/body from Admin) | not storefront `edit_text` |
+| `video` | Embed or video URL slot (declare-only until a video capability ships) | future `edit_video_*` |
+| `overlay` | Banner / popup / modal surface root (declare-only) | future overlay tools |
 
 A single visual element must not mix kinds in one setting value (no HTML blob
 that is both heading and button).
@@ -63,6 +67,14 @@ that is both heading and button).
 
 `image`, `image_mobile`, `background_image` — always pair with sibling
 `image_alt` (metadata; not body `copy` unless the inventory explicitly says so).
+When the URL is applied as CSS `background-image` on a `div`/`section`, set
+optional inventory `presentation: background` and marker
+`data-bf-presentation="background"` on that element (not only on an `<img>`).
+
+**Containers (`container` kind):**
+
+Section or wrapper shells that should be identifiable even when they are not
+copy/image nodes (e.g. `home.hero.shell`). Declare-only for current tools.
 
 **bf_id namespace:**
 
@@ -81,16 +93,21 @@ surface.
 ## Markup markers (storefront HTML)
 
 Where the site renders HTML for an inventory row of kind `copy`,
-`style_target`, `image`, or `chrome_denied`, emit:
+`style_target`, `image`, `chrome_denied`, `video`, `overlay`, or `container`,
+emit:
 
 | Attribute | Value |
 |-----------|--------|
 | `data-bf-id` | Exact inventory `bf_id` |
-| `data-bf-kind` | `copy` \| `style_target` \| `image` \| `chrome_denied` |
+| `data-bf-kind` | Matching kind (incl. `container` / `video` / `overlay` when declared) |
 | `data-bf-section` | Short section token (`hero`, `story`, `listing`, …) |
+| `data-bf-presentation` | Optional; for `image`: `img` \| `background` \| `picture` |
 
 `catalog_bound` nodes may omit markers or set `data-bf-kind="catalog_bound"`
-for QA only; storefront copy tools must not patch them.
+for QA only; storefront copy tools must not patch them. Current tools ignore
+`video` / `overlay` / `container` kinds until dedicated capabilities ship.
+Background `presentation` is for identification now; expanding `edit_image` to
+mutate CSS backgrounds is a later tool slice.
 
 Style wraps applied by Binflow may add `data-binflow-style="1"` on a span
 (existing Orbitype style tool). Keep `style_target` copy in a **single text
@@ -229,14 +246,33 @@ surfaces:
 | Blog create / delete | `catalog_bound` article fields + theme chrome | Theme templates ready; Admin/CMS is source for posts |
 | `update_menu` | n/a | Not part of this contract; project briefs may forbid |
 
+### Astro + Orbitype (optional BSI)
+
+Astro profiles **may** ship Binflow Surface Inventory (BSI); they are **not**
+required to (ADR-0064). Rules:
+
+1. **No BSI** → Astro tools keep today’s heuristic discovery (unchanged).
+2. **BSI present** → tools that know how to read it **prefer** inventory rows
+   over scraping; incomplete/unreadable inventory falls back to heuristics.
+3. Locators, CMS prop names, markers, containers, background images, and
+   template checklist:
+   [briefs/bsi/astro-orbitype.md](../briefs/bsi/astro-orbitype.md).
+
+Shopify Liquid greenfield / `edit_*_shopify` remains inventory-driven for that
+stack.
+
 Existing Orbitype/Webbin tools without an inventory keep heuristic discovery
-(ADR-0058 grandfather). New stacks **should** seed manifests from the
-inventory.
+(ADR-0058 grandfather). Shopify and other new stacks that already require
+inventory keep seeding manifests from it.
 
 ## PR checklist (site builds)
 
-- [ ] `binflow/surface-inventory.yaml` committed and complete for Home + blog chrome
-- [ ] Every editable node has `data-bf-id` / `data-bf-kind` / `data-bf-section`
+**When the project opts into BSI** (Shopify themes; optional Astro templates):
+
+- [ ] `binflow/surface-inventory.yaml` committed for declared surfaces
+- [ ] Every declared editable node has `data-bf-id` / `data-bf-kind` / `data-bf-section`
+- [ ] Section shells that matter use `kind: container` when needed
+- [ ] CSS background slots use `kind: image` + `presentation: background` (+ marker)
 - [ ] Copy setting ids follow naming rules; CTAs are `chrome_denied`
 - [ ] Images namespaced under Home/blog assets; alts are siblings
 - [ ] CSS namespaced; no global element selectors from custom Home CSS
@@ -244,9 +280,14 @@ inventory.
 - [ ] No menu-surface work unless the project brief explicitly requires it
 - [ ] Document whether Theme Editor / CMS UI edits are discouraged for allowlisted Git fields
 
+Astro sites that skip BSI omit this checklist; behavior stays heuristic.
+
 ## Related documents
 
+- [Binflow Surface Inventory (BSI)](binflow-surface-inventory.md)
 - [ADR-0058](../adr/0058-editable-surface-contract.md)
+- [ADR-0064](../adr/0064-optional-bsi-astro.md)
+- [BSI stack briefs](../briefs/bsi/README.md)
 - [GLOSSARY.md](../GLOSSARY.md)
 - [briefs/shopify-beverage-theme-agent-brief.md](../briefs/shopify-beverage-theme-agent-brief.md)
 - Stack tool contracts under `.cursor/skills/create-tool/references/stacks/`

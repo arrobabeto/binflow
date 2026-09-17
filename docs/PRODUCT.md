@@ -30,7 +30,7 @@ Small but frequent content changes require clients to understand a CMS, reposito
 - Review the real result rather than an abstract text response.
 - Request revisions without losing history.
 - Publish approved low/medium-risk content without learning GitHub or Vercel.
-- Use **Binn** (`/hey-binn`) for read-only ideation and typed tool handoffs
+- Use **Binn** (`/hey_binn`) for read-only ideation and typed tool handoffs
   without Binn mutating the site (ADR-0062).
 
 ### Platform

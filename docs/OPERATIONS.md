@@ -322,9 +322,10 @@ not require Vercel or Shopify Admin credentials at Validate.
 
 Migration `0033` records the `shopify_liquid` enrollment ship marker (profile is
 a text column; no enum alter). Migration `0034` registers
-`edit_image_shopify@1` (ADR-0060). Apply before dashboard assignment of the
-Shopify image tool. Rollback restores the prior application + DB backup rather
-than deleting capability definition history in place.
+`edit_image_shopify@1` (ADR-0060). Migration `0036` registers
+`edit_text_shopify@1` (ADR-0063). Apply before dashboard assignment of the
+Shopify image/text tools. Rollback restores the prior application + DB backup
+rather than deleting capability definition history in place.
 
 Surface inventory freshness (ADR-0061): theme agents keep
 `binflow/surface-inventory.yaml` synced on push (see
@@ -332,6 +333,18 @@ Surface inventory freshness (ADR-0061): theme agents keep
 same remap pipeline in the worker and may auto-merge an **inventory-only** PR.
 Signed GitHub App `push` webhook → remap enqueue remains gated on production
 webhook cutover; until then rely on the client agent gate + deep search.
+
+#### Elayva smoke (`edit_text_shopify`)
+
+After migrate `0036` and assign `edit_text_shopify` on Elayva:
+
+1. Telegram `/edit_text` (or NL edit-text) with a **fragment of live page copy**
+   (schema default), not a `bf_id`.
+2. Confirm target shows `«current text»` → send literal replacement → confirm plan.
+3. Zero matches → not-found + retry (no page picker / Deep search).
+4. Client Approve → admin Approve → merge.
+5. Verify Liquid schema `"default"` (and storefront if Theme Editor has no
+   override). Expect Approve/Cancel only on client notice (no Preview/PR CTAs).
 
 ### Live blog execution switch
 

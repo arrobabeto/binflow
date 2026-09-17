@@ -1113,6 +1113,39 @@ export const editImageInputSchema = z.discriminatedUnion('mode', [
     .strict(),
 ]);
 
+export const editTextShopifyInputSchema = z.discriminatedUnion('mode', [
+  z
+    .object({
+      collectionComplete: z.boolean().default(false),
+      collectionStep: z
+        .enum([
+          'await_target',
+          'disambiguate',
+          'confirm_target',
+          'await_replacement',
+          'ready',
+        ])
+        .default('await_target'),
+      contentLocale: z.enum(['de', 'en', 'es']).optional(),
+      discoveredTargets: z.array(textEditCandidateSchema).max(40).default([]),
+      messages: z.array(z.string().trim().max(10_000)).max(40).default([]),
+      mode: z.literal('collect'),
+      newValue: z.string().trim().max(10_000).optional(),
+      projectId: z.string().min(1),
+      targetKey: z.string().trim().min(1).max(200).optional(),
+    })
+    .strict(),
+  z
+    .object({
+      contentLocale: z.enum(['de', 'en', 'es']),
+      mode: z.literal('execute'),
+      newValue: z.string().trim().min(1).max(10_000),
+      projectId: z.string().min(1),
+      targetKey: z.string().trim().min(1).max(200),
+    })
+    .strict(),
+]);
+
 export const updateMenuInputSchema = z.discriminatedUnion('mode', [
   z
     .object({
@@ -1175,6 +1208,7 @@ export const capabilityInputSchema = z.union([
   deleteProjectAstroInputSchema,
   editTextInputSchema,
   editTextStyleInputSchema,
+  editTextShopifyInputSchema,
   editImageInputSchema,
   updateMenuInputSchema,
   openTicketCollectInputSchema,
@@ -1352,6 +1386,7 @@ export type DeleteBlogDraftInput = z.infer<typeof deleteBlogDraftInputSchema>;
 export type UpdateMenuInput = z.infer<typeof updateMenuInputSchema>;
 export type EditTextInput = z.infer<typeof editTextInputSchema>;
 export type EditTextStyleInput = z.infer<typeof editTextStyleInputSchema>;
+export type EditTextShopifyInput = z.infer<typeof editTextShopifyInputSchema>;
 export type TextStylePatch = z.infer<typeof textStylePatchSchema>;
 export type TextEditCandidate = z.infer<typeof textEditCandidateSchema>;
 export type EditImageInput = z.infer<typeof editImageInputSchema>;
@@ -1415,6 +1450,7 @@ export const capabilityIdSchema = z.enum([
   'edit_image',
   'edit_image_shopify',
   'edit_text',
+  'edit_text_shopify',
   'edit_text_style',
   'hey_binn',
   'open_ticket',

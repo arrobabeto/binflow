@@ -1,0 +1,4 @@
+kind: compute
+label: Build GitHub theme text patch
+nodeKind: text.render_theme_patch@1
+acceptsClientCustomization: false

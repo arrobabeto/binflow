@@ -20,7 +20,7 @@ mutates and never invokes tools.
 1. **Platform meta capability id `hey_binn`.** Available to every paired client
    on every stack by default. Listed in `/tools` and `/help`. Not assignable via
    Dashboard capability bindings (same class as `open_ticket`).
-2. **Invocation:** slash `/hey-binn` and natural-language greetings that address
+2. **Invocation:** slash `/hey_binn` and natural-language greetings that address
    Binn (e.g. Hola/Hi/Hallo/Hey Binn). Matcher must not steal unrelated tool
    intents.
 3. **Read-only advisor.** Deterministic application code may load allowlisted
@@ -58,7 +58,7 @@ mutates and never invokes tools.
 
 ## Verification
 
-- Ingress tests for `/hey-binn` and Binn greetings; negative cases for tool NL.
+- Ingress tests for `/hey_binn` and Binn greetings; negative cases for tool NL.
 - Adapter tests: read ports never write; mutate ports absent from Binn tool map.
 - Usage ledger rows attributable to `hey_binn` / project.
 - Dashboard Binn AI contract/UI smoke; nav placement under System below Analytics.

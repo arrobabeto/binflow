@@ -109,8 +109,14 @@ Still **no product code**.
    `DASHBOARD.md`, `INTEGRATIONS.md`, `CONTRACTS.md`, `GLOSSARY.md`.
 3. Add or amend ADR under `docs/adr/`; index `docs/adr/README.md` and
    `docs/DECISIONS.md` when used.
-4. Add `docs/CHANGELOG.md` Unreleased entry.
-5. Confirm relative Markdown links.
+4. **BSI stack brief (required):** write
+   `docs/briefs/bsi/<stack>.md` from
+   [`references/templates/bsi-stack-brief.md`](references/templates/bsi-stack-brief.md),
+   index it in [`docs/briefs/bsi/README.md`](../../../docs/briefs/bsi/README.md),
+   and link the platform guide
+   [`docs/guides/binflow-surface-inventory.md`](../../../docs/guides/binflow-surface-inventory.md).
+5. Add `docs/CHANGELOG.md` Unreleased entry.
+6. Confirm relative Markdown links.
 
 Mark the spec **Approved for implementation** only after Phase 2 (or when no
 Phase 2 was needed).
@@ -135,6 +141,8 @@ Include:
   from [`references/templates/stack-tool-contract.md`](references/templates/stack-tool-contract.md),
   and indexed in that README. Without this file, create-tool/test-tool must refuse
   the first capability on the stack.
+- **BSI stack brief** path `docs/briefs/bsi/<stack>.md` (required; same bar as
+  the stack tool contract). Link it from the stack tool contract file.
 - Next steps: “implementation session”, then later
   [`create-tool`](../create-tool/SKILL.md) for the first capability (after the
   contract file exists).
@@ -148,11 +156,12 @@ Present the handoff to the user. Do **not** start coding.
 Tell the user explicitly:
 
 1. Preparation is complete (spec, ADR, docs, readiness handoff, **stack tool
-   contract** under `create-tool/references/stacks/`).
+   contract**, and **BSI stack brief** under `docs/briefs/bsi/`).
 2. Implementation is a **separate** Agent request using the handoff.
 3. First content tool is a further separate [`create-tool`](../create-tool/SKILL.md)
    run after the profile is enrollable — create-tool loads the stack contract
-   first (blocked if missing).
+   first (blocked if missing). Site-build agents use the BSI brief for that
+   stack.
 4. Operator enrollment uses [`docs/ENROLLMENT.md`](../../../docs/ENROLLMENT.md).
 
 ---
@@ -167,6 +176,9 @@ Tell the user explicitly:
 - [`references/templates/spec-stub.md`](references/templates/spec-stub.md)
 - [`references/templates/readiness-handoff.md`](references/templates/readiness-handoff.md)
 - [`references/templates/stack-tool-contract.md`](references/templates/stack-tool-contract.md)
+- [`references/templates/bsi-stack-brief.md`](references/templates/bsi-stack-brief.md)
 - Sibling: [`../new-feature/SKILL.md`](../new-feature/SKILL.md)
 - Sibling: [`../create-tool/SKILL.md`](../create-tool/SKILL.md)
 - Sibling: [`../test-tool/SKILL.md`](../test-tool/SKILL.md)
+- BSI: [`docs/guides/binflow-surface-inventory.md`](../../../docs/guides/binflow-surface-inventory.md)
+- BSI briefs: [`docs/briefs/bsi/README.md`](../../../docs/briefs/bsi/README.md)

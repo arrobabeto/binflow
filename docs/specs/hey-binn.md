@@ -19,7 +19,7 @@ tool—without Binflow inventing a mutation or acting as a general coding agent.
 - Actor: `client` (dedicated Telegram bot); `platform_owner` observes Binn via
   dashboard **Binn AI**.
 - Success criteria:
-  - Invoke with `/hey-binn` or natural greetings (Hola/Hi/Hallo/Hey Binn, etc.).
+  - Invoke with `/hey_binn` or natural greetings (Hola/Hi/Hallo/Hey Binn, etc.).
   - Bidirectional natural-language chat; Binn reads tenant site/repo context via
     deterministic read-only ports.
   - Suggest an enabled tool (or `/open_ticket`); after client approval, deliver a
@@ -41,7 +41,7 @@ tool—without Binflow inventing a mutation or acting as a general coding agent.
 
 ### In scope
 
-- Platform command `hey_binn` / `/hey-binn` + NL greetings.
+- Platform command `hey_binn` / `/hey_binn` + NL greetings.
 - OpenAI chat with project-scoped credential and budget (ADR-0042 scope).
 - Read-only access to enrolled project content (GitHub theme/site paths;
   Orbitype/CMS read when the profile has it)—allowlisted by deterministic code.
@@ -70,7 +70,7 @@ tool—without Binflow inventing a mutation or acting as a general coding agent.
 
 ### Acceptance criteria
 
-1. Every paired client sees `/hey-binn` in `/tools` and `/help` without capability
+1. Every paired client sees `/hey_binn` in `/tools` and `/help` without capability
    assignment.
 2. Chat never creates content PRs/CMS drafts.
 3. Typed handoff requires explicit client approval in-chat.
@@ -111,7 +111,7 @@ Required by [`AGENTS.md`](../../AGENTS.md):
 - Next: **Agent implementation plan** (not classic create-tool mutate scaffold).
 - Ordered tasks after this spec:
 
-1. Contracts + Telegram ingress (`/hey-binn`, NL).
+1. Contracts + Telegram ingress (`/hey_binn`, NL).
 2. Read-only context ports + OpenAI advisor loop (no session DB v1).
 3. Typed handoff UX + usage ledger hooks.
 4. Dashboard Binn AI page + nav.

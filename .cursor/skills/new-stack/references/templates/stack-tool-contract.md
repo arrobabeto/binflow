@@ -16,6 +16,7 @@ on the stack. If the file is missing, those skills stop.
 | Required credentials | |
 | Enrollment fields | (especially `productionDomain`, locales) |
 | Implementation guide | path under `docs/guides/` if tools exist, else TBD |
+| BSI implementer brief | `docs/briefs/bsi/<stack>.md` (required; ADR-0064) |
 
 ## Path / route conventions
 

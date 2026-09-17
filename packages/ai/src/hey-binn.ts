@@ -26,6 +26,7 @@ export type OpenAIHeyBinnInput = Readonly<{
       items: ReadonlyArray<
         Readonly<{
           category?: string;
+          excerpt?: string;
           kind: 'blog' | 'page' | 'portfolio' | 'surface';
           locale?: string;
           slug?: string;
@@ -48,7 +49,7 @@ export type OpenAIHeyBinnResult = z.infer<typeof heyBinnReplySchema>;
 export const HEY_BINN_CHAT_MODEL = 'gpt-5.6-luna' as const;
 
 /**
- * Text-only advisor for `/hey-binn` (ADR-0062).
+ * Text-only advisor for `/hey_binn` (ADR-0062).
  * No tools exposed to the model — suggest only; never mutate or invoke.
  * Site/blog inventory is injected by deterministic application code.
  */
@@ -89,8 +90,11 @@ export const createOpenAIHeyBinnPort = (input: Readonly<{
             `You are Binn, a read-only advisor for website clients on Binflow.`,
             `Reply in ${language}. Be concise and practical.`,
             `You help invent/refine content ideas and prepare strong input for an enabled tool.`,
-            `Deterministic application code already loaded allowlisted project inventory into projectContext.inventory (blog/portfolio/page/surface titles from GitHub/CMS). Use that list when the client asks what exists (e.g. blogs). Do not claim you lack read access when inventory.items is non-empty.`,
-            `If inventory.items is empty, say the catalog came back empty and suggest /tools or asking the operator — do not invent posts.`,
+            `Deterministic application code already loaded allowlisted project inventory into projectContext.inventory.`,
+            `Each inventory item may include title/slug/metadata and an optional excerpt of real blog/page/theme copy (truncated).`,
+            `When the client asks about existing content, summarize from those excerpts. Do not claim you lack read access when inventory.items is non-empty.`,
+            `If inventory.items is empty or excerpts are missing, say so and suggest /tools or asking the operator — never invent posts or page copy.`,
+            `The client command is exactly /hey_binn (never /hey-bin or other misspellings). End chat with /bye_binn.`,
             `You NEVER mutate content, invoke tools, open tickets, merge, publish, or invent credentials.`,
             `You may suggest one enabled tool command (or /open_ticket) when helpful.`,
             `If askConfirmHandoff is true, set typedHandoff to a ready-to-paste message the client can use when THEY start that tool; otherwise typedHandoff is null.`,

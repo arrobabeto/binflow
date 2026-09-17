@@ -25,13 +25,15 @@ This directory is the canonical specification for Binflow. Documents describe cu
 
 ## Guides
 
-- [Editable Surface Contract](guides/editable-surface-contract.md) — site-first `bf_id`, field kinds, Surface Inventory, and markers for Binflow-intended sites (ADR-0058)
+- [Binflow Surface Inventory (BSI)](guides/binflow-surface-inventory.md) — platform convention; opt-in rules; per-stack briefs (ADR-0058 / ADR-0064)
+- [Editable Surface Contract](guides/editable-surface-contract.md) — `bf_id`, field kinds, inventory schema, markers
 - [Surface inventory sync](guides/surface-inventory-sync.md) — push gate + remap / deep search freshness (ADR-0061)
 - [Astro Orbitype tool implementation](guides/astro-orbitype-tool-implementation.md) — stack contracts, ports, manifest freeze, ops gates, failure appendix for `astro_orbitype` capabilities
 
 ## Briefs
 
-- [Shopify beverage theme agent brief](briefs/shopify-beverage-theme-agent-brief.md) — paste-ready instructions for a Home + blog Liquid theme that ships a Surface Inventory
+- [BSI stack briefs](briefs/bsi/README.md) — implementer docs per catalog stack (`astro-repo`, `astro-orbitype`, `shopify-liquid`)
+- [Shopify beverage theme agent brief](briefs/shopify-beverage-theme-agent-brief.md) — product-shaped Home + blog Liquid build (uses BSI Shopify brief)
 
 ## Governance
 
@@ -65,6 +67,8 @@ This directory is the canonical specification for Binflow. Documents describe cu
 | Coding and delivery standards                   | `DEVELOPMENT.md`   |
 | Delivery phases                                 | `ROADMAP.md`       |
 | Site-first editable content vocabulary          | `guides/editable-surface-contract.md` |
+| Binflow Surface Inventory (BSI)                 | `guides/binflow-surface-inventory.md` |
+| BSI per-stack implementer briefs                | `briefs/bsi/` |
 | Architectural decisions                         | `adr/`             |
 
 When documents conflict, an accepted ADR wins for the decision it owns; otherwise the more specific canonical document wins. Resolve contradictions immediately rather than relying on tribal knowledge.

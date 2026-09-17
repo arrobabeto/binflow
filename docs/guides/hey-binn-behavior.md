@@ -6,9 +6,10 @@ never see this page; operators use **Binn AI** in the dashboard.
 ## What Binn does
 
 - Helps invent and refine content ideas against project context.
-- Deterministic code loads allowlisted inventory (GitHub blog/portfolio
-  catalogs, optional Orbitype pages, Shopify surface areas) into the model
-  prompt. The LLM never receives read or write tools.
+- Deterministic code loads allowlisted inventory into the model prompt:
+  GitHub blog/portfolio **markdown bodies** (frontmatter stripped, truncated),
+  Orbitype page **editable copy fields**, and Shopify surface **copy** samples.
+  The LLM never receives read or write tools.
 - Suggests an **enabled** tool or `/open_ticket`.
 - After explicit client approval, emits a **typed message** for the client to
   paste when **they** start the tool.
@@ -28,10 +29,15 @@ never see this page; operators use **Binn AI** in the dashboard.
 
 ## Ingress
 
-- `/hey-binn` and greetings that address Binn (`Hey Binn`, `Hola Binn`, …).
-- Does not steal bare courtesy (`hola`) or unrelated tool natural language.
-- End chat: `/bye-binn`, or `Adiós Binn` / `Bye Binn` / `Gracias Binn` (and
-  locale equivalents). Idle thread TTL: **10 minutes**.
+- `/hey_binn` (Telegram-valid underscore; `/hey-binn` accepted as alias) and
+  greetings that address Binn (`Hey Binn`, `Hola Binn`, …).
+- Does not steal bare courtesy (`hola`) or unrelated tool natural language when
+  no Binn thread is open.
+- While a Binn thread is active, free-text (including words like “blog”) stays
+  with the advisor for the LLM turn; tool NL must not start workflows. Explicit
+  slash commands (`/create_blog`, …) remain an escape hatch.
+- End chat: `/bye_binn` (alias `/bye-binn`), or `Adiós Binn` / `Bye Binn` /
+  `Gracias Binn` (and locale equivalents). Idle thread TTL: **10 minutes**.
 
 ## Usage
 

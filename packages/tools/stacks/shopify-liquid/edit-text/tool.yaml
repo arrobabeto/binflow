@@ -1,0 +1,15 @@
+command: /edit_text
+description: "Lets shopify_liquid clients replace one allowlisted theme copy
+  field per request using the Surface Inventory (kind: copy, publication_target:
+  github_theme). Opens a GitHub PR that updates the Liquid schema default for
+  the inventory locator (no Orbitype, no Vercel, no Shopify Admin API). Client
+  approve/cancel binds the PR SHA; admin approval before merge. Literal
+  whole-field replacement only."
+displayName: Edit theme text
+executorId: workflow.edit_text_shopify@1
+graphVersion: stacks/shopify-liquid/edit-text@1
+id: edit_text_shopify
+profile: shopify_liquid
+requiresPreview: true
+riskClass: medium
+version: 1

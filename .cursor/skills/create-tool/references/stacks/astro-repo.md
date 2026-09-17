@@ -9,6 +9,7 @@
 | Required credentials | GitHub App, Vercel (OpenAI per-client) |
 | Enrollment | Locales bilingual ES+EN typical; `productionDomain` optional (defaults to Webbin pilot origin) |
 | Implementation guide | Webbin tools are the reference; Orbitype guide does **not** apply |
+| BSI implementer brief | [docs/briefs/bsi/astro-repo.md](../../../../docs/briefs/bsi/astro-repo.md) (optional opt-in; ADR-0064) |
 
 ## Path / route conventions
 

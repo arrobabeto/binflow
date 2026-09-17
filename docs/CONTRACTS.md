@@ -415,6 +415,45 @@ type EditTextInput =
 Execute replaces the entire resolved field value with `newValue` (substring
 search only locates the field). Surgical in-field edits are `edit_text_style`
 only.
+
+## `edit_text_shopify`
+
+Telegram command: `/edit_text` (profile `shopify_liquid` only).
+
+See `docs/specs/edit-text-shopify.md` and ADR-0063. Does **not** reuse Orbitype
+`edit_text` / ADR-0051. Input schema: `editTextShopifyInputSchema`
+(`collect` | `execute`). Collection discovery matches Astro `edit_text`:
+normalized substring search on live schema default / sample text; miss stays
+on `await_target` (no `browse_pages` / Deep search). Replacement is literal
+`newValue` (no attachments). Client preview actions: `approve_preview`,
+`cancel` only (no PR / storefront preview buttons). Admin required after
+client approve. Publish revalidate uses `publication.files`.
+
+```ts
+type EditTextShopifyInput =
+  | {
+      mode: 'collect';
+      projectId: string;
+      collectionStep:
+        | 'await_target'
+        | 'disambiguate'
+        | 'confirm_target'
+        | 'await_replacement'
+        | 'ready';
+      contentLocale?: SupportedLocale;
+      targetKey?: string;
+      newValue?: string;
+      discoveredTargets: TextEditCandidate[];
+    }
+  | {
+      mode: 'execute';
+      projectId: string;
+      contentLocale: SupportedLocale;
+      targetKey: string;
+      newValue: string;
+    };
+```
+
 ## `edit_text_style`
 
 Telegram command: `/edit_text_style`.
@@ -581,18 +620,19 @@ Publication with `publicationIntent: 'publish'` requires `url` on the bundle.
 
 ## `hey_binn` (platform meta)
 
-Telegram command: `/hey-binn` (also NL greetings addressing Binn).
+Telegram command: `/hey_binn` (alias `/hey-binn`; also NL greetings addressing Binn).
 
 See `docs/specs/hey-binn.md` and ADR-0062. Not a catalog-assigned capability.
 Available on every paired client bot. Chat does **not** create workflow
 `requests` in v1. Telegram action ids: `confirm_binn_handoff`,
 `cancel_binn_handoff` (via `binn_actions`, not `request_actions`). Exit:
-`/bye-binn` and addressed goodbyes (`Adiós Binn`, `Bye Binn`, `Gracias Binn`,
+`/bye_binn` and addressed goodbyes (`Adiós Binn`, `Bye Binn`, `Gracias Binn`,
 …). Idle thread TTL: 10 minutes. Deterministic worker loads allowlisted
-GitHub/CMS inventory into the model prompt (ADR-0042 `hey_binn` scope); the
-LLM never receives read/write tools. Usage via `binn_usage_events` with
-`capabilityId: hey_binn`, merged into `GET /api/v1/usage` (`byCapability`,
-`heyBinnByClient`). Dashboard Binn AI reads those aggregates.
+GitHub/CMS inventory **including truncated blog bodies and page copy** into the
+model prompt (ADR-0042 `hey_binn` scope); the LLM never receives read/write
+tools. Usage via `binn_usage_events` with `capabilityId: hey_binn`, merged into
+`GET /api/v1/usage` (`byCapability`, `heyBinnByClient`). Dashboard Binn AI
+reads those aggregates.
 
 ## `create_blog_draft`
 

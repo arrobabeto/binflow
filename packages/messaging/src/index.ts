@@ -390,6 +390,35 @@ export const renderThemeImageApprovalNotice = (
     ...(input.photoUrl === undefined ? {} : { photoUrl: input.photoUrl }),
   });
 
+const themeTextApprovalCopy: Record<
+  SupportedLocale,
+  (slot: string) => string
+> = {
+  de: (slot) =>
+    `Bereit zur Freigabe: Text **${slot}**. Der Storefront zeigt die Änderung noch nicht — erst nach Admin-Freigabe und Merge. Freigeben oder Abbrechen.`,
+  en: (slot) =>
+    `Ready to approve: text **${slot}**. The storefront does not show the change yet — it goes live after admin approval and merge. Approve or Cancel.`,
+  es: (slot) =>
+    `Listo para aprobar: texto **${slot}**. La tienda aún no muestra el cambio — se verá en vivo tras la aprobación admin y el merge. Aprobar o Cancelar.`,
+};
+
+/** Shopify theme text: Approve/Cancel only — no fake preview/PR link buttons. */
+export const renderThemeTextApprovalNotice = (
+  input: Readonly<{
+    locale: SupportedLocale;
+    slotLabel: string;
+    tokens: Readonly<{ approve: string; cancel: string }>;
+  }>,
+): AdapterPostableMessage =>
+  renderPreviewReadyNotice({
+    includeRevision: false,
+    locale: input.locale,
+    text: themeTextApprovalCopy[input.locale](input.slotLabel),
+    title: input.slotLabel,
+    tokens: input.tokens,
+    urls: {},
+  });
+
 const deleteAdminPendingCopy: Record<
   'blog' | 'portfolio',
   Record<SupportedLocale, Readonly<{ pending: (title: string) => string }>>

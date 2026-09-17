@@ -45,16 +45,22 @@ gate remains the primary freshness control; Deep search is the on-demand escape.
 
 ## Deep search (Telegram)
 
-Used by `edit_image_shopify` when target search returns zero matches:
+Used by **`edit_image_shopify` only** when image target search returns zero
+matches (ADR-0061). `edit_text_shopify` does **not** offer browse-by-area or
+Deep search — miss UX mirrors Astro `edit_text` (retry excerpt on
+`await_target`; ADR-0063).
+
+For images:
 
 1. Offer **Deep search** (+ browse by inventory `area` when areas exist) and Cancel.
 2. One deep search per request.
-3. After remap + reload, re-run the original query.
+3. After remap + reload, re-run the original query against image rows.
 4. Still zero → definitive not-found (no loop).
 
-Astro Orbitype `edit_image` does **not** gain this CTA (ADR-0042).
+Astro Orbitype `edit_image` / `edit_text` do **not** gain this CTA (ADR-0042).
 
 ## Related
 
 - Spec: [edit-image-shopify.md](../specs/edit-image-shopify.md)
-- ADR-0058 / ADR-0060 / ADR-0061
+- Spec: [edit-text-shopify.md](../specs/edit-text-shopify.md)
+- ADR-0058 / ADR-0060 / ADR-0061 / ADR-0063

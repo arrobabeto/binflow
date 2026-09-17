@@ -11,6 +11,7 @@ export type CapabilityIngressHandlerKind =
   | 'edit_image'
   | 'edit_image_shopify'
   | 'edit_text'
+  | 'edit_text_shopify'
   | 'edit_text_style'
   | 'project'
   | 'update_menu';
@@ -88,6 +89,7 @@ const handlerKindForExecutor = (
   if (executorId === 'workflow.delete_project@1') return 'delete_project';
   if (executorId === 'workflow.update_menu@1') return 'update_menu';
   if (executorId === 'workflow.edit_text@1') return 'edit_text';
+  if (executorId === 'workflow.edit_text_shopify@1') return 'edit_text_shopify';
   if (executorId === 'workflow.edit_text_style@1') return 'edit_text_style';
   if (executorId === 'workflow.edit_image@1') return 'edit_image';
   if (executorId === 'workflow.edit_image_shopify@1') return 'edit_image_shopify';
@@ -106,7 +108,8 @@ const naturalLanguageForCapability = (
   if (capabilityId === 'delete_project_astro') return deleteProjectNaturalLanguage;
   if (capabilityId === 'create_project_astro') return matchesNaturalProject;
   if (capabilityId === 'update_menu') return updateMenuNaturalLanguage;
-  if (capabilityId === 'edit_text') return editTextNaturalLanguage;
+  if (capabilityId === 'edit_text' || capabilityId === 'edit_text_shopify')
+    return editTextNaturalLanguage;
   if (capabilityId === 'edit_text_style') return editTextStyleNaturalLanguage;
   if (capabilityId === 'edit_image' || capabilityId === 'edit_image_shopify')
     return editImageNaturalLanguage;
@@ -138,6 +141,7 @@ export const collectionCapabilityIds = Object.freeze(
     'edit_image',
     'edit_image_shopify',
     'edit_text',
+    'edit_text_shopify',
     'edit_text_style',
     'open_ticket',
     'update_menu',

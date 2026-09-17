@@ -2,9 +2,10 @@
 
 | Term             | Meaning                                                                                                      |
 | ---------------- | ------------------------------------------------------------------------------------------------------------ |
-| Binn             | Read-only Telegram advisor (`hey_binn` / `/hey-binn`); suggests tools and typed handoffs; does not mutate (ADR-0062). |
+| Binn             | Read-only Telegram advisor (`hey_binn` / `/hey_binn`); suggests tools and typed handoffs; does not mutate (ADR-0062). |
 | Approval         | Permission from an authorized user bound to one exact request version and preview artifact.                  |
 | Artifact         | Versioned output such as Markdown, image, diff, screenshot or CMS draft.                                     |
+| BSI              | **Binflow Surface Inventory** — platform convention (`binflow/surface-inventory.yaml` + `data-bf-*`); general guide + per-stack briefs under `docs/briefs/bsi/` (ADR-0064). |
 | bf_id            | Stable dotted Editable Surface id (e.g. `home.hero.heading`); never rename after ship (ADR-0058).            |
 | Capability       | User-visible, typed operation that a project explicitly enables; synonym for dashboard **Tool** when listing enabled operations. |
 | catalog_bound    | Field kind for native catalog/CMS objects (product, collection, article body); not storefront `edit_text`.   |
@@ -16,7 +17,8 @@
 | Customization    | Versioned client markdown that supplies style and structure guidance for one assigned capability.            |
 | Editable Surface | Versioned set of allowlisted fields Binflow may mutate for one project (ADR-0058).                           |
 | Executor         | Deterministic implementation of a capability for a supported profile/manifest.                               |
-| field kind       | Surface Inventory classification: `copy`, `style_target`, `image`, `chrome_denied`, or `catalog_bound`.      |
+| field kind       | BSI classification: `copy`, `style_target`, `image`, `chrome_denied`, `catalog_bound`, plus declare-only `video` / `overlay` / `container`. |
+| container (kind) | Declare-only field kind for identifiable section/div shells (ADR-0064).                                      |
 | Global manifest  | Code-owned maximum contract for a technical profile.                                                         |
 | Graph            | Declared capability topology (`graph.yaml`) executed by the TypeScript workflow runtime.                    |
 | Grant            | Explicit authorization for a tenant to use a platform credential; outside the first MVP.                     |
@@ -29,7 +31,10 @@
 | Request          | A user's desired operation; it may contain multiple immutable request versions.                              |
 | Request version  | One frozen plan and artifact set; revisions create a new version and invalidate approvals.                   |
 | Stack            | Catalog directory such as `astro-repo` or `shopify-liquid`; each tool binds to one stack. Project **profile** uses underscores (`astro_repo`, `astro_orbitype`, `shopify_liquid`). |
-| Surface Inventory| Machine-readable map `bf_id → kind → path/locator → locales → publication_target` shipped with the site repo. |
+| Surface Inventory| Machine-readable map `bf_id → kind → path/locator → locales → publication_target`; public name **BSI**. |
+| presentation     | Optional image paint mode in BSI: `img` \| `background` \| `picture` (CSS backgrounds on divs/sections).   |
+| overlay          | Declare-only field kind for banner/popup/modal roots until overlay tools ship (ADR-0064).                    |
+| video (kind)     | Declare-only field kind for embed/URL slots until video tools ship (ADR-0064).                               |
 | Tenant           | Security and data-isolation boundary for one client organization.                                            |
 | Tool (dashboard) | Synonym for a versioned capability shown in the Tools catalog, grouped by stack.                             |
 | Tool (LLM)       | Bounded read or capability-proposal schema visible to a model. Internal publication operations are not LLM tools. |

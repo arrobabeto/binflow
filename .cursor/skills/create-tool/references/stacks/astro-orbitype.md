@@ -9,6 +9,7 @@
 | Required credentials | GitHub App, Vercel, **Orbitype API** |
 | Enrollment | **`productionDomain` required**; selectable locales (incl. monolingual `de`); translation policy per ADR-0046 |
 | Implementation guide | [docs/guides/astro-orbitype-tool-implementation.md](../../../../docs/guides/astro-orbitype-tool-implementation.md) |
+| BSI (optional) | [docs/briefs/bsi/astro-orbitype.md](../../../../docs/briefs/bsi/astro-orbitype.md) — platform [BSI guide](../../../../docs/guides/binflow-surface-inventory.md); ADR-0064; heuristics if absent |
 
 ## Path / route conventions
 

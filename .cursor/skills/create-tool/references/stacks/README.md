@@ -17,8 +17,12 @@ profile ships.
 2. Write `.cursor/skills/create-tool/references/stacks/<stack>.md` (hyphenated
    stack id).
 3. Add a row to this index.
-4. Readiness handoff must list the contract path; create-tool is **blocked**
-   until the file exists.
+4. Write **BSI stack brief** `docs/briefs/bsi/<stack>.md` from
+   [`new-stack/references/templates/bsi-stack-brief.md`](../../new-stack/references/templates/bsi-stack-brief.md)
+   and index [`docs/briefs/bsi/README.md`](../../../../docs/briefs/bsi/README.md).
+5. Link the BSI brief from the stack tool contract table.
+6. Readiness handoff must list the contract path **and** BSI brief path;
+   create-tool is **blocked** until the contract file exists.
 
 ## Shared rules
 
@@ -27,3 +31,5 @@ profile ships.
 - Webbin-only prose and path layouts stay in the `astro_repo` builder or
   customization layer.
 - Implementation manuals (when present) link from the stack contract.
+- Site labeling: [Binflow Surface Inventory](../../../../docs/guides/binflow-surface-inventory.md)
+  + per-stack brief under `docs/briefs/bsi/`.

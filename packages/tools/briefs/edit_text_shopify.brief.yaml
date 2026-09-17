@@ -1,0 +1,185 @@
+identity:
+  id: edit_text_shopify
+  version: 1
+  stack: shopify-liquid
+  toolDir: edit-text
+  graphVersionSuffix: '@1'
+  displayName: Edit theme text
+  command: /edit_text
+  description: >
+    Lets shopify_liquid clients replace one allowlisted theme copy field per
+    request using the Surface Inventory (kind: copy, publication_target:
+    github_theme). Opens a GitHub PR that updates the Liquid schema default for
+    the inventory locator (no Orbitype, no Vercel, no Shopify Admin API). Client
+    approve/cancel binds the PR SHA; admin approval before merge. Literal
+    whole-field replacement only.
+  profile: shopify_liquid
+  executorId: workflow.edit_text_shopify@1
+  riskClass: medium
+  requiresPreview: true
+  mutationClass: update
+  approvalPolicyId: shopify-liquid-text-edit@1
+
+specTitle: Edit theme text (Shopify Liquid) — capability specification
+
+migration:
+  inputSchemaId: edit_text_shopify.input@1
+  outputSchemaId: edit_text_shopify.output@1
+  allowedProfiles:
+    - shopify_liquid
+  requiredPermissions:
+    - github:metadata:read
+    - github:contents:write
+    - github:pull_requests:write
+    - github:checks:read
+    - github:statuses:read
+  timeoutSeconds: 1800
+  retryPolicy:
+    maxAttempts: 3
+    retryableErrors:
+      - provider_retryable
+  budget:
+    maxEstimatedCostCents: 25
+    maxModelCalls: 1
+    maxTokens: 500
+
+nodes:
+  - sortPrefix: '01'
+    id: sync_inventory_copy
+    kind: effect
+    nodeKind: text.sync_inventory_copy@1
+    label: Sync inventory copy allowlist
+    acceptsClientCustomization: false
+    permissions:
+      - github:metadata:read
+  - sortPrefix: '02'
+    id: validate_text_edit
+    kind: compute
+    nodeKind: text.validate_theme_edit@1
+    label: Validate inventory target and replacement text
+    acceptsClientCustomization: false
+  - sortPrefix: '03'
+    id: render_theme_text_patch
+    kind: compute
+    nodeKind: text.render_theme_patch@1
+    label: Build GitHub theme text patch
+    acceptsClientCustomization: false
+  - sortPrefix: '04'
+    id: open_text_edit_pr
+    kind: effect
+    nodeKind: text.open_theme_edit_pr@1
+    label: Open theme text pull request
+    acceptsClientCustomization: false
+    permissions:
+      - github:contents:write
+      - github:pull_requests:write
+  - sortPrefix: '05'
+    id: record_theme_preview
+    kind: compute
+    nodeKind: text.record_theme_preview@1
+    label: Record theme text preview binding
+    acceptsClientCustomization: false
+  - sortPrefix: '06'
+    id: awaiting_client_approval
+    kind: interrupt
+    nodeKind: workflow.awaiting_client_approval@1
+    label: Awaiting client preview approval
+    acceptsClientCustomization: false
+    actor: client
+    ttlHours: 72
+  - sortPrefix: '07'
+    id: awaiting_admin_approval
+    kind: interrupt
+    nodeKind: workflow.awaiting_admin_approval@1
+    label: Awaiting admin publication approval
+    acceptsClientCustomization: false
+    actor: admin
+    ttlHours: 72
+  - sortPrefix: '08'
+    id: merge_github
+    kind: effect
+    nodeKind: publication.merge_github@1
+    label: Merge GitHub PR
+    acceptsClientCustomization: false
+    permissions:
+      - github:pull_requests:write
+      - github:contents:write
+  - sortPrefix: '09'
+    id: verify_production
+    kind: effect
+    nodeKind: text.verify_theme_production@1
+    label: Verify production storefront
+    acceptsClientCustomization: false
+  - sortPrefix: '10'
+    id: completed
+    kind: compute
+    nodeKind: workflow.completed@1
+    label: Completed
+    acceptsClientCustomization: false
+
+edges:
+  - from: sync_inventory_copy
+    to: validate_text_edit
+  - from: validate_text_edit
+    to: render_theme_text_patch
+  - from: render_theme_text_patch
+    to: open_text_edit_pr
+  - from: open_text_edit_pr
+    to: record_theme_preview
+  - from: record_theme_preview
+    to: awaiting_client_approval
+  - from: awaiting_client_approval
+    to: awaiting_admin_approval
+  - from: awaiting_admin_approval
+    to: merge_github
+  - from: merge_github
+    to: verify_production
+  - from: verify_production
+    to: completed
+
+contentSchemaFields: []
+
+customizableNodeIds: []
+
+layerAssignments:
+  - layer: code
+    behavior: >
+      Inventory-driven github_theme copy slots only. Patch Liquid schema
+      default via GitHub PR. Client approval binds SHA without storefront
+      preview query or PR buttons. No Admin API / Orbitype / Vercel.
+  - layer: manifest
+    behavior: >
+      surfaceInventoryPath; editablePaths; productionOrigin; publicationTargets
+      github_theme.
+  - layer: customization
+    behavior: >
+      Optional collection hints only. No paths, models, or approval overrides.
+
+typedErrors:
+  - code: surface_inventory_missing
+    when: binflow/surface-inventory.yaml is absent at execute time.
+  - code: surface_inventory_empty
+    when: Inventory has no kind:copy github_theme rows.
+  - code: text_target_not_found
+    when: Search finds no allowlisted inventory copy for the query.
+  - code: text_target_ambiguous
+    when: Query matches more than one inventory copy field.
+  - code: text_replacement_missing
+    when: Client confirms plan without a replacement string.
+  - code: github_pr_failed
+    when: Theme text PR cannot be opened or updated.
+  - code: inventory_remap_failed
+    when: Deep search / remap could not update surface inventory.
+  - code: inventory_remap_pending
+    when: Remap is in progress (async webhook path).
+
+verification:
+  scenarios:
+    - Inventory sync fails closed when YAML missing.
+    - Search matches bf_id / area / section / sample; ambiguous returns numbered list.
+    - confirm_target shows current sample or schema default; Confirm / Not this one / Cancel.
+    - Replacement is literal whole-field text (no paraphrase).
+    - Client approval notice is Approve/Cancel only (no Preview/PR buttons).
+    - After client approve, admin approval required before merge.
+    - NL ingress edit-text phrases dispatch to edit_text_shopify when bound.
+  fixtures: []
