@@ -70,10 +70,10 @@ from code and marked **unverified-live**.
 - **Scenario:** DEL-04, DEL-05
 - **Severity:** major
 - **Layer:** code
-- **Observation:** [apps/worker/src/main.ts](apps/worker/src/main.ts) calls shared
+- **Observation:** [apps/worker/src/main.ts](../../apps/worker/src/main.ts) calls shared
   `renderDeleteAdminPendingNotice` / `renderDeletePublicationCompleteNotice` for
   both `delete_blog` and `delete_project`. Copy in
-  [packages/messaging/src/index.ts](packages/messaging/src/index.ts) references
+  [packages/messaging/src/index.ts](../../packages/messaging/src/index.ts) references
   *artículo* / *article* in all locales.
 - **Suggested fix:** Per-capability copy (mirror `deleteProjectActionLabels` pattern
   in ingress) or pass `contentKind: 'blog' | 'portfolio'` into render helpers.
