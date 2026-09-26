@@ -2,6 +2,7 @@
 
 - Status: Accepted
 - Date: 2026-08-17
+- Amended: 2026-09-26 (audited break-glass password recovery)
 - Supersedes: None
 - Superseded by: ADR-0024 for session duration and freshness timing
 
@@ -35,11 +36,15 @@ assurance and recovering access without adding email delivery to the MVP.
   Secret, integration, security and approval mutations require a fresh session;
   other authenticated operations require a non-expired two-factor session.
 - Password reset email and public account recovery are absent. Break-glass
-  recovery is an explicit local operator procedure that revokes all sessions,
-  rotates the password or TOTP material, and records an audit event. TOTP
-  replacement is not exposed as a browser self-service action because a
-  disable-then-enable sequence is not atomic. Recovery never creates a second
-  owner.
+  recovery uses the interactive local command
+  `pnpm binflow admin recover --email <existing-owner-email>`. It requires a
+  current database backup and the database-owner connection, matches exactly
+  one existing owner, changes only that owner's password, revokes all of that
+  owner's sessions, and records an audit event in the same transaction. The
+  password is entered twice through non-echoed prompts and follows the
+  12–128-character bounds. Recovery preserves TOTP enrollment, never creates or
+  replaces an owner, and refuses non-interactive use. TOTP replacement remains
+  an explicit operator procedure rather than a browser self-service action.
 - Auth rate limits use PostgreSQL so restart or horizontal-process changes do
   not erase counters. Production trusts forwarded client IP information only
   from the Caddy boundary; direct origin access remains unavailable.
@@ -73,5 +78,6 @@ assurance and recovering access without adding email delivery to the MVP.
 
 Tests cover single-owner bootstrap serialization, disabled HTTP sign-up,
 password bounds, incomplete-TOTP route restriction, TOTP and backup-code login,
-single-use backup codes, fresh-session gates, session revocation, origin checks,
-rate limiting and redacted logs/errors.
+single-use backup codes, fresh-session gates, break-glass password rotation,
+session revocation, TOTP preservation, origin checks, rate limiting and redacted
+logs/errors.

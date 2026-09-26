@@ -15,6 +15,7 @@ import {
   createBinflowAuth,
   loadAuthSecret,
   loadLocalAuthSecretFile,
+  recoverPlatformOwnerPassword,
   requirePlatformOwnerSession,
 } from '../src/index.js';
 
@@ -190,6 +191,96 @@ describeDatabase('platform owner authentication', () => {
         name: 'Second Owner',
       }),
     ).rejects.toThrow();
+  });
+
+  it('recovers the existing owner password, revokes sessions and preserves TOTP state', async () => {
+    const created = await bootstrap();
+    const auth = runtime();
+    const jar = new CookieJar();
+    expect(
+      (
+        await authRequest(
+          auth,
+          '/sign-in/email',
+          { email: ownerEmail, password: ownerPassword },
+          jar,
+        )
+      ).status,
+    ).toBe(200);
+
+    const enrollment = await authRequest(
+      auth,
+      '/two-factor/enable',
+      { method: 'totp', password: ownerPassword },
+      jar,
+    );
+    expect(enrollment.status).toBe(200);
+    const totpURI = (await enrollment.json()).totpURI as string;
+    const totpSecret = new URL(totpURI).searchParams.get('secret');
+    expect(totpSecret).not.toBeNull();
+    const code = await new OTP({ strategy: 'totp' }).generate({
+      secret: totpSecret!,
+    });
+    expect(
+      (
+        await authRequest(
+          auth,
+          '/two-factor/verify-totp',
+          { code, trustDevice: false },
+          jar,
+        )
+      ).status,
+    ).toBe(200);
+    const factorsBefore = await database.db
+      .select({ secret: schema.authTwoFactors.secret })
+      .from(schema.authTwoFactors);
+
+    const recovered = await recoverPlatformOwnerPassword({
+      databaseUrl: databaseUrl!,
+      email: ownerEmail,
+      password: 'new correct horse battery staple',
+    });
+    expect(recovered).toMatchObject({
+      email: ownerEmail,
+      userId: created.userId,
+    });
+    expect(recovered.sessionsRevoked).toBeGreaterThanOrEqual(1);
+
+    expect(
+      (
+        await authRequest(
+          auth,
+          '/sign-in/email',
+          { email: ownerEmail, password: ownerPassword },
+          new CookieJar(),
+        )
+      ).status,
+    ).toBeGreaterThanOrEqual(400);
+    expect(
+      (
+        await authRequest(
+          auth,
+          '/sign-in/email',
+          { email: ownerEmail, password: 'new correct horse battery staple' },
+          new CookieJar(),
+        )
+      ).status,
+    ).toBe(200);
+    const twoFactor = await database.db
+      .select({ enabled: schema.authUsers.twoFactorEnabled })
+      .from(schema.authUsers);
+    expect(twoFactor[0]?.enabled).toBe(true);
+    const factorsAfter = await database.db
+      .select({ secret: schema.authTwoFactors.secret })
+      .from(schema.authTwoFactors);
+    expect(factorsAfter).toEqual(factorsBefore);
+    const events = await database.db
+      .select({ action: schema.auditEvents.action })
+      .from(schema.auditEvents)
+      .where(eq(schema.auditEvents.actorId, 'local-break-glass'));
+    expect(events).toContainEqual({
+      action: 'auth.platform_owner_password_recovered',
+    });
   });
 
   it('keeps public sign-up disabled and gates password-only sessions', async () => {
