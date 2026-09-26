@@ -9,6 +9,7 @@ import {
   bootstrapPlatformOwner,
   createAuthSecretFile,
   loadLocalAuthSecretFile,
+  recoverPlatformOwnerPassword,
 } from '@binflow/auth';
 import {
   type CredentialOwnerScope,
@@ -99,9 +100,11 @@ program
     console.log(`Better Auth secret initialized at ${destination}`);
   });
 
-program
+const admin = program
   .command('admin')
-  .description('Manage the sole platform owner')
+  .description('Manage the sole platform owner');
+
+admin
   .command('bootstrap')
   .requiredOption('--email <email>', 'Platform-owner email')
   .requiredOption('--name <name>', 'Platform-owner display name')
@@ -140,6 +143,44 @@ program
       });
       console.log(
         `Platform owner ${created.email} created. Complete TOTP enrollment in the dashboard.`,
+      );
+    } finally {
+      void confirmation;
+    }
+  });
+
+admin
+  .command('recover')
+  .requiredOption('--email <email>', 'Existing platform-owner email')
+  .action(async ({ email }: { email: string }) => {
+    if (!process.stdin.isTTY || !process.stdout.isTTY) {
+      throw new Error(
+        'Platform-owner recovery requires an interactive terminal.',
+      );
+    }
+    const validatePassword = (value: string): true | string =>
+      value.length < 12 || value.length > 128
+        ? 'Password must contain 12 to 128 characters.'
+        : true;
+    const first = await password({
+      mask: '*',
+      message: 'New platform-owner password',
+      validate: validatePassword,
+    });
+    const confirmation = await password({
+      mask: '*',
+      message: 'Confirm new platform-owner password',
+      validate: (value) =>
+        value === first ? true : 'The passwords do not match.',
+    });
+    try {
+      const recovered = await recoverPlatformOwnerPassword({
+        databaseUrl: await migrationDatabaseUrl(),
+        email,
+        password: first,
+      });
+      console.log(
+        `Platform owner ${recovered.email} recovered; ${String(recovered.sessionsRevoked)} sessions revoked. Complete TOTP sign-in.`,
       );
     } finally {
       void confirmation;
@@ -273,8 +314,7 @@ integrations
           await withDatabase((db) =>
             storeCredentialVersion(db, {
               alias: prompted.alias,
-              configuration:
-                kind === 'vercel' ? {} : prompted.configuration,
+              configuration: kind === 'vercel' ? {} : prompted.configuration,
               ...((kind === 'github-app' ||
                 kind === 'vercel' ||
                 kind === 'orbitype-api') &&
@@ -298,8 +338,7 @@ integrations
                                     expectedProductionBranch:
                                       webbinPilotBinding.productionBranch,
                                   }),
-                              expectedRepository:
-                                webbinPilotBinding.repository,
+                              expectedRepository: webbinPilotBinding.repository,
                             },
                       kind,
                       scope: {
