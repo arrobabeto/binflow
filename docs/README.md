@@ -25,6 +25,7 @@ This directory is the canonical specification for Binflow. Documents describe cu
 
 ## Guides
 
+- [Agent skills](guides/agent-skills.md) — repo Cursor skills: description, scope, when to use
 - [Binflow Surface Inventory (BSI)](guides/binflow-surface-inventory.md) — platform convention; opt-in rules; per-stack briefs (ADR-0058 / ADR-0064)
 - [Editable Surface Contract](guides/editable-surface-contract.md) — `bf_id`, field kinds, inventory schema, markers
 - [Surface inventory sync](guides/surface-inventory-sync.md) — push gate + remap / deep search freshness (ADR-0061)
@@ -65,6 +66,7 @@ This directory is the canonical specification for Binflow. Documents describe cu
 | Quality and acceptance strategy                 | `TESTING.md`       |
 | Runtime, deployment and recovery                | `OPERATIONS.md`    |
 | Coding and delivery standards                   | `DEVELOPMENT.md`   |
+| Repo agent skills (Cursor)                      | `guides/agent-skills.md` |
 | Delivery phases                                 | `ROADMAP.md`       |
 | Site-first editable content vocabulary          | `guides/editable-surface-contract.md` |
 | Binflow Surface Inventory (BSI)                 | `guides/binflow-surface-inventory.md` |

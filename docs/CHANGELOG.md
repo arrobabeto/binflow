@@ -4,6 +4,11 @@ All notable changes to product behavior, architecture, contracts, security, oper
 
 ## Unreleased
 
+### Agent skills inventory guide
+
+- Canonical list of repo Cursor skills (description, scope, use):
+  `docs/guides/agent-skills.md`. Linked from README, DEVELOPMENT, REFERENCES.
+
 ### Binflow Surface Inventory (BSI) — general + per-stack briefs
 
 - Platform guide: `docs/guides/binflow-surface-inventory.md` (name **BSI**;
