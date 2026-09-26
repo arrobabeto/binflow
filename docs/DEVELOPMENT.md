@@ -65,13 +65,16 @@ valid.
 
 ## Agent skills (repo)
 
+Canonical inventory (description, scope, use):
+[guides/agent-skills.md](guides/agent-skills.md).
+
 | Skill | Role |
 |-------|------|
-| [`.cursor/skills/new-feature/`](../.cursor/skills/new-feature/SKILL.md) | Documentation-first **governance gate**: classify feature, impact vs docs/ADRs/tools, STOP for rule changes, write specs/ADRs/changelog, hand off. No product code. |
-| [`.cursor/skills/new-stack/`](../.cursor/skills/new-stack/SKILL.md) | **Stack/profile preparation**: interview, impact, approval STOP, spec/ADR/docs, readiness handoff for a later impl session. No product code. |
-| [`.cursor/skills/create-tool/`](../.cursor/skills/create-tool/SKILL.md) | New **capability** pipeline (brief → scaffold → implement → post-ship). Run after new-stack/new-feature when profile/ADR/SCOPE may change. |
+| [`.cursor/skills/new-feature/`](../.cursor/skills/new-feature/SKILL.md) | Documentation-first **governance gate**. No product code. |
+| [`.cursor/skills/new-stack/`](../.cursor/skills/new-stack/SKILL.md) | **Stack/profile preparation** + BSI brief + stack contract. No product code. |
+| [`.cursor/skills/create-tool/`](../.cursor/skills/create-tool/SKILL.md) | New **capability** pipeline (brief → scaffold → implement → post-ship). |
 | [`.cursor/skills/test-tool/`](../.cursor/skills/test-tool/SKILL.md) | Post-ship client-realistic audit |
-| [`.cursor/skills/edit-node-config/`](../.cursor/skills/edit-node-config/SKILL.md) | Edit declarative node config |
+| [`.cursor/skills/edit-node-config/`](../.cursor/skills/edit-node-config/SKILL.md) | Edit declarative agent node config |
 
 ## TypeScript standards
 

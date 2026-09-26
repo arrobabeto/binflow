@@ -4,6 +4,11 @@ All notable changes to product behavior, architecture, contracts, security, oper
 
 ## Unreleased
 
+### Agent skills inventory guide
+
+- Canonical list of repo Cursor skills (description, scope, use):
+  `docs/guides/agent-skills.md`. Linked from README, DEVELOPMENT, REFERENCES.
+
 ### Local dashboard LAN access
 
 - Added `pnpm run dev:lan` and `pnpm run dev:live:lan`, which detect a private

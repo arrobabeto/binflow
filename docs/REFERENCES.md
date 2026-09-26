@@ -4,7 +4,11 @@ References support implementation but do not override Binflow's accepted ADRs an
 
 ## Agent feature governance
 
-- Project skill [new-feature](../.cursor/skills/new-feature/SKILL.md) — intake gate before implementing platform/product features (stacks, integrations, trust boundaries). See also [DEVELOPMENT.md](DEVELOPMENT.md) § Agent skills.
+- [Agent skills inventory](guides/agent-skills.md) — all repo Cursor skills
+  (description, scope, use).
+- Project skill [new-feature](../.cursor/skills/new-feature/SKILL.md) — intake
+  gate before implementing platform/product features. See also
+  [DEVELOPMENT.md](DEVELOPMENT.md) § Agent skills.
 
 ## Runtime and packaging
 
