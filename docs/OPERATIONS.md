@@ -27,7 +27,9 @@
   and PostgreSQL-backed session runtime can initialize; Caddy waits for this
   health check in production.
 
-Start durable dependencies with `docker compose -f infra/compose/local.yml up -d postgres redis minio clamav`, then apply migrations with `pnpm db:migrate`. Host `pnpm dev` needs those dependency ports on localhost; it does not start PostgreSQL or Redis by itself. Host processes use **dashboard `:6060`** and **API `:2040`** by default (`pnpm dev` / `pnpm run dev:live` set `PORT`, `BINFLOW_PUBLIC_URL=http://localhost:6060`, and `BINFLOW_INTERNAL_API_URL=http://localhost:2040`). Compose-built api/dashboard containers still listen on `8080`/`3000` internally. The same Compose file can build the current API, dashboard, worker and maintenance images; the CLI intentionally runs in the trusted host terminal so interactive secret input never traverses Compose configuration.
+Start durable dependencies with `docker compose -f infra/compose/local.yml up -d postgres redis minio clamav`, then apply migrations with `pnpm db:migrate`. Host `pnpm dev` needs those dependency ports on localhost; it does not start PostgreSQL or Redis by itself. Local Compose pulls the pinned MinIO release from `quay.io/minio/minio`; it exposes the S3 API on `:9000` and the MinIO console on `:9001`. Host processes use **dashboard `:6060`** and **API `:2040`** by default (`pnpm dev` / `pnpm run dev:live` set `PORT`, `BINFLOW_PUBLIC_URL=http://localhost:6060`, and `BINFLOW_INTERNAL_API_URL=http://localhost:2040`). Compose-built api/dashboard containers still listen on `8080`/`3000` internally. The same Compose file can build the current API, dashboard, worker and maintenance images; the CLI intentionally runs in the trusted host terminal so interactive secret input never traverses Compose configuration.
+
+For a dashboard accessed from another device on the private LAN, use `pnpm run dev:lan` or `pnpm run dev:live:lan`. The command detects a private IPv4 address and sets it as the exact `BINFLOW_PUBLIC_URL` trusted origin. If the host has multiple interfaces, set `BINFLOW_LAN_ADDRESS` to the intended IP address before starting. Do not expose this development server beyond the private LAN.
 
 #### Logfire / OpenTelemetry (local, optional)
 
@@ -252,11 +254,18 @@ user already exists. It does not enroll TOTP. Start the dashboard, sign in and
 complete `/security`; store the displayed backup codes before leaving.
 
 Runtime sign-up and password-reset email remain disabled. Ordinary recovery is
-an unused backup code. Break-glass recovery requires local database-owner and
-auth-secret access, a current backup, session revocation and an audit entry; it
-must never delete the owner or create a replacement account. Detailed recovery
-commands are added with the recovery implementation and are not inferred with
-manual SQL.
+an unused backup code. When password access is lost, first take a current
+database backup, then run this local interactive break-glass command with the
+existing owner's email:
+
+```text
+pnpm binflow admin recover --email owner@example.com
+```
+
+It requires the database owner connection, rotates only the existing owner's
+password, revokes every session and records an audit event. It preserves the
+existing TOTP enrollment, never deletes the owner and never creates a
+replacement account. The password is entered only through non-echoed prompts.
 
 Migration `0008` adds Better Auth user, session, account, verification,
 two-factor and rate-limit tables, the single-owner invariant and the trigger

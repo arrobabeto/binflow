@@ -3,10 +3,11 @@ import { mkdir, open, readFile, realpath } from 'node:fs/promises';
 import { homedir } from 'node:os';
 import { dirname, isAbsolute, join, relative, resolve } from 'node:path';
 
-import { count } from 'drizzle-orm';
+import { and, count, eq } from 'drizzle-orm';
 import { betterAuth } from 'better-auth';
 import { APIError, createAuthMiddleware } from 'better-auth/api';
 import { drizzleAdapter } from 'better-auth/adapters/drizzle';
+import { hashPassword } from 'better-auth/crypto';
 import { twoFactor } from 'better-auth/plugins';
 import { Pool } from 'pg';
 import { v7 as uuidv7 } from 'uuid';
@@ -361,6 +362,97 @@ export const bootstrapPlatformOwner = async (
     try {
       await lockClient.query(
         "select pg_advisory_unlock(hashtext('binflow_admin_bootstrap'))",
+      );
+    } finally {
+      lockClient.release();
+      await Promise.all([lockPool.end(), pool.end()]);
+    }
+  }
+};
+
+export const recoverPlatformOwnerPassword = async (
+  input: Readonly<{
+    correlationId?: string;
+    databaseUrl: string;
+    email: string;
+    password: string;
+  }>,
+): Promise<
+  Readonly<{ email: string; sessionsRevoked: number; userId: string }>
+> => {
+  if (input.password.length < 12 || input.password.length > 128) {
+    throw new DomainError(
+      'validation_error',
+      'Password must contain 12 to 128 characters.',
+    );
+  }
+  const lockPool = new Pool({ connectionString: input.databaseUrl, max: 1 });
+  const lockClient = await lockPool.connect();
+  const { db, pool } = createDatabase(input.databaseUrl);
+  try {
+    await lockClient.query(
+      "select pg_advisory_lock(hashtext('binflow_admin_recovery'))",
+    );
+    const owners = await db.select({ value: count() }).from(schema.authUsers);
+    if ((owners[0]?.value ?? 0) !== 1) {
+      throw new DomainError(
+        'conflict_error',
+        'Break-glass recovery requires exactly one platform owner.',
+      );
+    }
+    const normalizedEmail = input.email.trim().toLowerCase();
+    const owner = await db
+      .select({ id: schema.authUsers.id, email: schema.authUsers.email })
+      .from(schema.authUsers)
+      .where(eq(schema.authUsers.email, normalizedEmail));
+    const user = owner[0];
+    if (user === undefined) {
+      throw new DomainError(
+        'authentication_error',
+        'Platform owner not found.',
+      );
+    }
+    const passwordHash = await hashPassword(input.password);
+    const correlationId = input.correlationId ?? uuidv7();
+    const result = await db.transaction(async (transaction) => {
+      const updated = await transaction
+        .update(schema.authAccounts)
+        .set({ password: passwordHash, updatedAt: new Date() })
+        .where(
+          and(
+            eq(schema.authAccounts.userId, user.id),
+            eq(schema.authAccounts.providerId, 'credential'),
+          ),
+        )
+        .returning({ id: schema.authAccounts.id });
+      if (updated.length !== 1) {
+        throw new DomainError(
+          'conflict_error',
+          'Platform owner credential account is unavailable.',
+        );
+      }
+      const revoked = await transaction
+        .delete(schema.authSessions)
+        .where(eq(schema.authSessions.userId, user.id))
+        .returning({ id: schema.authSessions.id });
+      await transaction.insert(schema.auditEvents).values({
+        action: 'auth.platform_owner_password_recovered',
+        actorId: 'local-break-glass',
+        actorType: 'platform_owner',
+        correlationId,
+        id: uuidv7(),
+        metadata: { sessionsRevoked: revoked.length },
+        objectId: user.id,
+        objectType: 'auth_user',
+        reason: 'Local break-glass password recovery',
+      });
+      return revoked.length;
+    });
+    return { email: user.email, sessionsRevoked: result, userId: user.id };
+  } finally {
+    try {
+      await lockClient.query(
+        "select pg_advisory_unlock(hashtext('binflow_admin_recovery'))",
       );
     } finally {
       lockClient.release();

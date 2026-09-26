@@ -9,6 +9,26 @@ All notable changes to product behavior, architecture, contracts, security, oper
 - Canonical list of repo Cursor skills (description, scope, use):
   `docs/guides/agent-skills.md`. Linked from README, DEVELOPMENT, REFERENCES.
 
+### Local dashboard LAN access
+
+- Added `pnpm run dev:lan` and `pnpm run dev:live:lan`, which detect a private
+  IPv4 address and configure it as the exact trusted dashboard origin for local
+  network access.
+- The browser origin remains exact; dashboard authentication and TOTP are still
+  required (ADR-0065).
+
+### Platform-owner break-glass password recovery
+
+- `pnpm binflow admin recover --email ...` rotates the sole existing owner's
+  password through non-echoed prompts, revokes sessions and records an audit
+  event while preserving TOTP enrollment (ADR-0016 amended).
+
+### Local MinIO registry
+
+- Local Compose pulls the pinned MinIO release from `quay.io/minio/minio` so
+  the local object store remains available when Docker Hub rejects the archived
+  `minio/minio` repository.
+
 ### Binflow Surface Inventory (BSI) — general + per-stack briefs
 
 - Platform guide: `docs/guides/binflow-surface-inventory.md` (name **BSI**;

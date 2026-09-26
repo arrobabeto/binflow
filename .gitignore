@@ -25,3 +25,4 @@ binflow-local.sql
 data/
 tmp/
 /artifacts/
+/binflow-local.sql

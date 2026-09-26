@@ -111,6 +111,19 @@ The command requires an interactive terminal, reads and confirms the password
 without echo, rejects a database that already contains any auth user and never
 accepts a password argument. Runtime `/sign-up/email` always rejects.
 
+An operator can recover access to the existing owner with:
+
+```text
+pnpm binflow admin recover --email <existing-owner-email>
+```
+
+Recovery requires an interactive terminal and prompts twice for a 12–128
+character password without echo. It uses the database-owner connection,
+requires exactly one existing owner matching the normalized email, updates that
+owner's credential, revokes all of the owner's sessions and writes an audit
+event in one transaction. It preserves TOTP enrollment and never creates or
+replaces an owner account.
+
 `auth-secret init` creates the independent high-entropy Better Auth secret in a
 new regular `0600` file outside the repository. It prints only the path and
 refuses to overwrite an existing file.

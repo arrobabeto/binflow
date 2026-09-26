@@ -73,7 +73,7 @@ API), with client Telegram pairing, before any Orbitype content tools exist.
 
 ## Documentation impact assessment
 
-Required by [`AGENTS.md`](../AGENTS.md):
+Required by [`AGENTS.md`](../../AGENTS.md):
 
 - Canonical documents changed: SCOPE, ROADMAP, ONBOARDING, DASHBOARD,
   INTEGRATIONS, CONTRACTS, SECURITY, TESTING, ARCHITECTURE, GLOSSARY,

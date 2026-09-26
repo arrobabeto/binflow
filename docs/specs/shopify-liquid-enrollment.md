@@ -89,7 +89,7 @@ that uses the Editable Surface Contract inventory — starting with pilot
 
 ## Documentation impact assessment
 
-Required by [`AGENTS.md`](../AGENTS.md):
+Required by [`AGENTS.md`](../../AGENTS.md):
 
 - Canonical documents changed: `SCOPE.md`, `ROADMAP.md`, `PRODUCT.md` (roles/
   profiles touch), `ONBOARDING.md`, `ENROLLMENT.md`, `DASHBOARD.md`,

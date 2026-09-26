@@ -104,7 +104,7 @@ context-switch to the dashboard for every pending approval.
 
 ## Documentation impact assessment
 
-Required by [`AGENTS.md`](../AGENTS.md):
+Required by [`AGENTS.md`](../../AGENTS.md):
 
 - Canonical documents changed: `TELEGRAM.md`, `DASHBOARD.md`, `WORKFLOWS.md`,
   `CONTRACTS.md`, `SECURITY.md`, `MVP.md`, `TESTING.md`, `CHANGELOG.md`.

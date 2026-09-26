@@ -42,31 +42,32 @@ plus the live-execution switch are enforced outside the model. Logs and audit
 store artifact digests and redacted metadata, never bodies, image bytes or
 provider secrets.
 
-| Threat                           | Required controls                                                                                                   |
-| -------------------------------- | ------------------------------------------------------------------------------------------------------------------- |
-| Unauthorized Telegram user       | One-time pairing, identity allowlist, tenant-scoped bot, RBAC; optional Piloter allowlist + capability subset (ADR-0057) |
-| Forged/replayed webhook          | HTTPS, provider signature/secret, delivery dedupe, expiration                                                       |
-| Callback replay                  | Opaque server action ID, user/project/version binding, expiration, idempotency                                      |
-| Prompt injection                 | Treat external text as data, bounded capability context, output validation outside model                            |
-| Customization markdown injection | Size/token caps, template section validation, malware scan, compose as untrusted style layer; path/schema/approval guards remain code-owned |
-| LLM proposes forbidden operation | Tool registry allowlist and deterministic policy rejection                                                          |
-| Hey Binn over-reads or mutates   | Read-only ports only; no mutate/invoke tools on the model; project allowlists; budgets (ADR-0062)                  |
-| Cross-tenant disclosure          | RLS, scoped repositories, tenant artifact prefixes, isolation tests                                                 |
-| Secret leakage                   | Envelope encryption, redaction, no secrets in queue/checkpoint/log/model contexts                                   |
-| Orbitype API key misuse          | Project-scoped credential, read-only enrollment verify, no CMS mutation at onboard, never LLM-visible (ADR-0045)   |
-| Local KEK disclosure             | Generate outside repository, regular-file and `0600` validation, no key output or database copy                     |
-| Excess GitHub App authority      | Single-repository installation, per-operation token downscoping, separate admin authorization and permission audits |
-| Approval of stale content        | Bind approval to request version, SHA and deployment/version                                                        |
-| Concurrent manual change         | Fresh source read, expected version and conflict stop                                                               |
-| Duplicate publication            | Idempotency keys, graph checkpoints, merge/publication reconciliation                                               |
-| Inventory deep search auto-merge | Inventory-file-only PR; one deep search per request; theme markers remain required (ADR-0061)                         |
-| Malicious attachment             | MIME sniffing, size limits, malware scan, safe parser, no macro execution                                           |
-| SSRF                             | URL parser, DNS/IP validation, protocol/port rules, redirect revalidation, egress policy                            |
-| `edit_image` replacement URL     | HTTPS only; block localhost/private literal hosts; no redirects; MIME + size caps before artifact persist           |
-| `edit_image` / `edit_text` / `edit_text_style` preview CMS | Temporary live Orbitype patch after snapshot; absolute preview asset URL for images; restore on cancel/reject (ADR-0051/0052/0053) |
-| Public confidential preview      | Vercel protection/share link policy and revocation                                                                  |
-| Compromised worker               | Non-root container, minimal mounted secrets, no Docker socket, scoped egress                                        |
-| Model cost abuse                 | Per-tenant budgets, call/token caps, rate limits and admin alerts                                                   |
+| Threat                                                     | Required controls                                                                                                                           |
+| ---------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------- |
+| Unauthorized Telegram user                                 | One-time pairing, identity allowlist, tenant-scoped bot, RBAC; optional Piloter allowlist + capability subset (ADR-0057)                    |
+| Unauthorized private-LAN dashboard access                  | Exact private `BINFLOW_PUBLIC_URL` origin; dashboard session and TOTP authorization remain required (ADR-0065)                              |
+| Forged/replayed webhook                                    | HTTPS, provider signature/secret, delivery dedupe, expiration                                                                               |
+| Callback replay                                            | Opaque server action ID, user/project/version binding, expiration, idempotency                                                              |
+| Prompt injection                                           | Treat external text as data, bounded capability context, output validation outside model                                                    |
+| Customization markdown injection                           | Size/token caps, template section validation, malware scan, compose as untrusted style layer; path/schema/approval guards remain code-owned |
+| LLM proposes forbidden operation                           | Tool registry allowlist and deterministic policy rejection                                                                                  |
+| Hey Binn over-reads or mutates                             | Read-only ports only; no mutate/invoke tools on the model; project allowlists; budgets (ADR-0062)                                           |
+| Cross-tenant disclosure                                    | RLS, scoped repositories, tenant artifact prefixes, isolation tests                                                                         |
+| Secret leakage                                             | Envelope encryption, redaction, no secrets in queue/checkpoint/log/model contexts                                                           |
+| Orbitype API key misuse                                    | Project-scoped credential, read-only enrollment verify, no CMS mutation at onboard, never LLM-visible (ADR-0045)                            |
+| Local KEK disclosure                                       | Generate outside repository, regular-file and `0600` validation, no key output or database copy                                             |
+| Excess GitHub App authority                                | Single-repository installation, per-operation token downscoping, separate admin authorization and permission audits                         |
+| Approval of stale content                                  | Bind approval to request version, SHA and deployment/version                                                                                |
+| Concurrent manual change                                   | Fresh source read, expected version and conflict stop                                                                                       |
+| Duplicate publication                                      | Idempotency keys, graph checkpoints, merge/publication reconciliation                                                                       |
+| Inventory deep search auto-merge                           | Inventory-file-only PR; one deep search per request; theme markers remain required (ADR-0061)                                               |
+| Malicious attachment                                       | MIME sniffing, size limits, malware scan, safe parser, no macro execution                                                                   |
+| SSRF                                                       | URL parser, DNS/IP validation, protocol/port rules, redirect revalidation, egress policy                                                    |
+| `edit_image` replacement URL                               | HTTPS only; block localhost/private literal hosts; no redirects; MIME + size caps before artifact persist                                   |
+| `edit_image` / `edit_text` / `edit_text_style` preview CMS | Temporary live Orbitype patch after snapshot; absolute preview asset URL for images; restore on cancel/reject (ADR-0051/0052/0053)          |
+| Public confidential preview                                | Vercel protection/share link policy and revocation                                                                                          |
+| Compromised worker                                         | Non-root container, minimal mounted secrets, no Docker socket, scoped egress                                                                |
+| Model cost abuse                                           | Per-tenant budgets, call/token caps, rate limits and admin alerts                                                                           |
 
 ## Authentication and authorization
 
@@ -76,6 +77,7 @@ provider secrets.
 - TOTP setup and verification are mandatory before managing integrations, secrets or approvals.
 - Backup codes are shown once and stored protected.
 - Cookies are secure, HTTP-only, same-site and short-lived with server-side revocation.
+- Local LAN development trusts only the exact private `BINFLOW_PUBLIC_URL` selected at startup; it does not trust an address range or arbitrary browser origins. The origin setting does not grant a dashboard session or bypass TOTP.
 - Sensitive actions require a non-idle TOTP-verified server session.
 - Runtime HTTP sign-up and password-reset email are disabled. A single owner is
   created by the interactive, advisory-lock-serialized local bootstrap command.
