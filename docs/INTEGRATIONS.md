@@ -276,6 +276,46 @@ First planned tool: inventory-driven `edit_image` (`github_theme` publication)
 via create-tool after enrollment ships. No Shopify Admin product mutation in
 this profile’s first ship.
 
-## Future WordPress
+## WordPress REST (wordpress_rest enrollment)
 
-The adapter will use HTTPS, REST discovery and a revocable Application Password. Scope is posts, approved categories and blog-associated media. Pages, themes, plugins, menus, settings and unrelated media remain blocked. A separately audited Signed Preview plugin is required before the profile can be activated.
+Profile: `wordpress_rest` (ADR-0066). Stack directory: `wordpress-rest`.
+Classic self-hosted WordPress operated **only** through the REST API — no
+GitHub repository and no Vercel.
+
+Enrollment requires:
+
+- Project-scoped `wordpress-api` credential: WordPress username + revocable
+  **Application Password** (HTTP Basic over HTTPS). Encrypted: application
+  password. Non-secret: site origin, username, discovered REST base, verified
+  user id and role.
+- Per-client OpenAI credential, dedicated Telegram client bot and
+  `productionDomain` (host must match the site origin).
+
+**Not** required or authorized: `github-app`, `vercel`, Orbitype, Shopify.
+
+Verification is read-only (ADR-0014):
+
+1. `GET /wp-json` discovery (requires `wp/v2`).
+2. `GET /wp/v2/users/me?context=edit` — role must be `editor` or
+   `administrator` with `edit_posts`. Administrator verifies with a persistent
+   dashboard risk warning.
+3. Read probe — first page of posts and categories; counts and up to five
+   latest titles stored as allowlisted evidence and shown in the dashboard.
+
+Network rules for the site origin: HTTPS only; redirects to another host are
+never followed (the Application Password is never re-sent off-origin); 30 s
+timeout per request; one retry on idempotent reads; bounded response size.
+`http://localhost` is allowed only behind a development-only flag.
+Private/loopback address blocking is not applied to this origin in v1
+(accepted risk, ADR-0066). Verify timeouts are shown to the operator; future
+tool-run timeouts notify the client via Telegram.
+
+Adapter scope: Binflow code calls only allowlisted REST endpoints. Plugins,
+themes, users, settings and menus endpoints are never called, regardless of
+the WordPress role. Content endpoints are added per capability via
+create-tool. The WebOps Signed Preview plugin is **not** required for
+enrollment or tools; each future tool must still define an exact,
+version-bound preview (ADR-0006).
+
+Empty capability catalog is allowed at `ACTIVE`. No content tools ship with
+the enrollment slice.

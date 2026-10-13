@@ -71,5 +71,6 @@ ADRs preserve why durable decisions exist. Accepted ADRs are binding until a lat
 | [0063](0063-edit-text-shopify.md)                                    | Edit theme text for Shopify Liquid (`edit_text_shopify`)     | Accepted |
 | [0064](0064-optional-bsi-astro.md)                          | Binflow Surface Inventory (BSI) general + per-stack briefs   | Accepted |
 | [0065](0065-local-dashboard-lan-origin.md)                   | Exact trusted origin for private-LAN local dashboard access | Accepted |
+| [0066](0066-wordpress-rest-enrollment.md)                    | WordPress REST enrollment (`wordpress_rest`) without GitHub | Accepted |
 
 Use [0000-template.md](0000-template.md) for new decisions.

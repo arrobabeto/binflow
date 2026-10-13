@@ -209,10 +209,17 @@ Client list supports create, resume configuration, validate, activate, suspend a
   the operator is not stuck on conflict.
 
 Only `astro_repo` was selectable in the first MVP. Post-MVP, `astro_orbitype`
-(ADR-0045) and `shopify_liquid` (ADR-0059) are also selectable for enrollment.
-Other future profile names must not be shown as operational choices until their
-acceptance criteria pass. Shopify enrollment does **not** require Vercel or a
-Shopify Admin credential in v1.
+(ADR-0045), `shopify_liquid` (ADR-0059) and `wordpress_rest` (ADR-0066) are
+also selectable for enrollment. Other future profile names must not be shown as
+operational choices until their acceptance criteria pass. Shopify enrollment
+does **not** require Vercel or a Shopify Admin credential in v1.
+
+For `wordpress_rest`, the enrollment detail hides GitHub and Vercel sections,
+shows a `wordpress-api` form (site origin, username, Application Password —
+password write-only), displays the verify **read-probe** summary (post and
+category counts, latest titles) and keeps a persistent risk warning when the
+verified role is Administrator. Verify timeouts are shown inline with a retry
+action.
 
 The enrollment form edits client configuration for draft and live enrollments.
 Pre-activation saves move the enrollment back to `configuring` so operators

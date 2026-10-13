@@ -129,6 +129,12 @@
   `productionDomain` required; **no** Vercel / Orbitype / Shopify Admin;
   activation may succeed with an empty capability catalog; Astro assignment
   gates must reject cross-profile tools.
+- `wordpress_rest` enrollment (ADR-0066): `wordpress-api` + OpenAI + Telegram
+  + `productionDomain` required; GitHub / Vercel bindings rejected; manifest
+  without `repository` / `deployment`; verifier fixtures (no live secrets)
+  cover discovery, role gate (Editor/Administrator + warning), read probe,
+  HTTPS-only, cross-host redirect refusal and timeout classification; empty
+  catalog ACTIVE; frozen-stack regression.
 - `create_blog_orbitype` dual-write (ADR-0047): GitHub draft then Orbitype CMS
   draft, Vercel preview URLs at `/posts/{draftId}/{titleSlug}`, merge_github
   then publish_orbitype; assignment only for `astro_orbitype` projects (Bistro

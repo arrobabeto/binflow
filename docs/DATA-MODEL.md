@@ -203,7 +203,9 @@ scope/kind is active, and one Telegram bot ID can be active globally. First MVP
 requires an active OpenAI credential per tenant. The client Telegram bot is
 tenant-owned and does not require a synthetic project binding. Post-MVP
 `astro_orbitype` enrollments also require a project-scoped `orbitype-api`
-credential (ADR-0045).
+credential (ADR-0045). `wordpress_rest` enrollments require a project-scoped
+`wordpress-api` credential and no `github-app` / `vercel` connection
+(ADR-0066); profile and kind remain text columns (no enum migration).
 
 ### `credential_events`
 

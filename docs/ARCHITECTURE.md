@@ -214,3 +214,11 @@ GitHub + OpenAI + Telegram + `productionDomain`, without Vercel or Shopify
 Admin API in v1. Empty catalog at ACTIVE is allowed. First content tool
 (`edit_image`) is inventory-driven (ADR-0058) and must not reuse Astro
 executors or widen shared ports (ADR-0042).
+
+Post-MVP profile `wordpress_rest` (ADR-0066) is the first profile with **no
+GitHub repository**: enrollment uses a project-scoped `wordpress-api`
+Application Password + OpenAI + Telegram + `productionDomain`. Its project
+manifest omits `repository` / `deployment` and carries a `wordpress` block
+(site origin, REST base, verified user). A dedicated WordPress REST port calls
+only allowlisted endpoints. Empty catalog at ACTIVE is allowed; content tools
+come later through create-tool.

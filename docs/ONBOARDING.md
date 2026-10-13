@@ -63,6 +63,12 @@ Until the Phase 1 dashboard wizard is available, the Phase 0 interactive CLI may
   client, and `productionDomain`. **No** Vercel or Shopify Admin API in v1.
   Empty capability catalog is allowed at activation. Surface inventory is
   recommended (ADR-0058) but not a Validate blocker.
+- Post-MVP (ADR-0066): `wordpress_rest` is selectable for classic self-hosted
+  WordPress. Activation requires a verified `wordpress-api` Application
+  Password (Editor or Administrator; Administrator shows a risk warning),
+  OpenAI, Telegram client and `productionDomain` matching the site origin.
+  **No** GitHub or Vercel. Validate runs a read probe (posts + categories).
+  Empty capability catalog is allowed at activation.
 - Production domain and optional preview domain expectations. For Webbin the
   client-visible live origin is `https://webbin.com.mx`.
 

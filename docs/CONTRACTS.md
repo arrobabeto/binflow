@@ -159,9 +159,10 @@ type CapabilityAccess =
 ```
 
 Only `astro_repo` was active in the first MVP. Post-MVP, `astro_orbitype`
-(ADR-0045) and `shopify_liquid` (ADR-0059) are accepted selectable profiles.
-`nuxt_orbitype` and `wordpress_rest` remain reserved names until their phases
-complete. Shopify v1 enrollment does not require Vercel or Shopify Admin.
+(ADR-0045), `shopify_liquid` (ADR-0059) and `wordpress_rest` (ADR-0066) are
+accepted selectable profiles. `nuxt_orbitype` remains a reserved name until its
+phase completes. Shopify v1 enrollment does not require Vercel or Shopify
+Admin. `wordpress_rest` enrollment requires neither GitHub nor Vercel.
 
 ## Project manifest
 
@@ -195,6 +196,14 @@ type ProjectManifest = {
     /** Client-visible live origin (ADR-0048); from enrollment productionDomain. */
     productionOrigin?: string;
   };
+  /** Required for `wordpress_rest`; forbidden for other profiles (ADR-0066). */
+  wordpress?: {
+    siteOrigin: string; // HTTPS origin, no trailing slash
+    restBase: string; // discovered from /wp-json
+    username: string;
+    userId: number;
+    role: 'editor' | 'administrator';
+  };
   content: {
     source: 'github' | 'orbitype' | 'wordpress';
     collections: Record<string, unknown>;
@@ -220,6 +229,13 @@ type ProjectBudgetPolicy = {
 
 Validation rules:
 
+- `repository` is required for `astro_repo`, `astro_orbitype` and
+  `shopify_liquid`; it is absent for `wordpress_rest`. `deployment` is
+  required where the profile publishes through Vercel or a theme deployment and
+  absent for `wordpress_rest`. `wordpress` is required only for
+  `wordpress_rest`, with `content.source: 'wordpress'`. The production origin
+  for `wordpress_rest` is the enrollment `productionDomain`, whose host must
+  match `wordpress.siteOrigin` (ADR-0048 / ADR-0066).
 - `contentLocales` must be supported by Binflow and the global profile manifest.
   The platform catalog is exactly `en`, `es` and `de` (ADR-0011 / ADR-0046).
   An enrollment may enable one, two or three of those locales.
@@ -1170,6 +1186,7 @@ Credential ownership and payload split:
 | `github-app`      | platform registration (keyed by GitHub `appId`) plus project installation binding | credential: App/client IDs; connection: expected repository/branch and discovered installation/repository IDs for that project | private key and webhook secret |
 | `vercel`          | project plus project connection                         | connection: project/team IDs and fixed GitHub repository/production branch                                        | access token                   |
 | `orbitype-api`    | project                                                 | optional non-secret base URL / project identifiers                                                                | API key                        |
+| `wordpress-api`   | project                                                 | HTTPS site origin, username; evidence: REST base, user id, role, `riskWarning`, read-probe counts/titles (ADR-0066) | Application Password           |
 
 The project-scoped legacy GitHub shape preserved by migration `0002` is revoked audit history only and is never eligible for resolution or verification.
 

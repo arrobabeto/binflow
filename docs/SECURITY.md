@@ -23,6 +23,8 @@ Trusted only after verification:
   only** (ADR-0050); not a general dashboard session substitute.
 - Bot integration resolved from stored token/secret association.
 - GitHub App installation token scoped to the configured repository and downscoped to the current operation.
+- WordPress Application Password (`wordpress-api`) sent only to the verified
+  HTTPS site origin of the same project (ADR-0066).
 - Vercel events validated and correlated to the configured project.
 - Data returned by adapters after schema and ownership checks.
 
@@ -55,6 +57,8 @@ provider secrets.
 | Cross-tenant disclosure                                    | RLS, scoped repositories, tenant artifact prefixes, isolation tests                                                                         |
 | Secret leakage                                             | Envelope encryption, redaction, no secrets in queue/checkpoint/log/model contexts                                                           |
 | Orbitype API key misuse                                    | Project-scoped credential, read-only enrollment verify, no CMS mutation at onboard, never LLM-visible (ADR-0045)                            |
+| WordPress Application Password misuse                      | Project-scoped, encrypted, revocable; read-only verify; adapter endpoint allowlist (no plugins/themes/users/settings/menus); Administrator role allowed only with dashboard risk warning; never LLM-visible (ADR-0066) |
+| WordPress site origin (operator-entered)                   | HTTPS only; no cross-host redirects; 30 s timeout + bounded body; no private-IP block in v1 (accepted risk, `platform_owner` + TOTP only; ADR-0066) |
 | Local KEK disclosure                                       | Generate outside repository, regular-file and `0600` validation, no key output or database copy                                             |
 | Excess GitHub App authority                                | Single-repository installation, per-operation token downscoping, separate admin authorization and permission audits                         |
 | Approval of stale content                                  | Bind approval to request version, SHA and deployment/version                                                                                |
@@ -62,7 +66,7 @@ provider secrets.
 | Duplicate publication                                      | Idempotency keys, graph checkpoints, merge/publication reconciliation                                                                       |
 | Inventory deep search auto-merge                           | Inventory-file-only PR; one deep search per request; theme markers remain required (ADR-0061)                                               |
 | Malicious attachment                                       | MIME sniffing, size limits, malware scan, safe parser, no macro execution                                                                   |
-| SSRF                                                       | URL parser, DNS/IP validation, protocol/port rules, redirect revalidation, egress policy                                                    |
+| SSRF                                                       | URL parser, DNS/IP validation, protocol/port rules, redirect revalidation, egress policy (WordPress site origin exception: see row above, ADR-0066) |
 | `edit_image` replacement URL                               | HTTPS only; block localhost/private literal hosts; no redirects; MIME + size caps before artifact persist                                   |
 | `edit_image` / `edit_text` / `edit_text_style` preview CMS | Temporary live Orbitype patch after snapshot; absolute preview asset URL for images; restore on cancel/reject (ADR-0051/0052/0053)          |
 | Public confidential preview                                | Vercel protection/share link policy and revocation                                                                                          |

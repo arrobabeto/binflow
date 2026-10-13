@@ -30,7 +30,7 @@ This directory is the canonical specification for Binflow. Documents describe cu
   - [BSI general guide](guides/BSI/binflow-surface-inventory.md) — platform convention; opt-in rules; shared rules
   - [Editable Surface Contract](guides/BSI/editable-surface-contract.md) — `bf_id`, field kinds, inventory schema, markers
   - [Surface inventory sync](guides/BSI/surface-inventory-sync.md) — push gate + remap / deep search freshness (ADR-0061)
-  - [Stack briefs](guides/BSI/README.md#stack-briefs) — implementer docs per catalog stack (`astro-repo`, `astro-orbitype`, `shopify-liquid`)
+  - [Stack briefs](guides/BSI/README.md#stack-briefs) — implementer docs per catalog stack (`astro-repo`, `astro-orbitype`, `shopify-liquid`, `wordpress-rest`)
 - [Astro Orbitype tool implementation](guides/astro-orbitype-tool-implementation.md) — stack contracts, ports, manifest freeze, ops gates, failure appendix for `astro_orbitype` capabilities
 
 ## Briefs

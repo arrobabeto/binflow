@@ -4,6 +4,28 @@ All notable changes to product behavior, architecture, contracts, security, oper
 
 ## Unreleased
 
+### WordPress REST enrollment prepared (ADR-0066)
+
+- New accepted ADR-0066 activates reserved profile `wordpress_rest` / stack
+  `wordpress-rest` for classic self-hosted WordPress over the REST API:
+  project-scoped `wordpress-api` Application Password (Editor or Administrator
+  with dashboard warning), OpenAI, Telegram client, `productionDomain`; **no
+  GitHub or Vercel**. Read-only verify + read probe; empty catalog at ACTIVE.
+- Amends INTEGRATIONS (“Future WordPress” replaced; Signed Preview plugin no
+  longer an activation gate; ADR-0006 unchanged), SECURITY (WordPress
+  credential + site-origin rows; HTTPS + no cross-host redirects + 30 s
+  timeout; private-IP blocking not applied in v1 as accepted risk), SCOPE /
+  ROADMAP / PRODUCT (enrollment only; no WordPress tools yet).
+- CONTRACTS: `wordpress_rest` selectable, `wordpress-api` kind, profile-
+  dependent `repository` / `deployment`, manifest `wordpress` block.
+- Also updated ONBOARDING, ENROLLMENT, DASHBOARD, ARCHITECTURE, DATA-MODEL,
+  TESTING, GLOSSARY, ADR index, DECISIONS; new spec + readiness handoff
+  (`docs/specs/wordpress-rest-*.md`), stack tool contract
+  (`.cursor/skills/create-tool/references/stacks/wordpress-rest.md`) and BSI
+  brief (`docs/guides/BSI/stacks/wordpress-rest.md`).
+- Documentation only; implementation is a separate session. No DB migration
+  expected (text columns).
+
 ### BSI docs consolidated under `docs/guides/BSI/`
 
 - All Binflow Surface Inventory manuals and guides now live in one folder:

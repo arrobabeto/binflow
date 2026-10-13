@@ -11,8 +11,9 @@
 - Admin dashboard with password + TOTP authentication.
 - Managed onboarding for the `astro_repo` profile (first MVP) and, as
   post-MVP expansions, the `astro_orbitype` profile (enrollment + Orbitype API
-  key; see ADR-0045) and the `shopify_liquid` profile (Shopify Liquid theme
-  enrollment; see ADR-0059).
+  key; see ADR-0045), the `shopify_liquid` profile (Shopify Liquid theme
+  enrollment; see ADR-0059) and the `wordpress_rest` profile (classic
+  WordPress enrollment over the REST API, no GitHub; see ADR-0066).
 - PostgreSQL, Redis/BullMQ, workflow checkpoints and S3-compatible artifacts.
 - Per-client OpenAI credential; no global fallback.
 - Structured audit, model usage and cost records.
@@ -42,6 +43,9 @@
 - Post-MVP: `shopify_liquid` enrollment for Shopify Liquid themes (GitHub theme
   repo; no Shopify Admin API in v1); first content tool family is inventory-
   driven `edit_image` (ADR-0059 / ADR-0058).
+- Post-MVP: `wordpress_rest` enrollment for classic self-hosted WordPress via
+  Application Password; no GitHub or Vercel; empty catalog at activation; no
+  WordPress content tools yet (ADR-0066).
 
 ### First capability
 
@@ -80,7 +84,8 @@
   ADR-0052 / ADR-0053).
 - Production VPS provisioning.
 - Validated German publication until a compatible real pilot exists.
-- WordPress runtime support as a separate later phase.
+- WordPress content tools (enrollment only is accepted post-MVP; ADR-0066).
+  Headless WordPress, WooCommerce and WPML/Polylang remain unplanned.
 - Orbitype content tools beyond the accepted `create_blog_orbitype` dual-write
   create path (ADR-0047) and the accepted page/image edit capabilities
   (ADR-0051 / ADR-0052); enrollment remains ADR-0045.

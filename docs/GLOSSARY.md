@@ -30,7 +30,7 @@
 | Project          | One managed website and its integrations, manifest and policies.                                             |
 | Request          | A user's desired operation; it may contain multiple immutable request versions.                              |
 | Request version  | One frozen plan and artifact set; revisions create a new version and invalidate approvals.                   |
-| Stack            | Catalog directory such as `astro-repo` or `shopify-liquid`; each tool binds to one stack. Project **profile** uses underscores (`astro_repo`, `astro_orbitype`, `shopify_liquid`). |
+| Stack            | Catalog directory such as `astro-repo` or `shopify-liquid`; each tool binds to one stack. Project **profile** uses underscores (`astro_repo`, `astro_orbitype`, `shopify_liquid`, `wordpress_rest`). |
 | Surface Inventory| Machine-readable map `bf_id → kind → path/locator → locales → publication_target`; public name **BSI**. |
 | presentation     | Optional image paint mode in BSI: `img` \| `background` \| `picture` (CSS backgrounds on divs/sections).   |
 | overlay          | Declare-only field kind for banner/popup/modal roots until overlay tools ship (ADR-0064).                    |
@@ -40,4 +40,7 @@
 | Tool (LLM)       | Bounded read or capability-proposal schema visible to a model. Internal publication operations are not LLM tools. |
 | Orbitype         | Third-party CMS accessed via API key for `astro_orbitype` enrollments (ADR-0045). Content tools are later. |
 | Shopify Liquid   | Online Store 2.0 theme (Liquid + JSON) enrolled as `shopify_liquid` (ADR-0059); theme GitHub is SoT for allowlisted surfaces in v1. |
+| WordPress REST   | Classic self-hosted WordPress enrolled as `wordpress_rest` / stack `wordpress-rest` (ADR-0066); operated only via the REST API, no GitHub. |
+| Application Password | Native WordPress per-user revocable password used by the `wordpress-api` credential (HTTP Basic over HTTPS). |
+| Read probe       | Read-only verify step that lists posts and categories to prove API access; summary shown in the dashboard (ADR-0066). |
 | Webbin           | Read-only reference and first `astro_repo` pilot; it remains a separate repository.                          |

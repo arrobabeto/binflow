@@ -100,9 +100,16 @@ Every capability reuses the same policy, translation, version, preview, approval
 
 ## Phase 7 — WordPress profile
 
-- Implement posts/categories/blog-media-only REST adapter.
-- Build and audit WebOps Signed Preview plugin.
-- Validate new posts and edit-clone flows against WordPress staging.
+- **Enrollment slice (ADR-0066):** profile `wordpress_rest` / stack
+  `wordpress-rest`; classic self-hosted WordPress over the REST API with an
+  Application Password; **no GitHub or Vercel**; read-only verify + read probe;
+  Telegram client pairing; zero tools required to activate. Spec:
+  [`docs/specs/wordpress-rest-enrollment.md`](specs/wordpress-rest-enrollment.md).
+- Content tools via create-tool after enrollment ships (allowlisted REST
+  endpoints only); each tool defines its ADR-0006 preview. The WebOps Signed
+  Preview plugin is no longer an activation gate.
+- Validate new posts and edit flows against a WordPress staging/pilot site
+  (pilot TBD).
 
 ## Future — Shopify profile (ADR-0059)
 

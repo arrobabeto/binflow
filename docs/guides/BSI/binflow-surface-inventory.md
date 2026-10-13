@@ -73,6 +73,8 @@ are encouraged but not forced on grandfathered pilots (ADR-0058 / ADR-0064).
    not mark every layout wrapper.
 7. **Unique samples** for substring targeting where tools search live text.
 8. **No browser discovery** — inventory lives in Git; markers are static attrs.
+   Stacks without a repository (`wordpress-rest`) keep markers declare-only
+   until a tool decides where inventory lives (see that brief).
 9. **Do not invent parallel tag systems.**
 
 Stack language (Liquid settings vs Orbitype props vs Astro content collections)
@@ -87,6 +89,7 @@ Give agents **both** this guide and the brief for the target stack:
 | `astro-repo` | `astro_repo` | [stacks/astro-repo.md](stacks/astro-repo.md) |
 | `astro-orbitype` | `astro_orbitype` | [stacks/astro-orbitype.md](stacks/astro-orbitype.md) |
 | `shopify-liquid` | `shopify_liquid` | [stacks/shopify-liquid.md](stacks/shopify-liquid.md) |
+| `wordpress-rest` | `wordpress_rest` | [stacks/wordpress-rest.md](stacks/wordpress-rest.md) |
 
 When **`new-stack`** adds a profile, it **must** add `docs/guides/BSI/stacks/<stack>.md`
 and index it in the [BSI folder README](README.md).

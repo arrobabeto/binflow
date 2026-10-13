@@ -34,8 +34,8 @@ Stack/profile naming: stack id is hyphenated (`astro-orbitype`,
    execution. Shopify theme tools use GitHub (not Vercel) for publication in
    v1.
 4. Know the target **project profile** and whether an empty capability catalog
-   is allowed at activation (documented per profile; `astro_orbitype` and
-   `shopify_liquid` yes, `astro_repo` no).
+   is allowed at activation (documented per profile; `astro_orbitype`,
+   `shopify_liquid` and `wordpress_rest` yes, `astro_repo` no).
 
 ### A1. Create the enrollment
 
@@ -43,8 +43,8 @@ Stack/profile naming: stack id is hyphenated (`astro-orbitype`,
 2. Set stable slugs:
    - **Client key** = `tenantKey` (e.g. `bistro`, `elayva`).
    - **Project key** = `projectKey` (often same as tenant for 1:1 MVP).
-3. Select **project profile** (`astro_repo`, `astro_orbitype`, or
-   `shopify_liquid`, …).
+3. Select **project profile** (`astro_repo`, `astro_orbitype`,
+   `shopify_liquid`, or `wordpress_rest`, …).
 4. Configure locales (platform set is `en` / `es` / `de`). Webbin /
    `astro_repo` overlay stays bilingual `es`+`en` + `always_translate` when
    that freeze applies; `shopify_liquid` pilot defaults to monolingual `en` +
@@ -65,6 +65,7 @@ Register and **Verify** each required binding for the profile. Typical set:
 | `vercel` | Full-account token for the **correct Vercel team**. Project ID, team/account ID, linked repo and production branch must match the binding. Team mismatch → `policy_denied`. |
 | `openai` | Platform or project-scoped as documented. |
 | Profile-specific (e.g. `orbitype-api`) | Enter in enrollment/integrations UI; encrypted at rest; read-only verify only. |
+| `wordpress-api` (`wordpress_rest` only) | Create a dedicated WordPress user (Editor recommended; Administrator shows a risk warning) → Users → Profile → **Application Passwords**. Enter HTTPS site origin, username and the generated password. Verify runs discovery, role check and a read probe (posts + categories). **No** `github-app` / `vercel` for this profile. |
 
 Wait until verification status is success before Validate.
 
@@ -112,6 +113,10 @@ Wait until verification status is success before Validate.
 | Preview deploy `PUBLIC_SITE_URL is missing` / `BUILD_UTILS_SPAWN_1` | Required Astro `PUBLIC_*` env only on Production | In Vercel project → Settings → Environment Variables, enable those keys for **Preview** (and Development if used). Bistro needed `PUBLIC_SITE_URL` on Preview. |
 | GitHub verify 403 / wrong repo | Installation or owner/repo/branch mismatch | Fix binding; re-verify |
 | `/tools` access denied after active | Empty catalog (expected for some profiles) | Assign tools or wait for first stack capability |
+| WordPress verify `wordpress_rest_unavailable` | REST API disabled or blocked by a security plugin / firewall | Allow `/wp-json` for the Binflow user; re-verify |
+| WordPress verify `wordpress_auth_failed` | Wrong username/Application Password, or host strips `Authorization` header | Regenerate the Application Password; confirm the server passes Basic auth |
+| WordPress verify timeout | Slow or misconfigured host (30 s limit) | Retry; previous status is preserved |
+| WordPress verify `policy_denied` (redirect) | Origin redirects to another host (e.g. `www` vs apex) | Enter the final HTTPS origin exactly |
 
 ---
 
@@ -162,3 +167,5 @@ separate implementation session (contracts, dashboard, verifiers, etc.).
 - [ADR-0045](adr/0045-astro-orbitype-enrollment.md) — example new-stack enrollment
 - [ADR-0059](adr/0059-shopify-liquid-enrollment.md) — Shopify Liquid enrollment
   (no Vercel / Admin API in v1; empty catalog; elayva pilot)
+- [ADR-0066](adr/0066-wordpress-rest-enrollment.md) — WordPress REST enrollment
+  (no GitHub / Vercel; Application Password; empty catalog)
