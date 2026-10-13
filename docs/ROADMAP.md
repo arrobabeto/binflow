@@ -110,7 +110,7 @@ Every capability reuses the same policy, translation, version, preview, approval
 - Enrollment: GitHub theme repo, OpenAI, Telegram client, `productionDomain`;
   **no** Vercel or Shopify Admin API in v1; `ACTIVE` with empty catalog allowed.
 - Greenfield themes follow the
-  [Editable Surface Contract](guides/editable-surface-contract.md) (ADR-0058);
+  [Editable Surface Contract](guides/BSI/editable-surface-contract.md) (ADR-0058);
   inventory recommended, not a Validate blocker.
 - First capability: inventory-driven `edit_image` (create-tool after enrollment).
 - Pilot: elayva. Spec: `docs/specs/shopify-liquid-enrollment.md`.

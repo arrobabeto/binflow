@@ -9,7 +9,7 @@
 | Required credentials | GitHub App (theme repo), OpenAI, Telegram client; **`productionDomain` required** |
 | Enrollment | No Vercel; no Shopify Admin API; no Orbitype. Locales: pilot monolingual `en` + `translationPolicy: none` (ADR-0046). Surface inventory recommended (ADR-0058), not a Validate blocker. |
 | Implementation guide | TBD until first tool ships (`docs/guides/` optional later) |
-| BSI implementer brief | [docs/briefs/bsi/shopify-liquid.md](../../../../docs/briefs/bsi/shopify-liquid.md) (content tools require inventory) |
+| BSI implementer brief | [docs/guides/BSI/stacks/shopify-liquid.md](../../../../../docs/guides/BSI/stacks/shopify-liquid.md) (content tools require inventory) |
 
 ## Path / route conventions
 

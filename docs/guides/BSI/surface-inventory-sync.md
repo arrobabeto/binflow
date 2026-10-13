@@ -2,8 +2,8 @@
 
 Canonical contract for keeping `binflow/surface-inventory.yaml` aligned with
 storefront `data-bf-*` markers. Binding ADR:
-[ADR-0061](../adr/0061-surface-inventory-sync-and-deep-search.md). Vocabulary:
-[editable-surface-contract.md](./editable-surface-contract.md).
+[ADR-0061](../../adr/0061-surface-inventory-sync-and-deep-search.md). Vocabulary:
+[editable-surface-contract.md](editable-surface-contract.md).
 
 ## Roles
 
@@ -61,6 +61,6 @@ Astro Orbitype `edit_image` / `edit_text` do **not** gain this CTA (ADR-0042).
 
 ## Related
 
-- Spec: [edit-image-shopify.md](../specs/edit-image-shopify.md)
-- Spec: [edit-text-shopify.md](../specs/edit-text-shopify.md)
+- Spec: [edit-image-shopify.md](../../specs/edit-image-shopify.md)
+- Spec: [edit-text-shopify.md](../../specs/edit-text-shopify.md)
 - ADR-0058 / ADR-0060 / ADR-0061 / ADR-0063

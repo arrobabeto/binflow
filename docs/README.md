@@ -25,14 +25,16 @@ This directory is the canonical specification for Binflow. Documents describe cu
 
 ## Guides
 
-- [Binflow Surface Inventory (BSI)](guides/binflow-surface-inventory.md) — platform convention; opt-in rules; per-stack briefs (ADR-0058 / ADR-0064)
-- [Editable Surface Contract](guides/editable-surface-contract.md) — `bf_id`, field kinds, inventory schema, markers
-- [Surface inventory sync](guides/surface-inventory-sync.md) — push gate + remap / deep search freshness (ADR-0061)
+- [Agent skills](guides/agent-skills.md) — repo Cursor skills: description, scope, when to use
+- [Binflow Surface Inventory (BSI) folder](guides/BSI/README.md) — every BSI manual and guide (ADR-0058 / ADR-0064):
+  - [BSI general guide](guides/BSI/binflow-surface-inventory.md) — platform convention; opt-in rules; shared rules
+  - [Editable Surface Contract](guides/BSI/editable-surface-contract.md) — `bf_id`, field kinds, inventory schema, markers
+  - [Surface inventory sync](guides/BSI/surface-inventory-sync.md) — push gate + remap / deep search freshness (ADR-0061)
+  - [Stack briefs](guides/BSI/README.md#stack-briefs) — implementer docs per catalog stack (`astro-repo`, `astro-orbitype`, `shopify-liquid`)
 - [Astro Orbitype tool implementation](guides/astro-orbitype-tool-implementation.md) — stack contracts, ports, manifest freeze, ops gates, failure appendix for `astro_orbitype` capabilities
 
 ## Briefs
 
-- [BSI stack briefs](briefs/bsi/README.md) — implementer docs per catalog stack (`astro-repo`, `astro-orbitype`, `shopify-liquid`)
 - [Shopify beverage theme agent brief](briefs/shopify-beverage-theme-agent-brief.md) — product-shaped Home + blog Liquid build (uses BSI Shopify brief)
 
 ## Governance
@@ -65,10 +67,11 @@ This directory is the canonical specification for Binflow. Documents describe cu
 | Quality and acceptance strategy                 | `TESTING.md`       |
 | Runtime, deployment and recovery                | `OPERATIONS.md`    |
 | Coding and delivery standards                   | `DEVELOPMENT.md`   |
+| Repo agent skills (Cursor)                      | `guides/agent-skills.md` |
 | Delivery phases                                 | `ROADMAP.md`       |
-| Site-first editable content vocabulary          | `guides/editable-surface-contract.md` |
-| Binflow Surface Inventory (BSI)                 | `guides/binflow-surface-inventory.md` |
-| BSI per-stack implementer briefs                | `briefs/bsi/` |
+| Site-first editable content vocabulary          | `guides/BSI/editable-surface-contract.md` |
+| Binflow Surface Inventory (BSI)                 | `guides/BSI/binflow-surface-inventory.md` |
+| BSI per-stack implementer briefs                | `guides/BSI/stacks/` |
 | Architectural decisions                         | `adr/`             |
 
 When documents conflict, an accepted ADR wins for the decision it owns; otherwise the more specific canonical document wins. Resolve contradictions immediately rather than relying on tribal knowledge.

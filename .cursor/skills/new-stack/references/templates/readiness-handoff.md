@@ -50,9 +50,9 @@ Do **not** start these tasks inside new-stack.
    `.cursor/skills/create-tool/references/stacks/<stack>.md` exists (from
    [`stack-tool-contract.md`](../templates/stack-tool-contract.md)) before any
    create-tool run.
-3. **BSI stack brief** — confirm `docs/briefs/bsi/<stack>.md` exists (from
+3. **BSI stack brief** — confirm `docs/guides/BSI/stacks/<stack>.md` exists (from
    [`bsi-stack-brief.md`](../templates/bsi-stack-brief.md)) and is indexed in
-   `docs/briefs/bsi/README.md`.
+   `docs/guides/BSI/README.md`.
 4. **First capability** — [`create-tool`](../../../create-tool/SKILL.md) after
    enrollment works (creates `packages/tools/stacks/<stack>/…`); loads the
    stack contract in Phase 0.
@@ -67,9 +67,9 @@ Do **not** start these tasks inside new-stack.
 
 ## BSI stack brief path
 
-- File: `docs/briefs/bsi/<stack>.md`
-- Index: `docs/briefs/bsi/README.md`
-- Platform guide: `docs/guides/binflow-surface-inventory.md`
+- File: `docs/guides/BSI/stacks/<stack>.md`
+- Index: `docs/guides/BSI/README.md`
+- Platform guide: `docs/guides/BSI/binflow-surface-inventory.md`
 - Status: written | missing (blocker for readiness completion)
 
 ## Out of scope for the impl session

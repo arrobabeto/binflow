@@ -4,11 +4,11 @@
 of a client site tools may identify and (when capabilities support it) mutate.
 
 - **Public name:** Binflow Surface Inventory (**BSI**)
-- **ADR synonym:** Surface Inventory ([ADR-0058](../adr/0058-editable-surface-contract.md))
+- **ADR synonym:** Surface Inventory ([ADR-0058](../../adr/0058-editable-surface-contract.md))
 - **Artifact:** `binflow/surface-inventory.yaml` + `data-bf-*` markup markers
 - **Schema / vocabulary detail:** [Editable Surface Contract](editable-surface-contract.md)
-- **Stack-specific implementer briefs:** [docs/briefs/bsi/](../briefs/bsi/README.md)
-- **Governance:** [ADR-0064](../adr/0064-optional-bsi-astro.md) (general BSI +
+- **Stack-specific implementer briefs:** [docs/guides/BSI/stacks/](README.md#stack-briefs)
+- **Governance:** [ADR-0064](../../adr/0064-optional-bsi-astro.md) (general BSI +
   per-stack briefs; Astro opt-in clarified)
 
 BSI is a **Binflow platform convention**, not a single-stack feature. Every
@@ -84,16 +84,16 @@ Give agents **both** this guide and the brief for the target stack:
 
 | Catalog stack | Profile | Implementer brief |
 |---------------|---------|-------------------|
-| `astro-repo` | `astro_repo` | [briefs/bsi/astro-repo.md](../briefs/bsi/astro-repo.md) |
-| `astro-orbitype` | `astro_orbitype` | [briefs/bsi/astro-orbitype.md](../briefs/bsi/astro-orbitype.md) |
-| `shopify-liquid` | `shopify_liquid` | [briefs/bsi/shopify-liquid.md](../briefs/bsi/shopify-liquid.md) |
+| `astro-repo` | `astro_repo` | [stacks/astro-repo.md](stacks/astro-repo.md) |
+| `astro-orbitype` | `astro_orbitype` | [stacks/astro-orbitype.md](stacks/astro-orbitype.md) |
+| `shopify-liquid` | `shopify_liquid` | [stacks/shopify-liquid.md](stacks/shopify-liquid.md) |
 
-When **`new-stack`** adds a profile, it **must** add `docs/briefs/bsi/<stack>.md`
-and index it in [briefs/bsi/README.md](../briefs/bsi/README.md).
+When **`new-stack`** adds a profile, it **must** add `docs/guides/BSI/stacks/<stack>.md`
+and index it in the [BSI folder README](README.md).
 
 ## Related
 
 - [Editable Surface Contract](editable-surface-contract.md) — schema & inventory YAML shape
 - [Surface inventory sync](surface-inventory-sync.md) — Shopify remap / freshness (ADR-0061)
-- [DEVELOPMENT.md](../DEVELOPMENT.md) — when site-build agents should load BSI
+- [DEVELOPMENT.md](../../DEVELOPMENT.md) — when site-build agents should load BSI
 - Stack tool contracts: `.cursor/skills/create-tool/references/stacks/`

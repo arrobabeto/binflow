@@ -1,12 +1,13 @@
 # Template: BSI stack implementer brief
 
-Write to `docs/briefs/bsi/<stack>.md` (hyphenated catalog stack id) and add a
-row to `docs/briefs/bsi/README.md`.
+Write to `docs/guides/BSI/stacks/<stack>.md` (hyphenated catalog stack id) and add a
+row to `docs/guides/BSI/README.md`.
 
-Platform links (keep at top of the brief):
+Platform links (keep at top of the brief; paths are relative to
+`docs/guides/BSI/stacks/`):
 
-- [Binflow Surface Inventory](../../../docs/guides/binflow-surface-inventory.md)
-- [Editable Surface Contract](../../../docs/guides/editable-surface-contract.md)
+- [Binflow Surface Inventory](../binflow-surface-inventory.md)
+- [Editable Surface Contract](../editable-surface-contract.md)
 
 ```markdown
 # BSI implementer brief — `<stack>`

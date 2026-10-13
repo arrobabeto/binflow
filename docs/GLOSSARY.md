@@ -5,7 +5,7 @@
 | Binn             | Read-only Telegram advisor (`hey_binn` / `/hey_binn`); suggests tools and typed handoffs; does not mutate (ADR-0062). |
 | Approval         | Permission from an authorized user bound to one exact request version and preview artifact.                  |
 | Artifact         | Versioned output such as Markdown, image, diff, screenshot or CMS draft.                                     |
-| BSI              | **Binflow Surface Inventory** — platform convention (`binflow/surface-inventory.yaml` + `data-bf-*`); general guide + per-stack briefs under `docs/briefs/bsi/` (ADR-0064). |
+| BSI              | **Binflow Surface Inventory** — platform convention (`binflow/surface-inventory.yaml` + `data-bf-*`); general guide + per-stack briefs under `docs/guides/BSI/stacks/` (ADR-0064). |
 | bf_id            | Stable dotted Editable Surface id (e.g. `home.hero.heading`); never rename after ship (ADR-0058).            |
 | Capability       | User-visible, typed operation that a project explicitly enables; synonym for dashboard **Tool** when listing enabled operations. |
 | catalog_bound    | Field kind for native catalog/CMS objects (product, collection, article body); not storefront `edit_text`.   |

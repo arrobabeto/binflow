@@ -2,8 +2,8 @@
 
 Paste this brief when building or retrofitting an **Astro + Orbitype** site for
 Binflow. Platform rules:
-[Binflow Surface Inventory](../../guides/binflow-surface-inventory.md) and
-[Editable Surface Contract](../../guides/editable-surface-contract.md)
+[Binflow Surface Inventory](../binflow-surface-inventory.md) and
+[Editable Surface Contract](../editable-surface-contract.md)
 (ADR-0058 / ADR-0064).
 
 | | |
