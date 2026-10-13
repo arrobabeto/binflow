@@ -6,7 +6,7 @@ shipped stack). This document owns the product lifecycle and validation
 model.
 
 For **new client sites** built to be operated by Binflow later, follow the
-[Editable Surface Contract](guides/editable-surface-contract.md) (ADR-0058)
+[Editable Surface Contract](guides/BSI/editable-surface-contract.md) (ADR-0058)
 before the first content capability: ship a Surface Inventory and storefront
 markers so tools can allowlist declared fields instead of reverse-engineering
 the live site.

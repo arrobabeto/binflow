@@ -31,8 +31,8 @@ edit-node-config  (existing tool node defaults only)
 ```
 
 Site builds that only label surfaces use **BSI docs**, not these skills:
-[Binflow Surface Inventory](binflow-surface-inventory.md) +
-[briefs/bsi/](../briefs/bsi/README.md).
+[Binflow Surface Inventory](BSI/binflow-surface-inventory.md) +
+[guides/BSI/stacks/](BSI/README.md).
 
 ---
 
@@ -72,7 +72,7 @@ ADRs, or when create-tool would be too narrow.
 `stack` (enrollment before tools). Interview → impact → approval STOP →
 spec/ADR/docs/CHANGELOG → readiness handoff for a later implementation
 session. Also requires a **BSI stack brief**
-(`docs/briefs/bsi/<stack>.md`) and a **stack tool contract** under
+(`docs/guides/BSI/stacks/<stack>.md`) and a **stack tool contract** under
 `.cursor/skills/create-tool/references/stacks/`.
 
 **Scope.**
@@ -161,4 +161,4 @@ defaults change.
 - [DOCUMENTATION-GOVERNANCE.md](../DOCUMENTATION-GOVERNANCE.md)
 - [ADR-0039](../adr/0039-tool-authoring-pipeline.md) — create-tool / test-tool pipeline
 - [docs/audits/](../audits/README.md) — test-tool outputs
-- [BSI](binflow-surface-inventory.md) — site labeling (not a skill)
+- [BSI](BSI/binflow-surface-inventory.md) — site labeling (not a skill)

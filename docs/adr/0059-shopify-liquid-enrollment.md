@@ -82,5 +82,5 @@ enrollment pattern as precedent), ADR-0058 (surface contract).
 
 - [ADR-0058](0058-editable-surface-contract.md)
 - [ADR-0045](0045-astro-orbitype-enrollment.md)
-- [docs/guides/editable-surface-contract.md](../guides/editable-surface-contract.md)
+- [docs/guides/BSI/editable-surface-contract.md](../guides/BSI/editable-surface-contract.md)
 - Spec: [shopify-liquid-enrollment.md](../specs/shopify-liquid-enrollment.md)

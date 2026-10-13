@@ -122,5 +122,5 @@ Required by [`AGENTS.md`](../../AGENTS.md):
 
 - ADR-0059, ADR-0058, beverage brief
   [`docs/briefs/shopify-beverage-theme-agent-brief.md`](../briefs/shopify-beverage-theme-agent-brief.md)
-- Guide [`docs/guides/editable-surface-contract.md`](../guides/editable-surface-contract.md)
+- Guide [`docs/guides/BSI/editable-surface-contract.md`](../guides/BSI/editable-surface-contract.md)
 - Pilot theme inventory: elayva `binflow/surface-inventory.yaml`

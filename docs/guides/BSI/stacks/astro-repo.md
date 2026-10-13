@@ -4,8 +4,8 @@ Paste this brief when building or retrofitting an **Astro content-collections**
 site (no Orbitype) for Binflow — e.g. Webbin-class portfolios/blogs.
 
 Platform rules:
-[Binflow Surface Inventory](../../guides/binflow-surface-inventory.md) and
-[Editable Surface Contract](../../guides/editable-surface-contract.md)
+[Binflow Surface Inventory](../binflow-surface-inventory.md) and
+[Editable Surface Contract](../editable-surface-contract.md)
 (ADR-0058 / ADR-0064).
 
 | | |

@@ -34,7 +34,7 @@ untouched), ADR-0059 (enrollment), ADR-0060 (capability shape).
    `sections/**`, `templates/**`, `snippets/**`, `assets/**`, markers, or the
    inventory file must refresh the YAML. Primary gate for pilots: theme-agent
    brief + `check-inventory-sync` (see
-   [`docs/guides/surface-inventory-sync.md`](../guides/surface-inventory-sync.md)).
+   [`docs/guides/BSI/surface-inventory-sync.md`](../guides/BSI/surface-inventory-sync.md)).
    Binflow exposes a shared remap pipeline (`images.remap_surface_inventory@1`)
    for on-demand and future signed GitHub `push` / merged-PR webhooks once App
    webhook delivery is activated in production.
@@ -81,7 +81,7 @@ untouched), ADR-0059 (enrollment), ADR-0060 (capability shape).
 ## Verification
 
 - Spec `docs/specs/edit-image-shopify.md` (deep search + remap).
-- Guide `docs/guides/surface-inventory-sync.md`.
+- Guide `docs/guides/BSI/surface-inventory-sync.md`.
 - Unit tests: remap merge; theme publish `expectedFiles`; deep-search action
   wiring / copy isolation from Astro.
 - Offline tool audit after ship; Astro `edit_image` unchanged.
@@ -90,4 +90,4 @@ untouched), ADR-0059 (enrollment), ADR-0060 (capability shape).
 
 - [ADR-0058](0058-editable-surface-contract.md)
 - [ADR-0060](0060-edit-image-shopify.md)
-- Guide: [surface-inventory-sync.md](../guides/surface-inventory-sync.md)
+- Guide: [surface-inventory-sync.md](../guides/BSI/surface-inventory-sync.md)

@@ -4,6 +4,19 @@ All notable changes to product behavior, architecture, contracts, security, oper
 
 ## Unreleased
 
+### BSI docs consolidated under `docs/guides/BSI/`
+
+- All Binflow Surface Inventory manuals and guides now live in one folder:
+  `docs/guides/BSI/` (`README.md` index, `binflow-surface-inventory.md`,
+  `editable-surface-contract.md`, `surface-inventory-sync.md`, and
+  `stacks/{astro-repo,astro-orbitype,shopify-liquid}.md`).
+- Moved from `docs/guides/*.md` and `docs/briefs/bsi/`; removed the old
+  redirect stubs (`guides/astro-orbitype-surface-labeling.md`,
+  `briefs/astro-orbitype-template-bsi-brief.md`).
+- `new-stack` now writes BSI stack briefs to `docs/guides/BSI/stacks/<stack>.md`
+  (ADR-0064 path amended; decision unchanged). Links updated across canonical
+  docs, ADRs, specs, and repo skills. No behavior, contract, or security change.
+
 ### Agent skills inventory guide
 
 - Canonical list of repo Cursor skills (description, scope, use):

@@ -45,11 +45,11 @@ Documentation may not be deferred to a follow-up issue or PR.
 
 ## Client site builds (Editable Surface / BSI)
 
-1. Read [Binflow Surface Inventory (BSI)](guides/binflow-surface-inventory.md)
+1. Read [Binflow Surface Inventory (BSI)](guides/BSI/binflow-surface-inventory.md)
    (ADR-0058 / ADR-0064).
-2. Open the **stack BSI brief** under [briefs/bsi/](briefs/bsi/README.md) for
+2. Open the **stack BSI brief** under [guides/BSI/stacks/](guides/BSI/README.md) for
    the catalog stack (`astro-repo`, `astro-orbitype`, `shopify-liquid`, …).
-3. Follow [Editable Surface Contract](guides/editable-surface-contract.md) for
+3. Follow [Editable Surface Contract](guides/BSI/editable-surface-contract.md) for
    schema (`bf_id`, kinds, YAML shape).
 
 **Shopify Liquid** content tools require inventory for allowlisted edits.
@@ -58,7 +58,7 @@ with it, inventory-aware tools prefer BSI.
 
 Product-shaped example: [Shopify beverage theme](briefs/shopify-beverage-theme-agent-brief.md).
 
-`new-stack` must add `docs/briefs/bsi/<stack>.md` for every new catalog stack.
+`new-stack` must add `docs/guides/BSI/stacks/<stack>.md` for every new catalog stack.
 
 Do not invent parallel tag systems. Existing pilots without an inventory remain
 valid.

@@ -26,7 +26,7 @@ each profile.
 ## Decision
 
 1. **Editable Surface Contract.** Canonical guide
-   [`docs/guides/editable-surface-contract.md`](../guides/editable-surface-contract.md)
+   [`docs/guides/BSI/editable-surface-contract.md`](../guides/BSI/editable-surface-contract.md)
    defines Editable Surface, Surface Inventory, `bf_id`, field kinds
    (`copy`, `style_target`, `image`, `chrome_denied`, `catalog_bound`), markup
    markers, naming rules, and the inventory artifact schema.

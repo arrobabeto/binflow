@@ -1,8 +1,8 @@
 # Editable Surface Contract
 
 Profile-agnostic, **site-first** contract for content that Binflow capabilities
-may mutate. Binding decision: [ADR-0058](../adr/0058-editable-surface-contract.md).
-Short definitions also live in [GLOSSARY.md](../GLOSSARY.md).
+may mutate. Binding decision: [ADR-0058](../../adr/0058-editable-surface-contract.md).
+Short definitions also live in [GLOSSARY.md](../../GLOSSARY.md).
 
 Stack-specific path builders, CMS schemas, preview ports, and approval graphs
 remain owned by each profile (`astro_repo`, `astro_orbitype`, future Shopify,
@@ -256,7 +256,7 @@ required to (ADR-0064). Rules:
    over scraping; incomplete/unreadable inventory falls back to heuristics.
 3. Locators, CMS prop names, markers, containers, background images, and
    template checklist:
-   [briefs/bsi/astro-orbitype.md](../briefs/bsi/astro-orbitype.md).
+   [guides/BSI/stacks/astro-orbitype.md](stacks/astro-orbitype.md).
 
 Shopify Liquid greenfield / `edit_*_shopify` remains inventory-driven for that
 stack.
@@ -285,9 +285,9 @@ Astro sites that skip BSI omit this checklist; behavior stays heuristic.
 ## Related documents
 
 - [Binflow Surface Inventory (BSI)](binflow-surface-inventory.md)
-- [ADR-0058](../adr/0058-editable-surface-contract.md)
-- [ADR-0064](../adr/0064-optional-bsi-astro.md)
-- [BSI stack briefs](../briefs/bsi/README.md)
-- [GLOSSARY.md](../GLOSSARY.md)
-- [briefs/shopify-beverage-theme-agent-brief.md](../briefs/shopify-beverage-theme-agent-brief.md)
+- [ADR-0058](../../adr/0058-editable-surface-contract.md)
+- [ADR-0064](../../adr/0064-optional-bsi-astro.md)
+- [BSI stack briefs](README.md)
+- [GLOSSARY.md](../../GLOSSARY.md)
+- [briefs/shopify-beverage-theme-agent-brief.md](../../briefs/shopify-beverage-theme-agent-brief.md)
 - Stack tool contracts under `.cursor/skills/create-tool/references/stacks/`

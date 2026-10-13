@@ -4,8 +4,8 @@ Paste this brief when building or retrofitting a **Shopify Online Store 2.0**
 theme (Liquid + JSON) for Binflow.
 
 Platform rules:
-[Binflow Surface Inventory](../../guides/binflow-surface-inventory.md) and
-[Editable Surface Contract](../../guides/editable-surface-contract.md)
+[Binflow Surface Inventory](../binflow-surface-inventory.md) and
+[Editable Surface Contract](../editable-surface-contract.md)
 (ADR-0058 / ADR-0064). Shopify content tools already **read** BSI as the
 allowlist (`edit_image_shopify`, `edit_text_shopify`).
 
@@ -14,7 +14,7 @@ allowlist (`edit_image_shopify`, `edit_text_shopify`).
 | Catalog stack | `shopify-liquid` |
 | Profile | `shopify_liquid` |
 | Stack tool contract | `.cursor/skills/create-tool/references/stacks/shopify-liquid.md` |
-| Product-shaped brief (beverage Home+blog) | [shopify-beverage-theme-agent-brief.md](../shopify-beverage-theme-agent-brief.md) |
+| Product-shaped brief (beverage Home+blog) | [shopify-beverage-theme-agent-brief.md](../../../briefs/shopify-beverage-theme-agent-brief.md) |
 
 **Note:** For this stack, missing/empty inventory fails closed for image/copy
 Shopify tools. Still use the same BSI vocabulary as other stacks.
@@ -133,7 +133,7 @@ surfaces:
 - [ ] Markers on all declared surfaces; containers/backgrounds where used
 - [ ] Setting ids follow naming rules; CTAs `chrome_denied`
 - [ ] Assets under Home/blog namespaces; alts siblings
-- [ ] Remap / push-gate awareness ([surface-inventory-sync](../../guides/surface-inventory-sync.md))
+- [ ] Remap / push-gate awareness ([surface-inventory-sync](../surface-inventory-sync.md))
 
 ## Retrofit checklist (existing theme)
 
@@ -146,5 +146,5 @@ surfaces:
 ## Related product brief
 
 For a beverage Home + blog build with file isolation and exclusions, also use
-[shopify-beverage-theme-agent-brief.md](../shopify-beverage-theme-agent-brief.md)
+[shopify-beverage-theme-agent-brief.md](../../../briefs/shopify-beverage-theme-agent-brief.md)
 (points at this BSI stack brief for vocabulary).

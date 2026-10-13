@@ -20,13 +20,13 @@ Surface Inventory (`binflow/surface-inventory.yaml` + `data-bf-*`).
 ## Decision
 
 1. **BSI is a Binflow-wide convention.** Canonical overview:
-   [`docs/guides/binflow-surface-inventory.md`](../guides/binflow-surface-inventory.md).
+   [`docs/guides/BSI/binflow-surface-inventory.md`](../guides/BSI/binflow-surface-inventory.md).
    Schema remains
-   [`docs/guides/editable-surface-contract.md`](../guides/editable-surface-contract.md).
+   [`docs/guides/BSI/editable-surface-contract.md`](../guides/BSI/editable-surface-contract.md).
 
 2. **Per-stack implementer briefs are mandatory for every catalog stack.** Path:
-   `docs/briefs/bsi/<stack>.md` (hyphenated stack id), indexed in
-   [`docs/briefs/bsi/README.md`](../briefs/bsi/README.md). Each brief covers
+   `docs/guides/BSI/stacks/<stack>.md` (hyphenated stack id), indexed in
+   [`docs/guides/BSI/README.md`](../guides/BSI/README.md). Each brief covers
    stack language, locators, `publication_target`, markers, containers,
    backgrounds, greenfield + retrofit checklists. Live stacks today:
    `astro-repo`, `astro-orbitype`, `shopify-liquid`.
@@ -67,8 +67,8 @@ Surface Inventory (`binflow/surface-inventory.yaml` + `data-bf-*`).
 
 ## Related documents
 
-- [Binflow Surface Inventory](../guides/binflow-surface-inventory.md)
-- [Editable Surface Contract](../guides/editable-surface-contract.md)
-- [BSI stack briefs](../briefs/bsi/README.md)
+- [Binflow Surface Inventory](../guides/BSI/binflow-surface-inventory.md)
+- [Editable Surface Contract](../guides/BSI/editable-surface-contract.md)
+- [BSI stack briefs](../guides/BSI/README.md)
 - [ADR-0058](0058-editable-surface-contract.md)
 - [new-stack skill](../../.cursor/skills/new-stack/SKILL.md)

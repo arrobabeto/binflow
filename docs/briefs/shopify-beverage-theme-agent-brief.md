@@ -2,9 +2,9 @@
 
 Paste this entire brief into the agent session that builds the Shopify theme.
 **BSI (required vocabulary for this stack):**
-[Binflow Surface Inventory](../guides/binflow-surface-inventory.md) +
-[BSI implementer brief — shopify-liquid](bsi/shopify-liquid.md).
-Schema: [Editable Surface Contract](../guides/editable-surface-contract.md)
+[Binflow Surface Inventory](../guides/BSI/binflow-surface-inventory.md) +
+[BSI implementer brief — shopify-liquid](../guides/BSI/stacks/shopify-liquid.md).
+Schema: [Editable Surface Contract](../guides/BSI/editable-surface-contract.md)
 ([ADR-0058](../adr/0058-editable-surface-contract.md)).
 
 ---
@@ -58,7 +58,7 @@ shared header/footer unless the Home absolutely needs a **conditional**
 
 ## Editable Surface rules (mandatory)
 
-Follow [editable-surface-contract.md](../guides/editable-surface-contract.md).
+Follow [editable-surface-contract.md](../guides/BSI/editable-surface-contract.md).
 
 1. Every Binflow-intended field gets a stable **`bf_id`**
    (`home.hero.heading`, `blog.listing.intro`, …). Never rename after first ship.

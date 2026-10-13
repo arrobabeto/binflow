@@ -338,7 +338,7 @@ rather than deleting capability definition history in place.
 
 Surface inventory freshness (ADR-0061): theme agents keep
 `binflow/surface-inventory.yaml` synced on push (see
-`docs/guides/surface-inventory-sync.md`). Telegram **Deep search** runs the
+`docs/guides/BSI/surface-inventory-sync.md`). Telegram **Deep search** runs the
 same remap pipeline in the worker and may auto-merge an **inventory-only** PR.
 Signed GitHub App `push` webhook → remap enqueue remains gated on production
 webhook cutover; until then rely on the client agent gate + deep search.

@@ -24,7 +24,7 @@ Present results using
 | Worker / Telegram hot-load | `OPERATIONS.md`, `TELEGRAM.md` | usually `compatible` |
 | First capability | create-tool later | handoff only — not this skill |
 | Glossary terms | `GLOSSARY.md` | if new names |
-| BSI stack brief | `docs/guides/binflow-surface-inventory.md`, `docs/briefs/bsi/` | `docs_gap` until `docs/briefs/bsi/<stack>.md` exists |
+| BSI stack brief | `docs/guides/BSI/binflow-surface-inventory.md`, `docs/guides/BSI/stacks/` | `docs_gap` until `docs/guides/BSI/stacks/<stack>.md` exists |
 
 ## Tool / port scan (always)
 
