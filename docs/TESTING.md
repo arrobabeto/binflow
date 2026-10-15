@@ -135,6 +135,13 @@
   cover discovery, role gate (Editor/Administrator + warning), read probe,
   HTTPS-only, cross-host redirect refusal and timeout classification; empty
   catalog ACTIVE; frozen-stack regression.
+- `create_blog_wordpress` (ADR-0067): fake-site port tests (write allowlist,
+  trash without `force`, password required on create/update, adoption rules,
+  media/category reuse by slug, anonymous protected check, text escaping and
+  content hash); workflow unit tests (as-is composition keeps every word and
+  escapes HTML, gap steps per mode, category ranking, same-origin image URLs,
+  ingress/runtime wiring); capability conformance and client tool catalog.
+  Runtime drift/cancel/publish paths are verified by the pilot live smoke.
 - `create_blog_orbitype` dual-write (ADR-0047): GitHub draft then Orbitype CMS
   draft, Vercel preview URLs at `/posts/{draftId}/{titleSlug}`, merge_github
   then publish_orbitype; assignment only for `astro_orbitype` projects (Bistro

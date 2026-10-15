@@ -22,6 +22,7 @@ const kindOptions: { label: string; value: Kind }[] = [
   { label: 'GitHub App', value: 'github-app' },
   { label: 'Vercel', value: 'vercel' },
   { label: 'Orbitype API', value: 'orbitype-api' },
+  { label: 'WordPress REST API', value: 'wordpress-api' },
 ];
 
 const apiErrorMessage = (error: unknown, fallback: string): string => {
@@ -70,6 +71,9 @@ const form = reactive({
   alias: '',
   apiKey: '',
   appId: '',
+  applicationPassword: '',
+  siteOrigin: '',
+  username: '',
   baseUrl: 'https://core.orbitype.com/api/sql/v1',
   botToken: '',
   clientId: '',
@@ -157,6 +161,17 @@ const secretPayload = (): IntegrationCandidateInput => {
       tenantKey: form.tenantKey,
     };
   }
+  if (form.kind === 'wordpress-api') {
+    return {
+      alias: form.alias,
+      applicationPassword: form.applicationPassword,
+      kind: form.kind,
+      projectKey: form.projectKey,
+      siteOrigin: form.siteOrigin,
+      tenantKey: form.tenantKey,
+      username: form.username,
+    };
+  }
   return {
     alias: form.alias,
     kind: form.kind,
@@ -176,6 +191,7 @@ const secretPayload = (): IntegrationCandidateInput => {
 
 const clearSecrets = () => {
   form.apiKey = '';
+  form.applicationPassword = '';
   form.botToken = '';
   form.privateKey = '';
   form.token = '';
@@ -238,10 +254,17 @@ const verifyCredential = async (credential: CredentialSummary) => {
       },
       method: 'POST',
     });
-    successMessage.value =
-      result.outcome === 'success'
-        ? `${credential.alias} is verified and active.`
-        : `Verification failed: ${result.errorDetail ?? result.errorCategory ?? 'provider error'}`;
+    if (result.outcome === 'success') {
+      successMessage.value = `${credential.alias} is verified and active.`;
+    } else if (
+      credential.kind === 'wordpress-api' &&
+      result.errorCategory === 'provider_retryable'
+    ) {
+      errorMessage.value =
+        'The WordPress site did not respond in time (30 s per request, retried once) or is temporarily unavailable. The previous status was kept; try Verify again.';
+    } else {
+      errorMessage.value = `Verification failed: ${result.errorDetail ?? result.errorCategory ?? 'provider error'}`;
+    }
     await refresh();
   } catch (error) {
     errorMessage.value = apiErrorMessage(
@@ -450,7 +473,8 @@ const revoke = async (credential: CredentialSummary) => {
               v-if="
                 form.kind === 'github-app' ||
                 form.kind === 'vercel' ||
-                form.kind === 'orbitype-api'
+                form.kind === 'orbitype-api' ||
+                form.kind === 'wordpress-api'
               "
               label="Project key"
               required
@@ -580,6 +604,31 @@ const revoke = async (credential: CredentialSummary) => {
               <UFormField label="API key" required>
                 <UInput
                   v-model="form.apiKey"
+                  type="password"
+                  class="w-full"
+                  required
+                />
+              </UFormField>
+            </template>
+            <template v-if="form.kind === 'wordpress-api'">
+              <UFormField label="Site origin (HTTPS)" required>
+                <UInput
+                  v-model="form.siteOrigin"
+                  placeholder="https://example.com"
+                  class="w-full"
+                  required
+                />
+              </UFormField>
+              <UFormField label="WordPress username" required>
+                <UInput v-model="form.username" class="w-full" required />
+              </UFormField>
+              <UFormField
+                label="Application Password"
+                help="Users → Profile → Application Passwords. Use an Editor account; Administrator works but shows a risk warning."
+                required
+              >
+                <UInput
+                  v-model="form.applicationPassword"
                   type="password"
                   class="w-full"
                   required

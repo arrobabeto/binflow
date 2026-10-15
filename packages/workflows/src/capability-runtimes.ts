@@ -11,7 +11,8 @@ export type CapabilityRuntimeKind =
   | 'edit_text_shopify'
   | 'edit_text_style'
   | 'project'
-  | 'update_menu';
+  | 'update_menu'
+  | 'wordpress_blog';
 
 export type CatalogContentScope = 'blog' | 'pages' | 'portfolio';
 
@@ -46,6 +47,8 @@ export const catalogScopeForRuntimeKind = (
     case 'edit_text_shopify':
     case 'edit_text_style':
       return 'pages';
+    case 'wordpress_blog':
+      return 'blog';
   }
 };
 
@@ -67,6 +70,7 @@ export const catalogContentKindsForRuntimeKind = (
     case 'edit_text':
     case 'edit_text_shopify':
     case 'edit_text_style':
+    case 'wordpress_blog':
       return [];
   }
 };
@@ -125,6 +129,11 @@ const runtimeByExecutorId = Object.freeze({
   'workflow.edit_text_shopify@1': Object.freeze({
     consumerPrefix: 'edit_text_shopify',
     kind: 'edit_text_shopify',
+    titleField: 'resolvedTitle',
+  }),
+  'workflow.create_blog_wordpress@1': Object.freeze({
+    consumerPrefix: 'wordpress_blog',
+    kind: 'wordpress_blog',
     titleField: 'resolvedTitle',
   }),
 } as const satisfies Record<

@@ -4,7 +4,22 @@
 - ADR: [ADR-0066](../adr/0066-wordpress-rest-enrollment.md)
 - Date: 2026-10-13
 - Prepared by: new-stack skill
-- Status: Ready for implementation
+- Status: Implemented (tasks 1–7); task 8 smoke pending a pilot site
+
+## Implementation notes
+
+- Task 1 shipped as a separate strict `wordpressRestManifestSchema` plus the
+  union `anyProjectManifestSchema` instead of making `repository` /
+  `deployment` optional in `projectManifestSchema`. Frozen Git-backed readers
+  keep their exact types; generic readers (onboarding, manifest API,
+  Hey Binn) parse the union and branch on `profile`.
+- Package `@binflow/wordpress`: read-only REST client + verifier. Verifier
+  budget is 150 s total (`CredentialVerifier.timeoutMs`) so the 30 s
+  per-request timeout and one retry are not cut short by the 15 s default.
+- Same-origin redirects (≤3) are followed; any host or protocol change is
+  `policy_denied` `wordpress_redirect_cross_host` and the password is never
+  re-sent.
+- Dev-only `BINFLOW_WORDPRESS_ALLOW_INSECURE_LOCALHOST` (OPERATIONS).
 
 ## Summary
 

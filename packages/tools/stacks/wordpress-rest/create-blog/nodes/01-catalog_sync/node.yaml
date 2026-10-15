@@ -1,0 +1,8 @@
+kind: effect
+label: Read WordPress categories
+nodeKind: wordpress.catalog_sync@1
+acceptsClientCustomization: false
+parameters:
+  catalogScope: blog
+permissions:
+  - wordpress:categories:read

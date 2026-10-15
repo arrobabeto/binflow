@@ -2,15 +2,18 @@ import { createHash, randomBytes } from 'node:crypto';
 
 import { and, desc, eq, inArray, isNull, or, sql } from 'drizzle-orm';
 import { v7 as uuidv7 } from 'uuid';
+import { z } from 'zod';
 
 import {
   createEnrollmentInputSchema,
   capabilityCatalogResponseSchema,
   enrollmentConfigurationSchema,
   enrollmentSchema,
+  anyProjectManifestSchema,
   projectManifestResponseSchema,
-  projectManifestSchema,
   updateProjectCapabilitiesInputSchema,
+  wordpressRoleSchema,
+  type AnyProjectManifest,
   type CapabilityBinding,
   type CreateEnrollmentInput,
   type CapabilityCatalogResponse,
@@ -38,7 +41,9 @@ import {
   astroOrbitypeGlobalProfile,
   astroRepoGlobalProfile,
   buildProjectManifest,
+  buildWordpressRestManifest,
   shopifyLiquidGlobalProfile,
+  wordpressRestGlobalProfile,
   type SelectableManifestProfile,
   type VerifiedManifestBindings,
 } from '@binflow/manifests';
@@ -56,13 +61,26 @@ const SHARED_CREDENTIAL_CHECKS = [
   'vercel_binding',
 ] as const;
 const ORBITYPE_CREDENTIAL_CHECK = 'orbitype_api_credential' as const;
+const WORDPRESS_CHECKS = [
+  'wordpress_api_credential',
+  'wordpress_read_probe',
+  'production_domain_matches_site_url',
+] as const;
 
 const credentialChecksForProfile = (
   profile: string,
 ): readonly (
   | (typeof SHARED_CREDENTIAL_CHECKS)[number]
   | typeof ORBITYPE_CREDENTIAL_CHECK
+  | (typeof WORDPRESS_CHECKS)[number]
 )[] => {
+  if (profile === 'wordpress_rest')
+    return [
+      'openai_credential',
+      'telegram_admin_credential',
+      'telegram_client_credential',
+      ...WORDPRESS_CHECKS,
+    ];
   if (profile === 'shopify_liquid')
     return [
       'openai_credential',
@@ -82,6 +100,7 @@ const asManifestProfile = (profile: string): SelectableManifestProfile => {
 };
 
 const globalProfileForEnrollment = (profile: string) => {
+  if (profile === 'wordpress_rest') return wordpressRestGlobalProfile;
   if (profile === 'shopify_liquid') return shopifyLiquidGlobalProfile;
   if (profile === 'astro_orbitype') return astroOrbitypeGlobalProfile;
   return astroRepoGlobalProfile;
@@ -230,11 +249,41 @@ const ensureConfigurationComplete = (
 
 const toProjectManifest = (
   row: typeof schema.projectManifestVersions.$inferSelect,
-): ProjectManifest =>
-  projectManifestSchema.parse({
+): AnyProjectManifest =>
+  anyProjectManifestSchema.parse({
     ...row.document,
     status: row.status,
   });
+
+const wordpressEvidenceSchema = z.object({
+  readProbe: z.object({
+    categoryCount: z.number().int().nonnegative(),
+    latestPostTitles: z.array(z.string()),
+    postCount: z.number().int().nonnegative(),
+  }),
+  restBase: z.url(),
+  riskWarning: z.literal('administrator_role').optional(),
+  role: wordpressRoleSchema,
+  siteOrigin: z.url(),
+  userId: z.number().int().positive(),
+  username: z.string().min(1),
+});
+
+const parseWordpressEvidence = (value: unknown) => {
+  const parsed = wordpressEvidenceSchema.safeParse(value);
+  return parsed.success ? parsed.data : undefined;
+};
+
+const sameHost = (left: string, right: string): boolean => {
+  try {
+    const host = (value: string) =>
+      new URL(value.includes('://') ? value : `https://${value}`).host
+        .toLowerCase();
+    return host(left) === host(right);
+  } catch {
+    return false;
+  }
+};
 
 const toEnrollment = (row: {
   enrollment: typeof schema.clientEnrollments.$inferSelect;
@@ -1737,11 +1786,10 @@ export class EnrollmentService {
     database: ScopedDatabase,
     enrollment: Enrollment,
     context: ActorContext,
-  ): Promise<ProjectManifest> {
+  ): Promise<AnyProjectManifest> {
     await database.execute(
       sql`select pg_advisory_xact_lock(hashtext(${`project-manifest:${enrollment.projectId}`}))`,
     );
-    const bindings = await this.resolveManifestBindings(database, enrollment);
     const [latest] = await database
       .select()
       .from(schema.projectManifestVersions)
@@ -1755,17 +1803,33 @@ export class EnrollmentService {
       .limit(1);
     const nextVersion = (latest?.version ?? 0) + 1;
     const now = this.clock.now();
-    const candidate = buildProjectManifest({
-      configuration: enrollment.configuration,
-      id: uuidv7(),
-      profile: asManifestProfile(enrollment.projectProfile),
-      projectId: enrollment.projectId,
-      projectKey: enrollment.projectKey,
-      tenantKey: enrollment.tenantKey,
-      validatedAt: now,
-      verifiedBindings: bindings,
-      version: nextVersion,
-    });
+    const candidate: AnyProjectManifest =
+      enrollment.projectProfile === 'wordpress_rest'
+        ? buildWordpressRestManifest({
+            configuration: enrollment.configuration,
+            id: uuidv7(),
+            projectId: enrollment.projectId,
+            validatedAt: now,
+            verifiedWordpress: await this.resolveWordpressBinding(
+              database,
+              enrollment,
+            ),
+            version: nextVersion,
+          })
+        : buildProjectManifest({
+            configuration: enrollment.configuration,
+            id: uuidv7(),
+            profile: asManifestProfile(enrollment.projectProfile),
+            projectId: enrollment.projectId,
+            projectKey: enrollment.projectKey,
+            tenantKey: enrollment.tenantKey,
+            validatedAt: now,
+            verifiedBindings: await this.resolveManifestBindings(
+              database,
+              enrollment,
+            ),
+            version: nextVersion,
+          });
     if (
       latest?.dependencyFingerprint === candidate.fingerprint &&
       (latest.status === 'validated' || latest.status === 'active')
@@ -1793,7 +1857,9 @@ export class EnrollmentService {
     await database.insert(schema.projectManifestVersions).values({
       createdBy: context.actorId,
       dependencyFingerprint: candidate.fingerprint,
-      document: candidate,
+      // wordpress_rest manifests have no repository/deployment; readers parse
+      // documents with anyProjectManifestSchema and branch on profile.
+      document: candidate as ProjectManifest,
       globalProfileVersion: candidate.globalProfileVersion,
       id: candidate.id,
       profile: candidate.profile,
@@ -1871,6 +1937,59 @@ export class EnrollmentService {
       tenantId: enrollment.tenantId,
     });
     return candidate;
+  }
+
+  private async readWordpressConnection(
+    database: ScopedDatabase,
+    enrollment: Enrollment,
+  ) {
+    const [row] = await database
+      .select({
+        evidence: schema.integrationConnections.verificationEvidence,
+        id: schema.providerCredentials.id,
+        version: schema.providerCredentials.version,
+      })
+      .from(schema.integrationConnections)
+      .innerJoin(
+        schema.providerCredentials,
+        eq(
+          schema.providerCredentials.id,
+          schema.integrationConnections.credentialId,
+        ),
+      )
+      .where(
+        and(
+          eq(schema.integrationConnections.projectId, enrollment.projectId),
+          eq(schema.integrationConnections.tenantId, enrollment.tenantId),
+          eq(schema.integrationConnections.status, 'active'),
+          eq(schema.providerCredentials.status, 'active'),
+          eq(schema.integrationConnections.kind, 'wordpress-api'),
+        ),
+      )
+      .orderBy(desc(schema.providerCredentials.verifiedAt))
+      .limit(1);
+    return row;
+  }
+
+  private async resolveWordpressBinding(
+    database: ScopedDatabase,
+    enrollment: Enrollment,
+  ) {
+    const row = await this.readWordpressConnection(database, enrollment);
+    const evidence = parseWordpressEvidence(row?.evidence);
+    if (evidence === undefined)
+      throw new DomainError(
+        'credential_unavailable',
+        'wordpress-api verified binding evidence is unavailable.',
+        { code: 'wordpress-api_binding_evidence_missing' },
+      );
+    return {
+      restBase: evidence.restBase,
+      role: evidence.role,
+      siteOrigin: evidence.siteOrigin,
+      userId: evidence.userId,
+      username: evidence.username,
+    };
   }
 
   private async resolveManifestBindings(
@@ -1955,9 +2074,80 @@ export class EnrollmentService {
     Readonly<{
       checkName: string;
       evidence: Record<string, JsonValue>;
+      errorCategory?: string;
+      errorCode?: string;
       result: 'success' | 'failed';
     }>[]
   > {
+    const wordpressConnection =
+      enrollment.projectProfile === 'wordpress_rest'
+        ? await this.readWordpressConnection(database, enrollment)
+        : undefined;
+    const wordpressEvidence = parseWordpressEvidence(
+      wordpressConnection?.evidence,
+    );
+    const wordpressCheck = (
+      checkName: (typeof WORDPRESS_CHECKS)[number],
+    ): Readonly<{
+      checkName: string;
+      evidence: Record<string, JsonValue>;
+      errorCategory?: string;
+      errorCode?: string;
+      result: 'success' | 'failed';
+    }> => {
+      if (wordpressConnection === undefined || wordpressEvidence === undefined)
+        return {
+          checkName,
+          errorCategory: 'credential_unavailable',
+          errorCode: 'wordpress_credential_unverified',
+          evidence: { active: false },
+          result: 'failed',
+        };
+      if (checkName === 'wordpress_api_credential')
+        return {
+          checkName,
+          evidence: {
+            active: true,
+            credentialId: wordpressConnection.id,
+            role: wordpressEvidence.role,
+            ...(wordpressEvidence.riskWarning === undefined
+              ? {}
+              : { riskWarning: wordpressEvidence.riskWarning }),
+            siteOrigin: wordpressEvidence.siteOrigin,
+            username: wordpressEvidence.username,
+            version: wordpressConnection.version,
+          },
+          result: 'success',
+        };
+      if (checkName === 'wordpress_read_probe')
+        return {
+          checkName,
+          evidence: {
+            categoryCount: wordpressEvidence.readProbe.categoryCount,
+            latestPostTitles: wordpressEvidence.readProbe.latestPostTitles,
+            postCount: wordpressEvidence.readProbe.postCount,
+          },
+          result: 'success',
+        };
+      const productionDomain = enrollment.configuration.productionDomain;
+      const matches =
+        productionDomain !== undefined &&
+        sameHost(productionDomain, wordpressEvidence.siteOrigin);
+      return {
+        checkName,
+        evidence: {
+          productionDomain: productionDomain ?? null,
+          siteOrigin: wordpressEvidence.siteOrigin,
+        },
+        ...(matches
+          ? {}
+          : {
+              errorCategory: 'policy_denied',
+              errorCode: 'production_domain_mismatch',
+            }),
+        result: matches ? 'success' : 'failed',
+      };
+    };
     const direct = await database
       .select({
         id: schema.providerCredentials.id,
@@ -2030,6 +2220,12 @@ export class EnrollmentService {
     };
     return credentialChecksForProfile(enrollment.projectProfile).map(
       (checkName) => {
+        if (
+          checkName === 'wordpress_api_credential' ||
+          checkName === 'wordpress_read_probe' ||
+          checkName === 'production_domain_matches_site_url'
+        )
+          return wordpressCheck(checkName);
         const credential = match(checkName);
         return {
           checkName,

@@ -123,6 +123,9 @@ importers:
       '@binflow/vercel':
         specifier: workspace:*
         version: link:../../packages/vercel
+      '@binflow/wordpress':
+        specifier: workspace:*
+        version: link:../../packages/wordpress
       '@inquirer/prompts':
         specifier: 8.5.2
         version: 8.5.2(@types/node@24.13.3)
@@ -231,6 +234,9 @@ importers:
       '@binflow/vercel':
         specifier: workspace:*
         version: link:../../packages/vercel
+      '@binflow/wordpress':
+        specifier: workspace:*
+        version: link:../../packages/wordpress
       '@binflow/workflows':
         specifier: workspace:*
         version: link:../../packages/workflows
@@ -478,6 +484,9 @@ importers:
       '@binflow/vercel':
         specifier: workspace:*
         version: link:../vercel
+      '@binflow/wordpress':
+        specifier: workspace:*
+        version: link:../wordpress
       drizzle-orm:
         specifier: 0.45.2
         version: 0.45.2(@opentelemetry/api@1.9.1)(@types/pg@8.20.0)(kysely@0.29.5)(pg@8.23.0)
@@ -622,6 +631,9 @@ importers:
       uuid:
         specifier: 14.0.1
         version: 14.0.1
+      zod:
+        specifier: 4.4.3
+        version: 4.4.3
     devDependencies:
       '@types/node':
         specifier: 24.13.3
@@ -765,6 +777,31 @@ importers:
         specifier: 24.13.3
         version: 24.13.3
 
+  packages/wordpress:
+    dependencies:
+      '@binflow/contracts':
+        specifier: workspace:*
+        version: link:../contracts
+      '@binflow/db':
+        specifier: workspace:*
+        version: link:../db
+      '@binflow/domain':
+        specifier: workspace:*
+        version: link:../domain
+      '@binflow/integrations':
+        specifier: workspace:*
+        version: link:../integrations
+      '@binflow/secrets':
+        specifier: workspace:*
+        version: link:../secrets
+      zod:
+        specifier: 4.4.3
+        version: 4.4.3
+    devDependencies:
+      '@types/node':
+        specifier: 24.13.3
+        version: 24.13.3
+
   packages/workflows:
     dependencies:
       '@binflow/artifacts':
@@ -803,6 +840,9 @@ importers:
       '@binflow/tools':
         specifier: workspace:*
         version: link:../tools
+      '@binflow/wordpress':
+        specifier: workspace:*
+        version: link:../wordpress
       drizzle-orm:
         specifier: 0.45.2
         version: 0.45.2(@opentelemetry/api@1.9.1)(@types/pg@8.20.0)(kysely@0.29.5)(pg@8.23.0)

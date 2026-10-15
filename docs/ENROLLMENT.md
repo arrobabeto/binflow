@@ -115,6 +115,9 @@ Wait until verification status is success before Validate.
 | `/tools` access denied after active | Empty catalog (expected for some profiles) | Assign tools or wait for first stack capability |
 | WordPress verify `wordpress_rest_unavailable` | REST API disabled or blocked by a security plugin / firewall | Allow `/wp-json` for the Binflow user; re-verify |
 | WordPress verify `wordpress_auth_failed` | Wrong username/Application Password, or host strips `Authorization` header | Regenerate the Application Password; confirm the server passes Basic auth |
+| WordPress verify times out (`wordpress_timeout`, dashboard “did not respond in time”) | Slow or misconfigured server; each request waits 30 s and reads retry once | Previous credential status is kept; retry **Verify** once the site responds |
+| WordPress verify `wordpress_role_insufficient` | User is Author/Contributor/Subscriber or lacks `edit_posts` | Use an Editor (or Administrator, with warning) account |
+| Validate `production_domain_matches_site_url` failed | `productionDomain` host differs from the verified site origin | Set `productionDomain` to the WordPress site host, then re-validate |
 | WordPress verify timeout | Slow or misconfigured host (30 s limit) | Retry; previous status is preserved |
 | WordPress verify `policy_denied` (redirect) | Origin redirects to another host (e.g. `www` vs apex) | Enter the final HTTPS origin exactly |
 

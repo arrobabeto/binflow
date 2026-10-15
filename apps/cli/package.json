@@ -22,6 +22,7 @@
     "@binflow/orbitype": "workspace:*",
     "@binflow/secrets": "workspace:*",
     "@binflow/vercel": "workspace:*",
+    "@binflow/wordpress": "workspace:*",
     "@inquirer/prompts": "8.5.2",
     "commander": "15.0.0",
     "uuid": "14.0.1"

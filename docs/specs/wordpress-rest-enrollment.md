@@ -1,7 +1,7 @@
 # Feature spec: WordPress REST enrollment
 
 - Slug: `wordpress-rest-enrollment`
-- Status: Approved for implementation
+- Status: Implemented (pilot smoke pending)
 - Primary type: `stack_profile`
 - Secondary types: `integration`, `dashboard`, `security_trust`
 - Date: 2026-10-13

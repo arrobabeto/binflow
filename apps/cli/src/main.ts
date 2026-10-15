@@ -35,6 +35,7 @@ import {
 } from '@binflow/integrations';
 import { createTelegramCredentialVerifier } from '@binflow/messaging';
 import { createOrbitypeCredentialVerifier } from '@binflow/orbitype';
+import { createWordpressCredentialVerifier } from '@binflow/wordpress';
 import {
   createMasterKeyFile,
   encryptSecret,
@@ -253,7 +254,8 @@ integrations
       if (
         (kind === 'github-app' ||
           kind === 'vercel' ||
-          kind === 'orbitype-api') &&
+          kind === 'orbitype-api' ||
+          kind === 'wordpress-api') &&
         (options.tenant === undefined || options.project === undefined)
       ) {
         throw new Error(`${kind} requires --tenant and --project.`);
@@ -293,7 +295,8 @@ integrations
               break;
             }
             case 'vercel':
-            case 'orbitype-api': {
+            case 'orbitype-api':
+            case 'wordpress-api': {
               if (
                 scope.tenantId === undefined ||
                 scope.projectId === undefined
@@ -317,13 +320,14 @@ integrations
               configuration: kind === 'vercel' ? {} : prompted.configuration,
               ...((kind === 'github-app' ||
                 kind === 'vercel' ||
-                kind === 'orbitype-api') &&
+                kind === 'orbitype-api' ||
+                kind === 'wordpress-api') &&
               scope.tenantId !== undefined &&
               scope.projectId !== undefined
                 ? {
                     connection: {
                       configuration:
-                        kind === 'orbitype-api'
+                        kind === 'orbitype-api' || kind === 'wordpress-api'
                           ? prompted.configuration
                           : {
                               ...(kind === 'vercel'
@@ -405,6 +409,7 @@ integrations
             createGitHubCredentialVerifier(),
             createVercelCredentialVerifier(),
             createOrbitypeCredentialVerifier(),
+            createWordpressCredentialVerifier(),
           ],
         );
         if (options.all === true) return service.verifyAll(key);

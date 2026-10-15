@@ -108,6 +108,11 @@ Every capability reuses the same policy, translation, version, preview, approval
 - Content tools via create-tool after enrollment ships (allowlisted REST
   endpoints only); each tool defines its ADR-0006 preview. The WebOps Signed
   Preview plugin is no longer an activation gate.
+- **First tool (ADR-0067):** `create_blog_wordpress` — `/create_blog` with
+  as-is or generated mode, category suggestion or admin-approved new category,
+  Telegram / site / AI cover image, password-protected live preview, publish by
+  removing the password, trash on cancel. Spec:
+  [`docs/specs/create-blog-wordpress.md`](specs/create-blog-wordpress.md).
 - Validate new posts and edit flows against a WordPress staging/pilot site
   (pilot TBD).
 

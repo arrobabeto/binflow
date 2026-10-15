@@ -44,8 +44,10 @@
   repo; no Shopify Admin API in v1); first content tool family is inventory-
   driven `edit_image` (ADR-0059 / ADR-0058).
 - Post-MVP: `wordpress_rest` enrollment for classic self-hosted WordPress via
-  Application Password; no GitHub or Vercel; empty catalog at activation; no
-  WordPress content tools yet (ADR-0066).
+  Application Password; no GitHub or Vercel; empty catalog at activation
+  (ADR-0066). First content tool: `create_blog_wordpress` (`/create_blog`,
+  as-is or generated, monolingual, password-protected live preview, trash on
+  cancel; ADR-0067).
 
 ### First capability
 
@@ -84,8 +86,10 @@
   ADR-0052 / ADR-0053).
 - Production VPS provisioning.
 - Validated German publication until a compatible real pilot exists.
-- WordPress content tools (enrollment only is accepted post-MVP; ADR-0066).
-  Headless WordPress, WooCommerce and WPML/Polylang remain unplanned.
+- WordPress content tools beyond `create_blog_wordpress` (ADR-0067): no page
+  edits, post edits/deletes, SEO-plugin fields, multilingual posts or
+  scheduled publication. Headless WordPress, WooCommerce and WPML/Polylang
+  remain unplanned.
 - Orbitype content tools beyond the accepted `create_blog_orbitype` dual-write
   create path (ADR-0047) and the accepted page/image edit capabilities
   (ADR-0051 / ADR-0052); enrollment remains ADR-0045.

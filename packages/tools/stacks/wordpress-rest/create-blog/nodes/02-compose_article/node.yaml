@@ -1,0 +1,4 @@
+kind: compute
+label: Format client text as-is
+nodeKind: wordpress.compose_as_is@1
+acceptsClientCustomization: false

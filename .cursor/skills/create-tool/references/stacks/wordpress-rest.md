@@ -8,7 +8,7 @@
 | Empty catalog at ACTIVE | **Yes** |
 | Required credentials | `wordpress-api` (Application Password; Editor or Administrator with warning), OpenAI, Telegram client; **`productionDomain` required** (host = site origin) |
 | Enrollment | **No GitHub, no Vercel** (rejected for this profile). Manifest has no `repository` / `deployment`; carries `wordpress` block. Locales per client; default monolingual + `translationPolicy: none`. |
-| Implementation guide | TBD until first tool ships (`docs/guides/wordpress-rest-tool-implementation.md` when it does) |
+| Implementation guide | Reference tool: `create_blog_wordpress` ([spec](../../../../../docs/specs/create-blog-wordpress.md), ADR-0067). Reuse its patterns: `@binflow/wordpress` port with a per-tool `WordpressRouteRule[]` allowlist, synthetic `wp:` / `wp-post:` approval evidence, `terminalResult.wordpress` checkpoint, worker branch in `apps/worker/src/wordpress-blog-job.ts` (no GitHub/Vercel context), Markdown-only model output rendered by escaping code. |
 | BSI implementer brief | [docs/guides/BSI/stacks/wordpress-rest.md](../../../../../docs/guides/BSI/stacks/wordpress-rest.md) (optional; declare-only; no Git inventory) |
 
 ## Path / route conventions

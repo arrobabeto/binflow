@@ -8,6 +8,10 @@ const profileOptions = [
     label: 'Shopify Liquid theme (shopify_liquid)',
     value: 'shopify_liquid',
   },
+  {
+    label: 'WordPress via REST API (wordpress_rest)',
+    value: 'wordpress_rest',
+  },
 ];
 
 const form = reactive({
@@ -16,7 +20,8 @@ const form = reactive({
   projectProfile: 'astro_repo' as
     | 'astro_repo'
     | 'astro_orbitype'
-    | 'shopify_liquid',
+    | 'shopify_liquid'
+    | 'wordpress_rest',
   tenantDisplayName: 'Webbin',
   tenantKey: 'webbin',
 });
@@ -26,7 +31,7 @@ const saving = ref(false);
 watch(
   () => form.projectProfile,
   (profile) => {
-    if (profile === 'astro_orbitype' || profile === 'shopify_liquid') {
+    if (profile !== 'astro_repo') {
       if (form.tenantKey === 'webbin') {
         form.tenantDisplayName = '';
         form.tenantKey = '';

@@ -28,6 +28,7 @@
     "@binflow/projects": "workspace:*",
     "@binflow/secrets": "workspace:*",
     "@binflow/vercel": "workspace:*",
+    "@binflow/wordpress": "workspace:*",
     "@binflow/workflows": "workspace:*",
     "bullmq": "6.0.11",
     "drizzle-orm": "0.45.2",

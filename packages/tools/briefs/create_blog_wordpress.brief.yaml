@@ -1,0 +1,277 @@
+identity:
+  id: create_blog_wordpress
+  version: 1
+  stack: wordpress-rest
+  toolDir: create-blog
+  graphVersionSuffix: '@1'
+  displayName: Create blog
+  command: /create_blog
+  description: >
+    Creates a WordPress blog post through the REST API. The client picks
+    "as-is" (their text verbatim, interview only fills gaps) or "generate"
+    (article written from base information with the project style
+    customization). Preview is the real post protected by a WordPress
+    password (ADR-0067); approval removes the password, cancel trashes it.
+  profile: wordpress_rest
+  executorId: workflow.create_blog_wordpress@1
+  riskClass: medium
+  requiresPreview: true
+  mutationClass: create
+  approvalPolicyId: wordpress-rest-blog-publication@1
+
+specTitle: Create blog (WordPress REST) — capability specification
+
+migration:
+  inputSchemaId: create_blog_wordpress.input@1
+  outputSchemaId: create_blog_wordpress.output@1
+  allowedProfiles:
+    - wordpress_rest
+  requiredPermissions:
+    - wordpress:posts:write
+    - wordpress:media:write
+    - wordpress:categories:write
+  timeoutSeconds: 1800
+  retryPolicy:
+    maxAttempts: 3
+    retryableErrors:
+      - provider_retryable
+  budget:
+    maxEstimatedCostCents: 400
+    maxModelCalls: 6
+    maxTokens: 80000
+
+nodes:
+  - sortPrefix: '01'
+    id: catalog_sync
+    kind: effect
+    nodeKind: wordpress.catalog_sync@1
+    label: Read WordPress categories
+    acceptsClientCustomization: false
+    parameters:
+      catalogScope: blog
+    permissions:
+      - wordpress:categories:read
+  - sortPrefix: '02'
+    id: compose_article
+    kind: compute
+    nodeKind: wordpress.compose_as_is@1
+    label: Format client text as-is
+    acceptsClientCustomization: false
+  - sortPrefix: '03'
+    id: generate
+    kind: agent
+    nodeKind: content.generate_blog@1
+    label: Generate article from base information
+    workload: text
+    model: gpt-5.6-terra
+    effort: medium
+    acceptsClientCustomization: true
+    rulesRef: shared/rules/editorial-content@1
+  - sortPrefix: '04'
+    id: prepare_image
+    kind: agent
+    nodeKind: content.prepare_image@1
+    label: Generate cover image
+    workload: image
+    model: gpt-image-2
+    acceptsClientCustomization: true
+    parameters:
+      quality: high
+      size: 1536x1024
+  - sortPrefix: '05'
+    id: upload_media
+    kind: effect
+    nodeKind: wordpress.upload_media@1
+    label: Upload featured image
+    acceptsClientCustomization: false
+    permissions:
+      - wordpress:media:write
+  - sortPrefix: '06'
+    id: upsert_protected_post
+    kind: effect
+    nodeKind: wordpress.upsert_protected_post@1
+    label: Create or update password-protected post
+    acceptsClientCustomization: false
+    permissions:
+      - wordpress:posts:write
+  - sortPrefix: '07'
+    id: verify_protected_preview
+    kind: effect
+    nodeKind: wordpress.verify_protected_preview@1
+    label: Verify protected preview
+    acceptsClientCustomization: false
+    permissions:
+      - wordpress:posts:read
+  - sortPrefix: '08'
+    id: awaiting_client_approval
+    kind: interrupt
+    nodeKind: await.client_approval@1
+    label: Client preview approval
+    acceptsClientCustomization: false
+    actor: client
+    ttlHours: 72
+  - sortPrefix: '09'
+    id: apply_revision
+    kind: agent
+    nodeKind: content.apply_revision@1
+    label: Apply client revision
+    workload: text
+    model: gpt-5.6-terra
+    effort: medium
+    acceptsClientCustomization: true
+    rulesRef: shared/rules/editorial-content@1
+  - sortPrefix: '10'
+    id: awaiting_admin_approval
+    kind: interrupt
+    nodeKind: await.admin_approval@1
+    label: Admin approval for new category
+    acceptsClientCustomization: false
+    actor: admin
+    ttlHours: 48
+  - sortPrefix: '11'
+    id: create_category
+    kind: effect
+    nodeKind: wordpress.create_category@1
+    label: Create approved category
+    acceptsClientCustomization: false
+    permissions:
+      - wordpress:categories:write
+  - sortPrefix: '12'
+    id: unlock_post
+    kind: effect
+    nodeKind: wordpress.unlock_post@1
+    label: Remove preview password
+    acceptsClientCustomization: false
+    permissions:
+      - wordpress:posts:write
+  - sortPrefix: '13'
+    id: verify_production
+    kind: effect
+    nodeKind: wordpress.verify_production@1
+    label: Verify public post
+    acceptsClientCustomization: false
+    permissions:
+      - wordpress:posts:read
+  - sortPrefix: '14'
+    id: trash_post
+    kind: effect
+    nodeKind: wordpress.trash_post@1
+    label: Move preview post to trash
+    acceptsClientCustomization: false
+    permissions:
+      - wordpress:posts:write
+  - sortPrefix: '15'
+    id: completed
+    kind: compute
+    nodeKind: workflow.completed@1
+    label: Completed
+    acceptsClientCustomization: false
+
+edges:
+  - from: catalog_sync
+    to: compose_article
+    when: blog_mode.is_as_is
+  - from: catalog_sync
+    to: generate
+    when: blog_mode.is_generate
+  - from: compose_article
+    to: prepare_image
+    when: image.is_ai_generated
+  - from: compose_article
+    to: upload_media
+    when: image.is_client_supplied
+  - from: generate
+    to: prepare_image
+    when: image.is_ai_generated
+  - from: generate
+    to: upload_media
+    when: image.is_client_supplied
+  - from: prepare_image
+    to: upload_media
+  - from: upload_media
+    to: upsert_protected_post
+  - from: upsert_protected_post
+    to: verify_protected_preview
+  - from: verify_protected_preview
+    to: awaiting_client_approval
+  - from: awaiting_client_approval
+    to: apply_revision
+    when: review.is_revision
+  - from: apply_revision
+    to: upsert_protected_post
+  - from: awaiting_client_approval
+    to: trash_post
+    when: review.is_cancelled
+  - from: awaiting_client_approval
+    to: awaiting_admin_approval
+    when: category.is_new
+  - from: awaiting_client_approval
+    to: unlock_post
+    when: category.is_existing_or_normalized
+  - from: awaiting_admin_approval
+    to: create_category
+  - from: awaiting_admin_approval
+    to: trash_post
+    when: review.is_cancelled
+  - from: create_category
+    to: unlock_post
+  - from: unlock_post
+    to: verify_production
+  - from: verify_production
+    to: completed
+
+contentSchemaFields: []
+
+customizableNodeIds:
+  - generate
+  - prepare_image
+  - apply_revision
+
+layerAssignments:
+  - layer: code
+    behavior: >
+      Mode buttons, gap interview, category suggestion, WordPress REST write
+      allowlist (posts, media, categories), lookup-before-create idempotency,
+      password-protected preview evidence, approval drift check, trash on
+      cancel, Telegram timeout notices.
+  - layer: manifest
+    behavior: >
+      wordpress.siteOrigin, restBase, productionOrigin, verified userId and
+      monolingual contentLocales. No repository or deployment.
+  - layer: customization
+    behavior: >
+      Voice, audience, structure and cover mood for generate, apply_revision
+      and prepare_image only. Never alters as-is text, routes, models or
+      approvals.
+
+typedErrors:
+  - code: wordpress_route_denied
+    when: A call targets a route or method outside the capability allowlist.
+  - code: wordpress_timeout
+    when: The WordPress host does not answer within 30 s (retryable; client notified).
+  - code: wordpress_category_missing
+    when: The picked existing category no longer exists at execution.
+  - code: wordpress_image_origin_denied
+    when: An image URL is not on the enrolled site host.
+  - code: wordpress_image_invalid
+    when: Image bytes are not JPEG/PNG/WebP or exceed 10 MB.
+  - code: wordpress_preview_not_protected
+    when: Unauthenticated REST does not report the post content as protected.
+  - code: wordpress_post_changed
+    when: Post modified_gmt or content hash drifted from the approved binding.
+  - code: wordpress_publish_unverified
+    when: Public verification fails after removing the password.
+
+verification:
+  scenarios:
+    - As-is mode publishes the client text verbatim; only gaps are asked.
+    - Generate mode applies the generate customization section only.
+    - Preview is a password-protected live post; client gets URL + password.
+    - wp-admin edit after preview invalidates approval and reopens review.
+    - Approve removes the password and verifies the public post.
+    - Cancel or admin reject moves the post to trash (no force delete).
+    - New category requires admin approval before it is created.
+    - Retries adopt the existing post, media and category (no duplicates).
+    - Only allowlisted WordPress routes are callable.
+  fixtures:
+    - docs/customizations/example-create-blog-wordpress.md

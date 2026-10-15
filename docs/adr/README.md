@@ -72,5 +72,6 @@ ADRs preserve why durable decisions exist. Accepted ADRs are binding until a lat
 | [0064](0064-optional-bsi-astro.md)                          | Binflow Surface Inventory (BSI) general + per-stack briefs   | Accepted |
 | [0065](0065-local-dashboard-lan-origin.md)                   | Exact trusted origin for private-LAN local dashboard access | Accepted |
 | [0066](0066-wordpress-rest-enrollment.md)                    | WordPress REST enrollment (`wordpress_rest`) without GitHub | Accepted |
+| [0067](0067-wordpress-password-protected-preview.md)         | WordPress preview artifact = password-protected live post (amends 0006) | Accepted |
 
 Use [0000-template.md](0000-template.md) for new decisions.

@@ -1,11 +1,39 @@
 import { describe, expect, it } from 'vitest';
 
 import {
+  allowsEmptyCapabilityCatalog,
   astroRepoGlobalProfile,
   buildProjectManifest,
+  buildWordpressRestManifest,
+  productionDomainMatchesWordpressSite,
   type BuildManifestInput,
+  type BuildWordpressRestManifestInput,
   webbinBudgetDefaults,
 } from '../src/index.js';
+
+const wordpressInput = (): BuildWordpressRestManifestInput => ({
+  configuration: {
+    budgetPolicy: webbinBudgetDefaults,
+    clientConversationLocale: 'es',
+    contentLocales: ['es'],
+    defaultContentLocale: 'es',
+    productionDomain: 'https://blog.example.com/',
+    requiredLocales: ['es'],
+    slugLocale: 'es',
+    translationPolicy: 'none',
+  },
+  id: 'manifest-wp',
+  projectId: 'project-wp',
+  validatedAt: new Date('2026-10-13T00:00:00.000Z'),
+  verifiedWordpress: {
+    restBase: 'https://blog.example.com/wp-json/',
+    role: 'editor',
+    siteOrigin: 'https://blog.example.com',
+    userId: 7,
+    username: 'binflow',
+  },
+  version: 1,
+});
 
 const input = (): BuildManifestInput => ({
   configuration: {
@@ -234,6 +262,63 @@ describe('project manifest', () => {
             installationId: '1',
             repository: 'acme/elayva-theme',
           },
+        },
+      }),
+    ).toThrow(/productionDomain/);
+  });
+
+  it('builds a git-free wordpress_rest manifest with an empty catalog', () => {
+    const manifest = buildWordpressRestManifest(wordpressInput());
+
+    expect(manifest.profile).toBe('wordpress_rest');
+    expect(manifest.content).toEqual({
+      collections: { es: { directory: 'posts', routePrefix: '/' } },
+      publicationTargets: ['wordpress'],
+      source: 'wordpress',
+    });
+    expect(manifest.enabledCapabilities).toEqual([]);
+    expect(manifest.globalProfileVersion).toBe('wordpress_rest@1');
+    expect(manifest.wordpress).toEqual({
+      productionOrigin: 'https://blog.example.com',
+      restBase: 'https://blog.example.com/wp-json/',
+      role: 'editor',
+      siteOrigin: 'https://blog.example.com',
+      userId: 7,
+      username: 'binflow',
+    });
+    expect(manifest).not.toHaveProperty('repository');
+    expect(manifest).not.toHaveProperty('deployment');
+    expect(allowsEmptyCapabilityCatalog('wordpress_rest')).toBe(true);
+    expect(buildWordpressRestManifest(wordpressInput()).fingerprint).toBe(
+      manifest.fingerprint,
+    );
+  });
+
+  it('rejects a wordpress_rest productionDomain on another host', () => {
+    expect(() =>
+      buildWordpressRestManifest({
+        ...wordpressInput(),
+        configuration: {
+          ...wordpressInput().configuration,
+          productionDomain: 'https://other.example.com',
+        },
+      }),
+    ).toThrow(/productionDomain must match/);
+    expect(
+      productionDomainMatchesWordpressSite(
+        'https://Blog.Example.com',
+        'https://blog.example.com',
+      ),
+    ).toBe(true);
+  });
+
+  it('requires productionDomain for wordpress_rest', () => {
+    expect(() =>
+      buildWordpressRestManifest({
+        ...wordpressInput(),
+        configuration: {
+          ...wordpressInput().configuration,
+          productionDomain: undefined,
         },
       }),
     ).toThrow(/productionDomain/);

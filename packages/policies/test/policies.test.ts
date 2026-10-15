@@ -18,7 +18,17 @@ import {
 
 describe('code-owned capability policy', () => {
   it('exposes Webbin blog, project and delete capabilities', () => {
-    expect(capabilityRegistry).toHaveLength(11);
+    expect(capabilityRegistry).toHaveLength(12);
+    expect(
+      capabilityRegistry.find((definition) => definition.id === 'create_blog_wordpress'),
+    ).toEqual(
+      expect.objectContaining({
+        command: '/create_blog',
+        executorId: 'workflow.create_blog_wordpress@1',
+        requiresPreview: true,
+        version: 1,
+      }),
+    );
     expect(
       capabilityRegistry.find((definition) => definition.id === 'edit_text_shopify'),
     ).toEqual(

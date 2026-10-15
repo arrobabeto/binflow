@@ -42,6 +42,11 @@ export const knownPredicates = Object.freeze([
   'category.is_new',
   'category.is_existing_or_normalized',
   'approval.client_publish',
+  'blog_mode.is_as_is',
+  'blog_mode.is_generate',
+  'image.is_ai_generated',
+  'image.is_client_supplied',
+  'review.is_cancelled',
 ] as const);
 
 const nodeConfigSchema = z

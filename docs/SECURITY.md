@@ -25,6 +25,13 @@ Trusted only after verification:
 - GitHub App installation token scoped to the configured repository and downscoped to the current operation.
 - WordPress Application Password (`wordpress-api`) sent only to the verified
   HTTPS site origin of the same project (ADR-0066).
+- `create_blog_wordpress` writes only `wp/v2/posts`, `wp/v2/media` and
+  `wp/v2/categories`; deletes are trash-only (`force` refused in code). Model
+  output is limited Markdown rendered by escaping code, and titles/excerpts are
+  escaped plain text, so no model-authored HTML reaches a site whose user has
+  `unfiltered_html`. The per-request preview password (ADR-0067) is sent only
+  to the requesting client's chat and cleared from `terminalResult` when the
+  request closes; snapshot artifacts omit it.
 - Vercel events validated and correlated to the configured project.
 - Data returned by adapters after schema and ownership checks.
 

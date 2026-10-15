@@ -1,0 +1,6 @@
+kind: effect
+label: Move preview post to trash
+nodeKind: wordpress.trash_post@1
+acceptsClientCustomization: false
+permissions:
+  - wordpress:posts:write

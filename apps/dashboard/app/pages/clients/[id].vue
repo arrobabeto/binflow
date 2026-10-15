@@ -76,7 +76,33 @@ const assignableTools = computed(() => {
 const allowsEmptyTools = computed(
   () =>
     enrollment.value?.projectProfile === 'astro_orbitype' ||
-    enrollment.value?.projectProfile === 'shopify_liquid',
+    enrollment.value?.projectProfile === 'shopify_liquid' ||
+    enrollment.value?.projectProfile === 'wordpress_rest',
+);
+const isWordpress = computed(
+  () => enrollment.value?.projectProfile === 'wordpress_rest',
+);
+const wordpressProbe = computed(() => {
+  const evidence = attempts.value.find(
+    (attempt) =>
+      attempt.checkName === 'wordpress_read_probe' &&
+      attempt.result === 'success',
+  )?.evidence;
+  if (evidence === undefined) return null;
+  return {
+    categoryCount: Number(evidence.categoryCount ?? 0),
+    latestPostTitles: Array.isArray(evidence.latestPostTitles)
+      ? evidence.latestPostTitles.map(String)
+      : [],
+    postCount: Number(evidence.postCount ?? 0),
+  };
+});
+const wordpressAdminWarning = computed(() =>
+  attempts.value.some(
+    (attempt) =>
+      attempt.checkName === 'wordpress_api_credential' &&
+      attempt.evidence.riskWarning === 'administrator_role',
+  ),
 );
 const platformLocales = ['en', 'es', 'de'] as const;
 const isWebbinLocaleOverlay = computed(
@@ -510,9 +536,23 @@ const savePiloterCapabilities = () =>
       </template>
     </PageHeader>
     <UAlert
+      v-if="isWordpress"
+      color="warning"
+      title="Activation remains fail-closed"
+      description="WordPress REST projects need verified wordpress-api, OpenAI and Telegram client credentials (Integrations page). GitHub and Vercel are not used. Verification only reads WordPress; nothing is changed on the site."
+    />
+    <UAlert
+      v-else
       color="warning"
       title="Activation remains fail-closed"
       description="Mutable GitHub, Vercel, Telegram, catalog and pairing evidence must be completed by later modules. No Webbin mutation is performed here."
+    />
+    <UAlert
+      v-if="isWordpress && wordpressAdminWarning"
+      class="mt-4"
+      color="error"
+      title="WordPress user is an Administrator"
+      description="The Application Password belongs to an Administrator. Binflow only needs Editor; use a dedicated Editor user to reduce risk if the password leaks."
     />
     <div class="mt-8 grid gap-6 lg:grid-cols-[1fr_20rem]">
       <UCard class="binflow-surface !ring-0">
@@ -857,6 +897,21 @@ const savePiloterCapabilities = () =>
           ><p class="text-sm font-semibold">One-time pairing URL</p>
           <UInput class="mt-3 w-full" :model-value="pairingUrl" readonly
         /></UCard>
+        <UCard v-if="isWordpress && wordpressProbe"
+          ><p class="font-semibold">WordPress read probe</p>
+          <p class="mt-2 text-sm text-muted">
+            {{ wordpressProbe.postCount }} posts ·
+            {{ wordpressProbe.categoryCount }} categories
+          </p>
+          <ul
+            v-if="wordpressProbe.latestPostTitles.length"
+            class="mt-3 list-disc pl-5 text-sm"
+          >
+            <li v-for="title in wordpressProbe.latestPostTitles" :key="title">
+              {{ title }}
+            </li>
+          </ul></UCard
+        >
         <UCard v-if="attempts.length"
           ><p class="font-semibold">Latest validation</p>
           <div class="mt-3 grid gap-2">
@@ -865,7 +920,13 @@ const savePiloterCapabilities = () =>
               :key="attempt.checkName"
               class="flex items-center justify-between gap-2 text-sm"
             >
-              <span>{{ attempt.checkName }}</span
+              <span
+                >{{ attempt.checkName
+                }}<span
+                  v-if="attempt.errorCode"
+                  class="ml-2 font-mono text-xs text-muted"
+                  >{{ attempt.errorCode }}</span
+                ></span
               ><UBadge
                 :color="attempt.result === 'success' ? 'success' : 'error'"
                 variant="soft"

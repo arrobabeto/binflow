@@ -83,6 +83,25 @@ const evidenceSchemas = {
       readOnlyProbe: z.literal('select_1'),
     })
     .strict(),
+  'wordpress-api': z
+    .object({
+      authenticated: z.literal(true),
+      externalResourceId: z.string().min(1),
+      readProbe: z
+        .object({
+          categoryCount: z.number().int().nonnegative(),
+          latestPostTitles: z.array(z.string().max(160)).max(5),
+          postCount: z.number().int().nonnegative(),
+        })
+        .strict(),
+      restBase: z.url(),
+      riskWarning: z.literal('administrator_role').optional(),
+      role: z.enum(['editor', 'administrator']),
+      siteOrigin: z.url(),
+      userId: z.number().int().positive(),
+      username: z.string().min(1),
+    })
+    .strict(),
 } as const satisfies Record<IntegrationKind, z.ZodType>;
 
 const parseEvidence = (
@@ -107,6 +126,8 @@ export type CredentialVerifierInput = Readonly<{
 
 export interface CredentialVerifier {
   readonly kinds: readonly IntegrationKind[];
+  /** Overall budget for one verify call; defaults to the service timeout. */
+  readonly timeoutMs?: number;
   verify(input: CredentialVerifierInput): Promise<VerificationEvidence>;
 }
 
@@ -240,7 +261,9 @@ export class CredentialVerificationService {
         await verifier.verify({
           credential,
           masterKey,
-          signal: AbortSignal.timeout(this.options.timeoutMs ?? 15_000),
+          signal: AbortSignal.timeout(
+            verifier.timeoutMs ?? this.options.timeoutMs ?? 15_000,
+          ),
         }),
       );
     } catch (cause) {

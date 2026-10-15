@@ -40,10 +40,19 @@ export const integrationKindSchema = z.enum([
   'github-app',
   'vercel',
   'orbitype-api',
+  'wordpress-api',
 ]);
 
 /** Profiles selectable for new enrollments (post-MVP expansions). */
 export const selectableEnrollmentProfileSchema = z.enum([
+  'astro_repo',
+  'astro_orbitype',
+  'shopify_liquid',
+  'wordpress_rest',
+]);
+
+/** Profiles whose manifests carry a GitHub `repository` (ADR-0066). */
+export const gitManifestProfileSchema = z.enum([
   'astro_repo',
   'astro_orbitype',
   'shopify_liquid',
@@ -150,6 +159,17 @@ export const integrationCandidateInputSchema = z.discriminatedUnion('kind', [
       kind: z.literal('orbitype-api'),
       projectKey: integrationScopeKeySchema,
       tenantKey: integrationScopeKeySchema,
+    })
+    .strict(),
+  z
+    .object({
+      alias: credentialAliasSchema,
+      applicationPassword: z.string().trim().min(16).max(200),
+      kind: z.literal('wordpress-api'),
+      projectKey: integrationScopeKeySchema,
+      siteOrigin: z.url().max(500),
+      tenantKey: integrationScopeKeySchema,
+      username: z.string().trim().min(1).max(120),
     })
     .strict(),
 ]);
@@ -1201,8 +1221,95 @@ export const openTicketCollectInputSchema = z
   })
   .strict();
 
+export const wordpressBlogModeSchema = z.enum(['as_is', 'generate']);
+
+export const wordpressBlogCategoryChoiceSchema = z.discriminatedUnion('kind', [
+  z
+    .object({
+      id: z.number().int().positive(),
+      kind: z.literal('existing'),
+      name: z.string().trim().min(1).max(200),
+    })
+    .strict(),
+  z
+    .object({
+      kind: z.literal('new'),
+      name: z.string().trim().min(2).max(60),
+    })
+    .strict(),
+]);
+
+export const wordpressBlogImageChoiceSchema = z.discriminatedUnion('source', [
+  z
+    .object({
+      artifactKey: z.string().trim().min(1).max(500),
+      source: z.literal('telegram'),
+    })
+    .strict(),
+  z.object({ source: z.literal('site_url'), url: z.url() }).strict(),
+  z.object({ source: z.literal('ai') }).strict(),
+]);
+
+export const wordpressBlogCollectionStepSchema = z.enum([
+  'choose_mode',
+  'await_content',
+  'await_title',
+  'await_excerpt',
+  'choose_category',
+  'await_new_category',
+  'choose_image',
+  'ready',
+]);
+
+/** `create_blog_wordpress@1` (ADR-0067). As-is content is never rewritten. */
+export const createBlogWordpressInputSchema = z.discriminatedUnion('mode', [
+  z
+    .object({
+      blogMode: wordpressBlogModeSchema.optional(),
+      category: wordpressBlogCategoryChoiceSchema.optional(),
+      collectionStep: wordpressBlogCollectionStepSchema,
+      content: z.string().max(60_000).default(''),
+      excerpt: z.string().trim().max(300).optional(),
+      excerptSkipped: z.boolean().default(false),
+      image: wordpressBlogImageChoiceSchema.optional(),
+      mode: z.literal('collect'),
+      projectId: z.string().min(1),
+      suggestedCategories: z
+        .array(
+          z
+            .object({
+              id: z.number().int().positive(),
+              name: z.string().trim().min(1).max(200),
+            })
+            .strict(),
+        )
+        .max(12)
+        .default([]),
+      title: z.string().trim().min(3).max(200).optional(),
+    })
+    .strict(),
+  z
+    .object({
+      blogMode: wordpressBlogModeSchema,
+      category: wordpressBlogCategoryChoiceSchema,
+      content: z.string().trim().min(1).max(60_000),
+      excerpt: z.string().trim().max(300).optional(),
+      image: wordpressBlogImageChoiceSchema,
+      mode: z.literal('execute'),
+      projectId: z.string().min(1),
+      revisionNotes: z.array(z.string().trim().min(1).max(4_000)).max(10).default([]),
+      title: z.string().trim().min(3).max(200).optional(),
+    })
+    .strict(),
+]);
+
+export type CreateBlogWordpressInput = z.infer<
+  typeof createBlogWordpressInputSchema
+>;
+
 export const capabilityInputSchema = z.union([
   createBlogDraftInputSchema,
+  createBlogWordpressInputSchema,
   createProjectAstroInputSchema,
   deleteBlogDraftInputSchema,
   deleteProjectAstroInputSchema,
@@ -1341,7 +1448,7 @@ export const projectManifestSchema = z
     globalProfileVersion: z.string().min(1),
     graphVersion: z.string().min(1),
     id: z.string().min(1),
-    profile: selectableEnrollmentProfileSchema,
+    profile: gitManifestProfileSchema,
     projectId: z.string().min(1),
     repository: z
       .object({
@@ -1363,6 +1470,60 @@ export const projectManifestSchema = z
   })
   .strict();
 
+export const wordpressRoleSchema = z.enum(['editor', 'administrator']);
+
+/**
+ * `wordpress_rest` manifest (ADR-0066): no GitHub `repository`, no
+ * `deployment`; the site is reached only through the verified REST API.
+ */
+export const wordpressRestManifestSchema = z
+  .object({
+    budgetPolicy: projectBudgetPolicySchema,
+    content: z
+      .object({
+        collections: z
+          .partialRecord(supportedLocaleSchema, manifestCollectionSchema)
+          .refine((collections) => Object.keys(collections).length > 0),
+        publicationTargets: z.array(z.literal('wordpress')).length(1),
+        source: z.literal('wordpress'),
+      })
+      .strict(),
+    contentLocales: z.array(supportedLocaleSchema).min(1).max(3),
+    conversationLocale: supportedLocaleSchema,
+    defaultContentLocale: supportedLocaleSchema,
+    enabledCapabilities: z.array(capabilityBindingSchema),
+    fingerprint: z.string().regex(/^[a-f0-9]{64}$/),
+    globalProfileVersion: z.string().min(1),
+    graphVersion: z.string().min(1),
+    id: z.string().min(1),
+    profile: z.literal('wordpress_rest'),
+    projectId: z.string().min(1),
+    requiredContentLocales: z.array(supportedLocaleSchema).min(1).max(3),
+    rulesVersion: z.string().min(1),
+    slugLocale: supportedLocaleSchema,
+    status: projectManifestStatusSchema,
+    translationPolicy: translationPolicySchema,
+    validationProfileId: z.string().min(1),
+    validatedAt: z.iso.datetime(),
+    version: resourceVersionSchema,
+    wordpress: z
+      .object({
+        productionOrigin: httpsUrlSchema,
+        restBase: z.url(),
+        role: wordpressRoleSchema,
+        siteOrigin: z.url(),
+        userId: z.number().int().positive(),
+        username: z.string().min(1),
+      })
+      .strict(),
+  })
+  .strict();
+
+export const anyProjectManifestSchema = z.union([
+  projectManifestSchema,
+  wordpressRestManifestSchema,
+]);
+
 export const globalProfileSummarySchema = z
   .object({
     id: selectableEnrollmentProfileSchema,
@@ -1374,7 +1535,7 @@ export const globalProfileSummarySchema = z
 export const projectManifestResponseSchema = z
   .object({
     globalProfile: globalProfileSummarySchema,
-    manifest: projectManifestSchema.nullable(),
+    manifest: anyProjectManifestSchema.nullable(),
   })
   .strict();
 
@@ -1443,6 +1604,7 @@ export const requestStateSchema = z.enum([
 export const capabilityIdSchema = z.enum([
   'create_blog_draft',
   'create_blog_orbitype',
+  'create_blog_wordpress',
   'create_project_astro',
   'create_project_draft',
   'delete_blog_draft',
@@ -1994,6 +2156,12 @@ const telegramActionTokenSchema = z
       'adjust_revision_plan',
       'cancel_revision',
       'toggle_menu_cta',
+      'pick_wp_blog_mode',
+      'wp_blog_content_done',
+      'wp_blog_skip_excerpt',
+      'pick_wp_blog_category',
+      'wp_blog_new_category',
+      'pick_wp_blog_image',
       'start_open_ticket',
       'show_tools',
       'pick_ticket_urgency',
@@ -2054,6 +2222,7 @@ export const workflowResumeSignalSchema = z
         'publish',
         'reconcile',
         'restore_orbitype_preview',
+        'discard_wordpress_post',
       ])
       .default('execute'),
     requestId: z.string().min(1),
@@ -2325,6 +2494,9 @@ export type TelegramIngress = z.infer<typeof telegramIngressSchema>;
 export type TelegramReply = z.infer<typeof telegramReplySchema>;
 export type WorkflowResumeSignal = z.infer<typeof workflowResumeSignalSchema>;
 export type ProjectManifest = z.infer<typeof projectManifestSchema>;
+export type WordpressRestManifest = z.infer<typeof wordpressRestManifestSchema>;
+export type AnyProjectManifest = z.infer<typeof anyProjectManifestSchema>;
+export type WordpressRole = z.infer<typeof wordpressRoleSchema>;
 export type GlobalProfileSummary = z.infer<typeof globalProfileSummarySchema>;
 export type ProjectManifestResponse = z.infer<
   typeof projectManifestResponseSchema
