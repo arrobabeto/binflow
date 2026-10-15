@@ -4,9 +4,12 @@ import {
   projectBudgetPolicySchema,
   projectManifestSchema,
   webbinPilotBinding,
+  wordpressRestManifestSchema,
   type EnrollmentConfiguration,
   type GlobalProfileSummary,
   type ProjectManifest,
+  type WordpressRestManifest,
+  type WordpressRole,
 } from '@binflow/contracts';
 import { DomainError } from '@binflow/domain';
 import {
@@ -31,6 +34,12 @@ export const shopifyLiquidGlobalProfile = {
   version: 'shopify_liquid@1',
 } as const satisfies GlobalProfileSummary;
 
+export const wordpressRestGlobalProfile = {
+  id: 'wordpress_rest',
+  supportedLocales: ['en', 'es', 'de'],
+  version: 'wordpress_rest@1',
+} as const satisfies GlobalProfileSummary;
+
 export type SelectableManifestProfile =
   | 'astro_repo'
   | 'astro_orbitype'
@@ -39,7 +48,9 @@ export type SelectableManifestProfile =
 export const allowsEmptyCapabilityCatalog = (
   profile: string,
 ): boolean =>
-  profile === 'astro_orbitype' || profile === 'shopify_liquid';
+  profile === 'astro_orbitype' ||
+  profile === 'shopify_liquid' ||
+  profile === 'wordpress_rest';
 
 export const webbinBudgetDefaults = {
   maxEstimatedCostCentsPerDay: 2_000,
@@ -63,7 +74,7 @@ export const normalizeProductionOrigin = (value: string): string => {
 
 export const resolveManifestProductionOrigin = (
   configuration: EnrollmentConfiguration,
-  profile: SelectableManifestProfile,
+  profile: SelectableManifestProfile | 'wordpress_rest',
 ): string => {
   if (
     configuration.productionDomain !== undefined &&
@@ -717,5 +728,149 @@ const buildShopifyLiquidManifest = (
     validatedAt: input.validatedAt.toISOString(),
     validationProfileId: 'shopify-liquid@1',
     version: input.version,
+  });
+};
+
+export type VerifiedWordpressBinding = Readonly<{
+  restBase: string;
+  role: WordpressRole;
+  siteOrigin: string;
+  userId: number;
+  username: string;
+}>;
+
+export type BuildWordpressRestManifestInput = Readonly<{
+  configuration: EnrollmentConfiguration;
+  id: string;
+  projectId: string;
+  validatedAt: Date;
+  verifiedWordpress: VerifiedWordpressBinding;
+  version: number;
+}>;
+
+/** True when `productionDomain` and the verified WordPress site share a host (ADR-0066). */
+export const productionDomainMatchesWordpressSite = (
+  productionOrigin: string,
+  siteOrigin: string,
+): boolean =>
+  new URL(productionOrigin).host.toLowerCase() ===
+  new URL(siteOrigin).host.toLowerCase();
+
+export const buildWordpressRestManifest = (
+  input: BuildWordpressRestManifestInput,
+): WordpressRestManifest => {
+  const configuration = input.configuration;
+  if (
+    configuration.budgetPolicy === undefined ||
+    configuration.clientConversationLocale === undefined ||
+    configuration.contentLocales === undefined ||
+    configuration.defaultContentLocale === undefined ||
+    configuration.requiredLocales === undefined ||
+    configuration.slugLocale === undefined ||
+    configuration.translationPolicy === undefined
+  ) {
+    throw new DomainError(
+      'validation_error',
+      'wordpress_rest enrollment configuration is incomplete.',
+      { code: 'configuration_incomplete' },
+    );
+  }
+  const enabledCapabilities = resolveProjectCapabilityBindings(configuration, {
+    allowEmpty: true,
+  });
+  const contentLocales = [...configuration.contentLocales];
+  const requiredContentLocales = [...configuration.requiredLocales];
+  if (
+    !contentLocales.includes(configuration.defaultContentLocale) ||
+    !contentLocales.includes(configuration.slugLocale) ||
+    requiredContentLocales.some((locale) => !contentLocales.includes(locale))
+  ) {
+    throw new DomainError(
+      'validation_error',
+      'wordpress_rest locale configuration is inconsistent.',
+      { code: 'locale_contract_invalid' },
+    );
+  }
+  if (contentLocales.length === 1 && configuration.translationPolicy !== 'none')
+    throw new DomainError(
+      'policy_denied',
+      'Monolingual projects require translation policy none.',
+      { code: 'translation_policy_monolingual' },
+    );
+  if (contentLocales.length > 1 && configuration.translationPolicy === 'none')
+    throw new DomainError(
+      'policy_denied',
+      'Multilingual projects cannot use translation policy none.',
+      { code: 'translation_policy_multilingual' },
+    );
+  const productionOrigin = resolveManifestProductionOrigin(
+    configuration,
+    'wordpress_rest',
+  );
+  if (
+    !productionDomainMatchesWordpressSite(
+      productionOrigin,
+      input.verifiedWordpress.siteOrigin,
+    )
+  )
+    throw new DomainError(
+      'policy_denied',
+      'productionDomain must match the verified WordPress site origin.',
+      { code: 'production_domain_mismatch' },
+    );
+  const collections = Object.fromEntries(
+    contentLocales.map((locale) => [
+      locale,
+      { directory: 'posts', routePrefix: '/' },
+    ]),
+  );
+  const wordpress = {
+    productionOrigin,
+    restBase: input.verifiedWordpress.restBase,
+    role: input.verifiedWordpress.role,
+    siteOrigin: input.verifiedWordpress.siteOrigin,
+    userId: input.verifiedWordpress.userId,
+    username: input.verifiedWordpress.username,
+  };
+  const fingerprint = manifestFingerprint({
+    budgetPolicy: configuration.budgetPolicy,
+    clientConversationLocale: configuration.clientConversationLocale,
+    contentLocales,
+    defaultContentLocale: configuration.defaultContentLocale,
+    enabledCapabilities: [...enabledCapabilities],
+    globalProfileVersion: wordpressRestGlobalProfile.version,
+    projectId: input.projectId,
+    requiredContentLocales,
+    slugLocale: configuration.slugLocale,
+    translationPolicy: configuration.translationPolicy,
+    wordpress,
+  });
+
+  return wordpressRestManifestSchema.parse({
+    budgetPolicy: configuration.budgetPolicy,
+    content: {
+      collections,
+      publicationTargets: ['wordpress'],
+      source: 'wordpress',
+    },
+    contentLocales,
+    conversationLocale: configuration.clientConversationLocale,
+    defaultContentLocale: configuration.defaultContentLocale,
+    enabledCapabilities: [...enabledCapabilities],
+    fingerprint,
+    globalProfileVersion: wordpressRestGlobalProfile.version,
+    graphVersion: 'stacks/wordpress-rest@0',
+    id: input.id,
+    profile: 'wordpress_rest',
+    projectId: input.projectId,
+    requiredContentLocales,
+    rulesVersion: 'wordpress-rest@0',
+    slugLocale: configuration.slugLocale,
+    status: 'validated',
+    translationPolicy: configuration.translationPolicy,
+    validatedAt: input.validatedAt.toISOString(),
+    validationProfileId: 'wordpress-rest@1',
+    version: input.version,
+    wordpress,
   });
 };

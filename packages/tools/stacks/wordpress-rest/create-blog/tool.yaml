@@ -1,0 +1,14 @@
+command: /create_blog
+description: Creates a WordPress blog post through the REST API. The client
+  picks "as-is" (their text verbatim, interview only fills gaps) or "generate"
+  (article written from base information with the project style customization).
+  Preview is the real post protected by a WordPress password (ADR-0067);
+  approval removes the password, cancel trashes it.
+displayName: Create blog
+executorId: workflow.create_blog_wordpress@1
+graphVersion: stacks/wordpress-rest/create-blog@1
+id: create_blog_wordpress
+profile: wordpress_rest
+requiresPreview: true
+riskClass: medium
+version: 1

@@ -1028,3 +1028,7 @@ export {
   type OpenAIHeyBinnInput,
   type OpenAIHeyBinnResult,
 } from './hey-binn.js';
+export {
+  createOpenAIWordpressBlogGenerationPort,
+  type OpenAIWordpressModelCall,
+} from './wordpress-blog.js';

@@ -2,6 +2,7 @@ import {
   capabilityCatalogItemSchema,
   createBlogDraftInputSchema,
   createBlogOrbitypeInputSchema,
+  createBlogWordpressInputSchema,
   createProjectAstroInputSchema,
   deleteBlogDraftInputSchema,
   deleteProjectAstroInputSchema,
@@ -29,6 +30,7 @@ export type CapabilityDefinition = Readonly<{
   inputSchema:
     | typeof createBlogDraftInputSchema
     | typeof createBlogOrbitypeInputSchema
+    | typeof createBlogWordpressInputSchema
     | typeof createProjectAstroInputSchema
     | typeof deleteBlogDraftInputSchema
     | typeof deleteProjectAstroInputSchema
@@ -412,12 +414,40 @@ export const updateMenuDefinition: CapabilityDefinition = Object.freeze({
   version: 1,
 });
 
+export const createBlogWordpressDefinition: CapabilityDefinition = Object.freeze({
+  approvalPolicyId: 'wordpress-rest-blog-publication@1',
+  budget: Object.freeze({
+    maxEstimatedCostCents: 400,
+    maxModelCalls: 6,
+    maxTokens: 80_000,
+  }),
+  command: '/create_blog',
+  displayName: 'Create blog',
+  executorId: 'workflow.create_blog_wordpress@1',
+  id: 'create_blog_wordpress',
+  inputSchema: createBlogWordpressInputSchema,
+  requiredPermissions: Object.freeze([
+    'wordpress:posts:write',
+    'wordpress:media:write',
+    'wordpress:categories:write',
+  ]),
+  requiresPreview: true,
+  retryPolicy: Object.freeze({
+    maxAttempts: 3,
+    retryableErrors: Object.freeze(['provider_retryable']),
+  }),
+  riskClass: 'medium',
+  timeoutSeconds: 1_800,
+  version: 1,
+});
+
 /** @deprecated Use createProjectAstroDefinition */
 export const createProjectDraftDefinition = createProjectAstroDefinition;
 
 export const capabilityRegistry = Object.freeze([
   createBlogDraftDefinition,
   createBlogOrbitypeDefinition,
+  createBlogWordpressDefinition,
   createProjectAstroDefinition,
   deleteBlogDraftDefinition,
   deleteProjectAstroDefinition,

@@ -103,6 +103,12 @@ import {
   stripMarkdownFrontmatter,
 } from '@binflow/workflows';
 
+import {
+  createWordpressBlogCatalogLoader,
+  isWordpressBlogSignal,
+  processWordpressBlogJob,
+} from './wordpress-blog-job.js';
+
 const deleteNoticeContentKind = (
   kind: ReturnType<typeof resolveCapabilityRuntime>['kind'],
 ): 'blog' | 'portfolio' =>
@@ -248,6 +254,13 @@ const loadHeyBinnSiteContext: HeyBinnSiteContextLoader = async ({
       'No active manifest for Hey Binn site context.',
     );
   const manifest = manifestRow.document;
+  if ((manifest.profile as string) === 'wordpress_rest')
+    return {
+      collections: [],
+      items: [],
+      notes: 'WordPress site context is not loaded in v1 (ADR-0066).',
+      source: 'manifest_only',
+    };
   const collections = Object.entries(manifest.content.collections).flatMap(
     ([locale, collection]) =>
       collection === undefined
@@ -1147,6 +1160,13 @@ const workflowService = new WorkflowService(
     }
   },
   loadHeyBinnSiteContext,
+  createWordpressBlogCatalogLoader({
+    database,
+    loadMasterKey: () =>
+      loadRuntimeMasterKeyFile(
+        process.env.BINFLOW_KEK_FILE ?? defaultMasterKeyPath(),
+      ),
+  }),
 );
 const connection = new Redis(redisUrl, { maxRetriesPerRequest: null });
 // BullMQ Worker blocks on `connection`; keep polling-lock commands on a
@@ -1373,6 +1393,30 @@ const processWorkflowJob = async (name: string, data: unknown) => {
       'Live workflow execution is disabled. Set BINFLOW_LIVE_EXECUTION_ENABLED=true explicitly.',
     );
   const signal = workflowResumeSignalSchema.parse(data);
+  if (await isWordpressBlogSignal(database, signal)) {
+    await artifactStore.ensureBucket();
+    const outcome = await processWordpressBlogJob(
+      {
+        artifactStore,
+        database,
+        loadMasterKey: () =>
+          loadRuntimeMasterKeyFile(
+            process.env.BINFLOW_KEK_FILE ?? defaultMasterKeyPath(),
+          ),
+        notifyClient,
+        resolveLocale: async (requestId) => {
+          const target = await loadClientNotificationTarget(requestId);
+          return target?.locale === 'en' ||
+            target?.locale === 'de' ||
+            target?.locale === 'es'
+            ? target.locale
+            : 'es';
+        },
+      },
+      signal,
+    );
+    return { outcome };
+  }
   const context = await loadExecutionContext(signal);
   const masterKey = await loadRuntimeMasterKeyFile(
     process.env.BINFLOW_KEK_FILE ?? defaultMasterKeyPath(),
@@ -2410,6 +2454,7 @@ const recoverStaleWorkflowExecutions = async (): Promise<void> => {
           id: schema.requests.id,
           projectId: schema.requests.projectId,
           tenantId: schema.requests.tenantId,
+          terminalResult: schema.requests.terminalResult,
           version: schema.requests.version,
         })
         .from(schema.requests)
@@ -2441,11 +2486,19 @@ const recoverStaleWorkflowExecutions = async (): Promise<void> => {
           .limit(1);
         if (version === undefined) continue;
         const nextVersion = row.version + 1;
+        // WordPress post id/password checkpoint must survive recovery (ADR-0067).
+        const wordpressCheckpoint =
+          row.terminalResult !== null &&
+          typeof row.terminalResult === 'object' &&
+          'wordpress' in row.terminalResult
+            ? { wordpress: row.terminalResult.wordpress }
+            : {};
         await scoped
           .update(schema.requests)
           .set({
             state: 'FAILED_RETRYABLE',
             terminalResult: {
+              ...wordpressCheckpoint,
               errorCategory: 'provider_retryable',
               errorMessage:
                 'Workflow interrupted before completion; scheduled recovery retry.',

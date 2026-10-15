@@ -1,0 +1,6 @@
+kind: effect
+label: Remove preview password
+nodeKind: wordpress.unlock_post@1
+acceptsClientCustomization: false
+permissions:
+  - wordpress:posts:write

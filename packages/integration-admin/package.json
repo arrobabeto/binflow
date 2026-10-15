@@ -26,6 +26,7 @@
     "@binflow/orbitype": "workspace:*",
     "@binflow/secrets": "workspace:*",
     "@binflow/vercel": "workspace:*",
+    "@binflow/wordpress": "workspace:*",
     "drizzle-orm": "0.45.2",
     "uuid": "14.0.1"
   },

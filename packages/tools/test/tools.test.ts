@@ -14,7 +14,28 @@ import {
 describe('@binflow/tools catalog', () => {
   it('loads Astro tools with matching executor stages', async () => {
     const tools = await listTools();
-    expect(tools).toHaveLength(11);
+    expect(tools).toHaveLength(12);
+    const blogWordpress = tools.find(
+      (tool) => tool.tool.id === 'create_blog_wordpress',
+    );
+    expect(blogWordpress?.tool.profile).toBe('wordpress_rest');
+    expect(blogWordpress?.graph.version).toBe(
+      'stacks/wordpress-rest/create-blog@1',
+    );
+    expect(
+      blogWordpress?.nodes
+        .filter((node) => node.acceptsClientCustomization)
+        .map((node) => node.id)
+        .sort(),
+    ).toEqual(['apply_revision', 'generate', 'prepare_image']);
+    expect(
+      blogWordpress?.graph.edges.some(
+        (edge) =>
+          edge.from === 'awaiting_client_approval' &&
+          edge.to === 'trash_post' &&
+          edge.when === 'review.is_cancelled',
+      ),
+    ).toBe(true);
     const blog = tools.find((tool) => tool.tool.id === 'create_blog_draft');
     const blogOrbitype = tools.find(
       (tool) => tool.tool.id === 'create_blog_orbitype',

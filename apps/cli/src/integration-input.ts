@@ -4,6 +4,10 @@ import { cwd } from 'node:process';
 import { phase0OpenAIModels } from '@binflow/ai';
 import type { IntegrationKind } from '@binflow/contracts';
 import { loadSecureSecretFile } from '@binflow/secrets';
+import {
+  allowInsecureWordpressLocalhost,
+  normalizeWordpressSiteOrigin,
+} from '@binflow/wordpress';
 
 export type PromptResult = Readonly<{
   alias: string;
@@ -100,6 +104,24 @@ export const promptIntegrationInput = async (
       primarySecret = apiKey;
       value = { apiKey };
       configuration = { baseUrl };
+      break;
+    }
+    case 'wordpress-api': {
+      const siteOrigin = normalizeWordpressSiteOrigin(
+        await input({
+          message: 'WordPress site origin (https://example.com)',
+          validate: required,
+        }),
+        { allowInsecureLocalhost: allowInsecureWordpressLocalhost() },
+      );
+      const username = await input({
+        message: 'WordPress username (Editor or Administrator)',
+        validate: required,
+      });
+      const applicationPassword = await secret('WordPress Application Password');
+      primarySecret = applicationPassword.replaceAll(' ', '');
+      value = { applicationPassword };
+      configuration = { siteOrigin, username: username.trim() };
       break;
     }
   }

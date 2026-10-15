@@ -432,6 +432,41 @@ describe('control-plane contracts', () => {
     ).toBe('shopify_liquid');
   });
 
+  it('accepts wordpress_rest enrollment and wordpress-api candidates', () => {
+    expect(
+      createEnrollmentInputSchema.parse({
+        projectDisplayName: 'Blog',
+        projectKey: 'blog',
+        projectProfile: 'wordpress_rest',
+        tenantDisplayName: 'Blog',
+        tenantKey: 'blog',
+      }).projectProfile,
+    ).toBe('wordpress_rest');
+    expect(
+      integrationCandidateInputSchema.parse({
+        alias: 'WordPress blog',
+        applicationPassword: 'abcd efgh ijkl mnop',
+        kind: 'wordpress-api',
+        projectKey: 'blog',
+        siteOrigin: 'https://blog.example.com',
+        tenantKey: 'blog',
+        username: 'binflow',
+      }),
+    ).toMatchObject({ kind: 'wordpress-api' });
+    expect(() =>
+      integrationCandidateInputSchema.parse({
+        alias: 'WordPress blog',
+        applicationPassword: 'abcd efgh ijkl mnop',
+        kind: 'wordpress-api',
+        projectKey: 'blog',
+        siteOrigin: 'https://blog.example.com',
+        tenantKey: 'blog',
+        unexpected: true,
+        username: 'binflow',
+      }),
+    ).toThrow();
+  });
+
   it('accepts monolingual translation policy none', () => {
     expect(translationPolicySchema.parse('none')).toBe('none');
     expect(supportedLocaleSchema.parse('de')).toBe('de');

@@ -101,7 +101,8 @@ const actionButtonStyle = (
     action === 'confirm_text_plan' ||
     action === 'confirm_text_style_plan' ||
     action === 'confirm_menu_selection' ||
-    action === 'done_text_style_attrs'
+    action === 'done_text_style_attrs' ||
+    action === 'wp_blog_content_done'
   )
     return 'primary';
   return 'default';
@@ -617,6 +618,88 @@ export const renderPublicationCompleteNotice = (
     contentUrlButtons(input.urls, productionLinkCopy[input.locale]),
   );
 
+const wordpressPreviewCopy: Record<
+  SupportedLocale,
+  Readonly<{
+    open: string;
+    published: string;
+    ready: (title: string, password: string) => string;
+    reopened: string;
+    view: string;
+  }>
+> = {
+  de: {
+    open: 'Beitrag öffnen',
+    published: 'Der Beitrag ist jetzt öffentlich.',
+    ready: (title, password) =>
+      `Vorschau bereit: **${title}**. Der Beitrag ist live, aber passwortgeschützt. Passwort: **${password}**. Freigeben macht ihn öffentlich; Abbrechen verschiebt ihn in den Papierkorb.`,
+    reopened:
+      'Der Beitrag wurde in WordPress geändert. Bitte prüfe die aktuelle Version erneut.',
+    view: 'Beitrag ansehen',
+  },
+  en: {
+    open: 'Open post',
+    published: 'The post is now public.',
+    ready: (title, password) =>
+      `Preview ready: **${title}**. The post is live but password-protected. Password: **${password}**. Approve makes it public; Cancel moves it to the trash.`,
+    reopened:
+      'The post was edited in WordPress. Please review the current version again.',
+    view: 'View post',
+  },
+  es: {
+    open: 'Abrir post',
+    published: 'El post ya es público.',
+    ready: (title, password) =>
+      `Preview listo: **${title}**. El post está en vivo pero protegido con contraseña. Contraseña: **${password}**. Aprobar lo hace público; Cancelar lo manda a la papelera.`,
+    reopened:
+      'El post se editó en WordPress. Revisa de nuevo la versión actual.',
+    view: 'Ver post',
+  },
+};
+
+/** WordPress password-protected preview (ADR-0067): link + password + actions. */
+export const renderWordpressPreviewNotice = (
+  input: Readonly<{
+    link: string;
+    locale: SupportedLocale;
+    password: string;
+    reopened?: boolean;
+    title: string;
+    tokens: Readonly<{ approve: string; cancel: string; revise: string }>;
+  }>,
+): AdapterPostableMessage => {
+  const copy = wordpressPreviewCopy[input.locale];
+  const actions = previewActionCopy[input.locale];
+  const ready = copy.ready(input.title, input.password);
+  return renderClientTelegramReply(
+    {
+      actionTokens: [
+        { action: 'approve_preview', label: actions.approve, token: input.tokens.approve },
+        { action: 'request_revision', label: actions.revise, token: input.tokens.revise },
+        { action: 'cancel', label: actions.cancel, token: input.tokens.cancel },
+      ],
+      duplicate: false,
+      locale: input.locale,
+      requestId: null,
+      text: input.reopened === true ? `${copy.reopened}\n\n${ready}` : ready,
+    },
+    [{ label: copy.open, url: input.link }],
+  );
+};
+
+export const renderWordpressPublishedNotice = (
+  input: Readonly<{ link: string; locale: SupportedLocale }>,
+): AdapterPostableMessage =>
+  renderClientTelegramReply(
+    {
+      actionTokens: [],
+      duplicate: false,
+      locale: input.locale,
+      requestId: null,
+      text: wordpressPreviewCopy[input.locale].published,
+    },
+    [{ label: wordpressPreviewCopy[input.locale].view, url: input.link }],
+  );
 export { isCardElement };
 
 const telegramIngress = (

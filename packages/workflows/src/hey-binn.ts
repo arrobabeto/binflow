@@ -2,6 +2,7 @@ import { createHash, randomBytes } from 'node:crypto';
 import { v7 as uuidv7 } from 'uuid';
 
 import {
+  wordpressRestManifestSchema,
   type SupportedLocale,
   type TelegramReply,
 } from '@binflow/contracts';
@@ -423,13 +424,33 @@ const loadProjectContext = async (
     .orderBy(desc(schema.projectManifestVersions.version))
     .limit(1);
   if (manifest === undefined) return null;
-  const repository = `${manifest.document.repository.owner}/${manifest.document.repository.name}`;
-  if (repository.length < 3) return null;
   const [tenant] = await database
     .select({ key: schema.tenants.key })
     .from(schema.tenants)
     .where(eq(schema.tenants.id, tenantId))
     .limit(1);
+
+  if (manifest.profile === 'wordpress_rest') {
+    const wordpress = wordpressRestManifestSchema
+      .pick({ content: true, wordpress: true })
+      .safeParse(manifest.document);
+    if (!wordpress.success) return null;
+    return {
+      inventory: {
+        collections: [],
+        items: [],
+        notes:
+          'WordPress site context is not loaded in v1 (ADR-0066); answer from the conversation and enabled tools only.',
+        source: 'manifest_only',
+      },
+      profile: manifest.profile,
+      productionOrigin: wordpress.data.wordpress.productionOrigin,
+      repository: null,
+      tenantKey: tenant?.key ?? 'unknown',
+    };
+  }
+  const repository = `${manifest.document.repository.owner}/${manifest.document.repository.name}`;
+  if (repository.length < 3) return null;
 
   const collections = Object.entries(manifest.document.content.collections).flatMap(
     ([locale, collection]) =>
@@ -530,7 +551,7 @@ export const runHeyBinnTurn = async (input: Readonly<{
   if (projectContext === null)
     throw new DomainError(
       'policy_denied',
-      'Hey Binn requires an active project binding with a readable repository.',
+      'Hey Binn requires an active project manifest (and a readable repository for Git-backed profiles).',
       { code: 'hey_binn_context_unavailable' },
     );
 

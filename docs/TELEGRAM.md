@@ -135,7 +135,7 @@ For the local MVP router:
   code injects allowlisted GitHub/CMS inventory into the prompt (no LLM tools).
   End with `/bye_binn` or addressed goodbyes (Adiós/Bye/Gracias Binn); idle
   threads expire after 10 minutes.
-- **Blog:** messages mentioning *blog*, *article*, *artículo*, *Beitrag*, *post*, etc. start the project's assigned create-blog capability (`create_blog_draft` on `astro_repo`, `create_blog_orbitype` on `astro_orbitype`) when no active Binn thread claims the turn.
+- **Blog:** messages mentioning *blog*, *article*, *artículo*, *Beitrag*, *post*, etc. start the project's assigned create-blog capability (`create_blog_draft` on `astro_repo`, `create_blog_orbitype` on `astro_orbitype`, `create_blog_wordpress` on `wordpress_rest`) when no active Binn thread claims the turn. On `wordpress_rest` the bot first asks for the mode with two buttons (**As-is** / **Generate with style**), then interviews only for missing title, excerpt, category and cover image; the preview message carries an **Open post** button and the post password (ADR-0067).
 - **Menu update (`astro_orbitype`):** messages mentioning *menú*, *carta*, *Speisekarte*, *update menu*, *upload menu*, etc. start `update_menu` when assigned.
 - **Text edit (`astro_orbitype`):** messages mentioning *editar texto*, *cambiar texto*, *edit text*, *Text ändern*, etc. start `edit_text` when assigned.
 - **Text edit (`shopify_liquid`):** same `/edit_text` / NL phrases start

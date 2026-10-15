@@ -21,6 +21,7 @@ and [ADR-0064](../../adr/0064-optional-bsi-astro.md).
 | `astro-repo` | `astro_repo` | [stacks/astro-repo.md](stacks/astro-repo.md) |
 | `astro-orbitype` | `astro_orbitype` | [stacks/astro-orbitype.md](stacks/astro-orbitype.md) |
 | `shopify-liquid` | `shopify_liquid` | [stacks/shopify-liquid.md](stacks/shopify-liquid.md) |
+| `wordpress-rest` | `wordpress_rest` | [stacks/wordpress-rest.md](stacks/wordpress-rest.md) |
 
 ## When to use
 

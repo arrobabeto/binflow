@@ -1,0 +1,69 @@
+edges:
+  - from: catalog_sync
+    to: compose_article
+    when: blog_mode.is_as_is
+  - from: catalog_sync
+    to: generate
+    when: blog_mode.is_generate
+  - from: compose_article
+    to: prepare_image
+    when: image.is_ai_generated
+  - from: compose_article
+    to: upload_media
+    when: image.is_client_supplied
+  - from: generate
+    to: prepare_image
+    when: image.is_ai_generated
+  - from: generate
+    to: upload_media
+    when: image.is_client_supplied
+  - from: prepare_image
+    to: upload_media
+  - from: upload_media
+    to: upsert_protected_post
+  - from: upsert_protected_post
+    to: verify_protected_preview
+  - from: verify_protected_preview
+    to: awaiting_client_approval
+  - from: awaiting_client_approval
+    to: apply_revision
+    when: review.is_revision
+  - from: apply_revision
+    to: upsert_protected_post
+  - from: awaiting_client_approval
+    to: trash_post
+    when: review.is_cancelled
+  - from: awaiting_client_approval
+    to: awaiting_admin_approval
+    when: category.is_new
+  - from: awaiting_client_approval
+    to: unlock_post
+    when: category.is_existing_or_normalized
+  - from: awaiting_admin_approval
+    to: create_category
+  - from: awaiting_admin_approval
+    to: trash_post
+    when: review.is_cancelled
+  - from: create_category
+    to: unlock_post
+  - from: unlock_post
+    to: verify_production
+  - from: verify_production
+    to: completed
+nodes:
+  - id: catalog_sync
+  - id: compose_article
+  - id: generate
+  - id: prepare_image
+  - id: upload_media
+  - id: upsert_protected_post
+  - id: verify_protected_preview
+  - id: awaiting_client_approval
+  - id: apply_revision
+  - id: awaiting_admin_approval
+  - id: create_category
+  - id: unlock_post
+  - id: verify_production
+  - id: trash_post
+  - id: completed
+version: stacks/wordpress-rest/create-blog@1

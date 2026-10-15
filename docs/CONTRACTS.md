@@ -159,9 +159,10 @@ type CapabilityAccess =
 ```
 
 Only `astro_repo` was active in the first MVP. Post-MVP, `astro_orbitype`
-(ADR-0045) and `shopify_liquid` (ADR-0059) are accepted selectable profiles.
-`nuxt_orbitype` and `wordpress_rest` remain reserved names until their phases
-complete. Shopify v1 enrollment does not require Vercel or Shopify Admin.
+(ADR-0045), `shopify_liquid` (ADR-0059) and `wordpress_rest` (ADR-0066) are
+accepted selectable profiles. `nuxt_orbitype` remains a reserved name until its
+phase completes. Shopify v1 enrollment does not require Vercel or Shopify
+Admin. `wordpress_rest` enrollment requires neither GitHub nor Vercel.
 
 ## Project manifest
 
@@ -195,6 +196,16 @@ type ProjectManifest = {
     /** Client-visible live origin (ADR-0048); from enrollment productionDomain. */
     productionOrigin?: string;
   };
+  /** Required for `wordpress_rest`; forbidden for other profiles (ADR-0066). */
+  wordpress?: {
+    siteOrigin: string; // HTTPS origin, no trailing slash
+    restBase: string; // discovered from /wp-json
+    username: string;
+    userId: number;
+    role: 'editor' | 'administrator';
+    /** Normalized enrollment productionDomain (same host as siteOrigin). */
+    productionOrigin: string;
+  };
   content: {
     source: 'github' | 'orbitype' | 'wordpress';
     collections: Record<string, unknown>;
@@ -220,6 +231,19 @@ type ProjectBudgetPolicy = {
 
 Validation rules:
 
+- `repository` is required for `astro_repo`, `astro_orbitype` and
+  `shopify_liquid`; it is absent for `wordpress_rest`. `deployment` is
+  required where the profile publishes through Vercel or a theme deployment and
+  absent for `wordpress_rest`. `wordpress` is required only for
+  `wordpress_rest`, with `content.source: 'wordpress'`. The production origin
+  for `wordpress_rest` is the enrollment `productionDomain`, whose host must
+  match `wordpress.siteOrigin` (ADR-0048 / ADR-0066); it is frozen as
+  `wordpress.productionOrigin`. In code, Git-backed profiles parse with
+  `projectManifestSchema` and `wordpress_rest` with
+  `wordpressRestManifestSchema`; generic readers use the union
+  `anyProjectManifestSchema` and branch on `profile`. The `wordpress_rest`
+  manifest uses `content: { source: 'wordpress', publicationTargets:
+  ['wordpress'], collections }` with no editable/blocked paths.
 - `contentLocales` must be supported by Binflow and the global profile manifest.
   The platform catalog is exactly `en`, `es` and `de` (ADR-0011 / ADR-0046).
   An enrollment may enable one, two or three of those locales.
@@ -317,9 +341,76 @@ The immutable registry includes **`create_project_astro@1`** with executor
 required, and client-only publication approval (ADR-0034). Legacy
 `create_project_draft@1` remains in the database append-only history.
 
+The immutable registry includes **`create_blog_wordpress@1`** with executor
+`workflow.create_blog_wordpress@1`, profile `wordpress_rest`, medium risk,
+preview required (password-protected live post, ADR-0067), command
+`/create_blog`, approval policy `wordpress-rest-blog-publication@1`,
+permissions `wordpress:posts:write`, `wordpress:media:write`,
+`wordpress:categories:write`. `capabilityIdSchema` includes
+`create_blog_wordpress`. Migration `0037_create_blog_wordpress_capability.sql`
+appends the capability definition (append-only). See the section below.
+
 Graph versions for queued runs resolve from the declarative tool catalog
 (`tool.yaml` → `graphVersion`) via ADR-0038; worker dispatch resolves
 `executorId` through `packages/workflows/src/capability-runtimes.ts` (fail-closed).
+
+## `create_blog_wordpress`
+
+Telegram command: `/create_blog` (routed here when the project has this
+capability enabled). Spec: `docs/specs/create-blog-wordpress.md`.
+
+```ts
+type WordpressBlogMode = 'as_is' | 'generate';
+type WordpressBlogCategoryChoice =
+  | { kind: 'existing'; id: number; name: string }
+  | { kind: 'new'; name: string }; // 2–60 chars, admin approval required
+type WordpressBlogImageChoice =
+  | { source: 'telegram'; artifactKey: string }
+  | { source: 'site_url'; url: string } // enrolled origin only
+  | { source: 'ai' };
+
+type CreateBlogWordpressInput =
+  | {
+      mode: 'collect';
+      projectId: string;
+      collectionStep:
+        | 'choose_mode' | 'await_content' | 'await_title' | 'await_excerpt'
+        | 'choose_category' | 'await_new_category' | 'choose_image' | 'ready';
+      blogMode?: WordpressBlogMode;
+      content: string; // default ''
+      title?: string;
+      excerpt?: string; // ≤ 300
+      excerptSkipped: boolean;
+      category?: WordpressBlogCategoryChoice;
+      image?: WordpressBlogImageChoice;
+      suggestedCategories: { id: number; name: string }[];
+    }
+  | {
+      mode: 'execute';
+      projectId: string;
+      blogMode: WordpressBlogMode;
+      content: string;
+      title?: string; // required for as_is
+      excerpt?: string;
+      category: WordpressBlogCategoryChoice;
+      image: WordpressBlogImageChoice;
+      revisionNotes: string[]; // appended per revision; non-empty ⇒ revision version
+    };
+```
+
+Client action tokens added for collection: `pick_wp_blog_mode:<as_is|generate>`,
+`wp_blog_content_done`, `wp_blog_skip_excerpt`, `pick_wp_blog_category:<id>`,
+`wp_blog_new_category`, `pick_wp_blog_image:ai`. Preview uses the shared
+`approve_preview`, `request_revision` and `cancel`. A new category routes the
+client approval to `AWAITING_ADMIN_APPROVAL`; `terminalResult.categoryKind`
+(`existing` | `new`) is the policy evidence.
+
+Approval evidence (no Git): artifact kind `wordpress_post_snapshot`,
+`repo_changes.head_sha = wp:<post id>:<modified_gmt>:<hash16>`, preview
+`deployments.provider_id = wp-post:<post id>:<request version id>`,
+`deployments.urls.post`. The preview password is returned to the requesting
+client only and is stored in `terminalResult.wordpress.password` while the
+request is open.
 
 ## `create_project_astro`
 
@@ -808,9 +899,12 @@ never includes the `/action` form.
 
 Publication resume signals use the same stable request/request-version
 identity as generation and add a code-owned reason: `execute`, `publish`,
-`reconcile`, or `restore_orbitype_preview` (compensating restore of temporary
-preview CMS patches for `edit_image` / `edit_text`). Queue payloads contain no
-provider credential, generated body or attachment bytes.
+`interpret_revision`, `apply_revision`, `reconcile`,
+`restore_orbitype_preview` (compensating restore of temporary preview CMS
+patches for `edit_image` / `edit_text`) or `discard_wordpress_post` (move the
+`create_blog_wordpress` preview post to the WordPress trash after cancel or
+admin reject; never a permanent delete). Queue payloads contain no provider
+credential, generated body or attachment bytes.
 
 ## Generated rationale and model call
 
@@ -1170,6 +1264,7 @@ Credential ownership and payload split:
 | `github-app`      | platform registration (keyed by GitHub `appId`) plus project installation binding | credential: App/client IDs; connection: expected repository/branch and discovered installation/repository IDs for that project | private key and webhook secret |
 | `vercel`          | project plus project connection                         | connection: project/team IDs and fixed GitHub repository/production branch                                        | access token                   |
 | `orbitype-api`    | project                                                 | optional non-secret base URL / project identifiers                                                                | API key                        |
+| `wordpress-api`   | project                                                 | HTTPS site origin, username; evidence: REST base, user id, role, `riskWarning`, read-probe counts/titles (ADR-0066) | Application Password           |
 
 The project-scoped legacy GitHub shape preserved by migration `0002` is revoked audit history only and is never eligible for resolution or verification.
 

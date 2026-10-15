@@ -14,7 +14,8 @@ export type CapabilityIngressHandlerKind =
   | 'edit_text_shopify'
   | 'edit_text_style'
   | 'project'
-  | 'update_menu';
+  | 'update_menu'
+  | 'wordpress_blog';
 
 export type CapabilityIngressRoute = Readonly<{
   capabilityId: string;
@@ -93,6 +94,7 @@ const handlerKindForExecutor = (
   if (executorId === 'workflow.edit_text_style@1') return 'edit_text_style';
   if (executorId === 'workflow.edit_image@1') return 'edit_image';
   if (executorId === 'workflow.edit_image_shopify@1') return 'edit_image_shopify';
+  if (executorId === 'workflow.create_blog_wordpress@1') return 'wordpress_blog';
   throw new Error(`Unsupported ingress executor ${executorId}.`);
 };
 
@@ -101,7 +103,8 @@ const naturalLanguageForCapability = (
 ): ((text: string) => boolean) | undefined => {
   if (
     capabilityId === 'create_blog_draft' ||
-    capabilityId === 'create_blog_orbitype'
+    capabilityId === 'create_blog_orbitype' ||
+    capabilityId === 'create_blog_wordpress'
   )
     return blogNaturalLanguage;
   if (capabilityId === 'delete_blog_draft') return deleteBlogNaturalLanguage;
@@ -135,6 +138,7 @@ export const capabilityIngressRoutes: readonly CapabilityIngressRoute[] =
 
 export const collectionCapabilityIds = Object.freeze(
   new Set([
+    'create_blog_wordpress',
     'create_project_astro',
     'delete_blog_draft',
     'delete_project_astro',

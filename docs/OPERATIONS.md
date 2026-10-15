@@ -151,6 +151,11 @@ First production target should provide at least 2–4 vCPU, 8 GiB RAM and 100 Gi
 - Database/Redis/object-store endpoints without credentials.
 - Log level, retention, rate and worker concurrency defaults.
 - Allowed callback domains and provider feature flags.
+- `BINFLOW_WORDPRESS_ALLOW_INSECURE_LOCALHOST=true` (development only,
+  ADR-0066): lets `wordpress-api` candidates and verification use
+  `http://localhost` / `127.0.0.1` for a local WordPress. Ignored when
+  `NODE_ENV=production`; every other WordPress origin must be HTTPS. Set it on
+  the API (dashboard verify) and CLI processes only.
 
 Dashboard sessions use a rolling 30-minute inactivity limit. Changing this
 policy requires an ADR and coordinated dashboard/API restart; sessions whose
@@ -161,7 +166,8 @@ persisted last activity already exceeds the new limit are rejected immediately.
 - Database, Redis and object-store credentials.
 - Better Auth secret and bootstrap material.
 - SecretsProvider KEK.
-- Telegram, OpenAI, GitHub App, Vercel, Orbitype API key and future integration credentials.
+- Telegram, OpenAI, GitHub App, Vercel, Orbitype API key, WordPress
+  Application Password and future integration credentials.
 
 Production secrets use Docker secrets or a future managed secret provider. They never appear in Compose files, images, Git or documentation.
 
@@ -556,6 +562,35 @@ Roll back application images only when database migrations remain backward compa
 ### Repo-backed publication
 
 Use a new revert PR to realign Git and production. Vercel rollback may restore service temporarily but does not replace the Git revert.
+
+### WordPress REST enrollment
+
+To roll back `wordpress_rest` (ADR-0066), remove it from
+`selectableEnrollmentProfileSchema` and redeploy. No migration is involved
+(profile and credential kind are text columns); existing enrollments,
+manifests and `wordpress-api` credentials stay readable, and operators can
+revoke the credentials from **Integrations**. Verification is read-only, so
+there is no WordPress content to restore.
+
+### WordPress blog tool (`create_blog_wordpress`, ADR-0067)
+
+- Deploy order: run `pnpm db:migrate` (migration
+  `0037_create_blog_wordpress_capability.sql`) **before** assigning the tool;
+  then assign it to the `wordpress_rest` project and reload the worker.
+- Before assigning, confirm with the site owner that automations reacting to
+  `publish` (newsletters, social auto-post, IndexNow, webhooks) are disabled or
+  filtered: the preview is a published, password-protected post and those
+  plugins may fire at preview time.
+- The worker handles this capability in `apps/worker/src/wordpress-blog-job.ts`
+  with the project `wordpress-api` credential and the tenant OpenAI
+  credential; no GitHub App or Vercel credential is needed.
+- Stuck request: posts are never permanently deleted. A cancelled or finally
+  failed request moves its protected post to the WordPress trash; the post id
+  is in `terminalResult.wordpress.postId`. A post whose password was already
+  removed is public and must be handled manually in wp-admin.
+- Rollback: unassign the capability (append-only definition stays). Published
+  posts remain on the site; open preview posts stay protected until trashed in
+  wp-admin.
 
 ### Workflow recovery
 

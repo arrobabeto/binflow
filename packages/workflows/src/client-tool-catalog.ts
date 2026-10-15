@@ -175,6 +175,30 @@ export const clientToolCatalog: readonly ClientToolCatalogEntry[] =
       },
     ),
     entry(
+      'create_blog_wordpress',
+      '/create_blog',
+      {
+        de: 'Blogbeitrag erstellen',
+        en: 'Create blog post',
+        es: 'Crear artículo de blog',
+      },
+      {
+        de: 'Veröffentlicht einen Blogbeitrag in WordPress — dein Text wie er ist oder im Stil deiner Marke generiert.',
+        en: 'Publishes a WordPress blog post — your text as-is or generated in your brand style.',
+        es: 'Publica un artículo en WordPress — tu texto tal cual o generado con el estilo de tu marca.',
+      },
+      {
+        de: 'Starte mit /create_blog oder schreibe „Blog über …“.',
+        en: 'Start with /create_blog or say “blog about …”.',
+        es: 'Empieza con /create_blog o di “blog sobre …”.',
+      },
+      {
+        de: 'Was es macht: Fragt nur nach Fehlendem (Titel, Auszug, Kategorie, Bild), legt den Beitrag passwortgeschützt live an und macht ihn erst nach deiner Freigabe öffentlich.\nWas es nicht macht: Keine SEO-Plugin-Felder, keine Übersetzungen, keine Seiten.\nAblauf: Modus wählen → Inhalt → Kategorie → Bild → Vorschau mit Passwort → Freigabe.\nBeispiel: /create_blog',
+        en: 'What it does: Asks only for what is missing (title, excerpt, category, image), creates the post live but password-protected, and makes it public only after your approval.\nWhat it does not do: SEO plugin fields, translations, or pages.\nFlow: choose mode → content → category → image → password preview → approve.\nExample: /create_blog',
+        es: 'Qué hace: Pregunta solo lo que falta (título, extracto, categoría, imagen), crea el post en vivo protegido con contraseña y lo hace público solo tras tu aprobación.\nQué no hace: Campos de plugins SEO, traducciones ni páginas.\nFlujo: elegir modo → contenido → categoría → imagen → preview con contraseña → aprobar.\nEjemplo: /create_blog',
+      },
+    ),
+    entry(
       'edit_text_shopify',
       '/edit_text',
       {

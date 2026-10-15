@@ -39,7 +39,8 @@ Small but frequent content changes require clients to understand a CMS, reposito
 - Preserve the repository or CMS as the source of truth.
 - Make every mutation attributable, reproducible and recoverable.
 - Add new technical profiles without weakening existing isolation or approval
-  rules (`astro_repo`, `astro_orbitype`, `shopify_liquid`, …).
+  rules (`astro_repo`, `astro_orbitype`, `shopify_liquid`, `wordpress_rest`,
+  …).
 
 ## Users and roles
 

@@ -490,6 +490,99 @@ describeDatabase('credential lifecycle database invariants', () => {
     ).rejects.toMatchObject({ category: 'policy_denied' });
   });
 
+  it('binds wordpress-api only to wordpress_rest projects, which reject other connections', async () => {
+    const wordpressProject = await ensureDraftScope(database.db, {
+      projectKey: 'blog',
+      tenantKey: 'blog',
+    });
+    await database.db
+      .update(projects)
+      .set({ profile: 'wordpress_rest' })
+      .where(eq(projects.id, wordpressProject.projectId));
+    const astroProject = await ensureDraftScope(database.db, {
+      projectKey: 'site',
+      tenantKey: 'site',
+    });
+    await database.db
+      .update(projects)
+      .set({ profile: 'astro_orbitype' })
+      .where(eq(projects.id, astroProject.projectId));
+
+    const storeWordpress = (
+      credentialId: string,
+      scope: { projectId: string; tenantId: string },
+    ) => {
+      const context = {
+        credentialId,
+        keyVersion: 1,
+        provider: 'wordpress-api',
+        tenantId: scope.tenantId,
+      } as const;
+      const plaintext = Buffer.from(
+        JSON.stringify({ applicationPassword: 'fixture fixture fixture' }),
+      );
+      const envelope = encryptSecret(plaintext, masterKey, context);
+      plaintext.fill(0);
+      const configuration = {
+        siteOrigin: 'https://blog.example.com',
+        username: 'binflow',
+      };
+      return storeCredentialVersion(database.db, {
+        alias: 'WordPress',
+        configuration,
+        connection: { configuration, kind: 'wordpress-api', scope },
+        credentialId,
+        envelope,
+        kind: 'wordpress-api',
+        maskedSuffix: 'ture',
+        ownerScope: 'project',
+        scope,
+      });
+    };
+
+    await expect(
+      storeWordpress('wordpress-ok', wordpressProject),
+    ).resolves.not.toThrow();
+    await expect(
+      storeWordpress('wordpress-wrong-profile', astroProject),
+    ).rejects.toMatchObject({ category: 'policy_denied' });
+
+    const vercelContext = {
+      credentialId: 'vercel-on-wordpress',
+      keyVersion: 1,
+      provider: 'vercel',
+      tenantId: wordpressProject.tenantId,
+    } as const;
+    const vercelPlaintext = Buffer.from(JSON.stringify({ token: 'fixture' }));
+    const vercelEnvelope = encryptSecret(
+      vercelPlaintext,
+      masterKey,
+      vercelContext,
+    );
+    vercelPlaintext.fill(0);
+    await expect(
+      storeCredentialVersion(database.db, {
+        alias: 'Vercel',
+        configuration: {},
+        connection: {
+          configuration: {
+            expectedProductionBranch: 'main',
+            expectedRepository: 'acme/blog',
+            projectId: 'prj_blog',
+          },
+          kind: 'vercel',
+          scope: wordpressProject,
+        },
+        credentialId: vercelContext.credentialId,
+        envelope: vercelEnvelope,
+        kind: 'vercel',
+        maskedSuffix: 'ture',
+        ownerScope: 'project',
+        scope: wordpressProject,
+      }),
+    ).rejects.toMatchObject({ category: 'policy_denied' });
+  });
+
   it('rejects a project credential connected to another valid project', async () => {
     const owner = await ensureDraftScope(database.db, {
       projectKey: 'owner-project',

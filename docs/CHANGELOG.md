@@ -4,6 +4,96 @@ All notable changes to product behavior, architecture, contracts, security, oper
 
 ## Unreleased
 
+### `create_blog_wordpress` — first WordPress tool (ADR-0067)
+
+- New accepted ADR-0067: the WordPress preview artifact is the real post
+  published with a per-request password; approvals bind to post id +
+  `modified_gmt` + content hash; a wp-admin edit reopens review; publish removes
+  the password and verifies anonymously; cancel / admin reject / final failure
+  move the post to the trash (never `force`). Content safety: model output is
+  limited Markdown rendered by escaping code; titles/excerpts are escaped text.
+- Capability `create_blog_wordpress@1` (`/create_blog` on `wordpress_rest`):
+  two modes chosen by buttons — **As-is** (client text published word for
+  word, interview only fills gaps) and **Generate** (base information +
+  customization). Category suggestions or an admin-approved new category;
+  cover image from a Telegram photo, a same-origin site URL or AI.
+  Monolingual, core excerpt only (no SEO-plugin fields).
+- Contracts: `createBlogWordpressInputSchema` (collect/execute),
+  `capabilityIdSchema` + action tokens (`pick_wp_blog_mode`,
+  `wp_blog_content_done`, `wp_blog_skip_excerpt`, `pick_wp_blog_category`,
+  `wp_blog_new_category`, `pick_wp_blog_image`), resume reason
+  `discard_wordpress_post`. Policy definition registered; migration
+  `0037_create_blog_wordpress_capability.sql` (append-only).
+- Code: declarative tool `stacks/wordpress-rest/create-blog@1`;
+  `@binflow/wordpress` write port with per-tool route allowlist;
+  `@binflow/workflows` collection, content and runtime modules plus
+  `WorkflowService` wiring (ingress, collection buttons, cancel → trash,
+  revision → `apply_revision`, new-category admin gate);
+  `@binflow/ai` WordPress generation port; `@binflow/messaging` preview and
+  published notices; worker job module that needs no GitHub/Vercel context.
+  Stale-execution recovery now preserves `terminalResult.wordpress`.
+- Docs: spec `docs/specs/create-blog-wordpress.md`, CONTRACTS, SECURITY,
+  OPERATIONS (migrate before assign; disable publish-triggered plugins),
+  SCOPE, ROADMAP, TELEGRAM, TESTING, stack contract, neutral customization
+  template and `docs/customizations/example-create-blog-wordpress.md`
+  (placeholder until the client's style rules are supplied).
+- Tests: WordPress port (fake site), workflow content/wiring unit tests,
+  policies registry, tools catalog, capability conformance.
+
+### WordPress REST enrollment implemented (ADR-0066)
+
+- `wordpress_rest` is selectable in **Clients → New**; `wordpress-api` is a new
+  project-scoped credential kind (Integrations page and CLI). GitHub App and
+  Vercel bindings are rejected for this profile, and `wordpress-api` is
+  rejected for every other profile (integration admin + repository guards).
+- New package `@binflow/wordpress`: read-only REST client (HTTPS only, dev-only
+  localhost flag, same-origin redirects only, 30 s per request with one retry,
+  2 MiB body cap, route allowlist) and verifier (discovery → `users/me` role
+  check → posts/categories read probe). Stable codes include
+  `wordpress_rest_unavailable`, `wordpress_auth_failed`,
+  `wordpress_role_insufficient`, `wordpress_redirect_cross_host`,
+  `wordpress_timeout`. `CredentialVerifier` gained an optional per-kind
+  `timeoutMs` (WordPress: 150 s); other verifiers keep the 15 s default.
+- Contracts: `wordpressRestManifestSchema` (no `repository` / `deployment`;
+  `wordpress.productionOrigin` added to the documented block) and
+  `anyProjectManifestSchema`; `projectManifestResponseSchema.manifest` now uses
+  the union. Git-backed `projectManifestSchema` is unchanged for frozen stacks.
+- Manifests/onboarding: `wordpress_rest@1` global profile,
+  `buildWordpressRestManifest`, empty catalog allowed; Validate checks
+  `wordpress_api_credential`, `wordpress_read_probe` and
+  `production_domain_matches_site_url` (`production_domain_mismatch`) instead
+  of GitHub/Vercel. Workflows activation checks match.
+- Hey Binn answers for `wordpress_rest` without site context or GitHub reads.
+- Dashboard: read-probe panel, Administrator risk banner, timeout/retry
+  message on verify, error codes shown next to validation checks.
+- OPERATIONS: `BINFLOW_WORDPRESS_ALLOW_INSECURE_LOCALHOST` and rollback note;
+  ENROLLMENT troubleshooting rows for timeout, role and domain mismatch.
+- No DB migration. Tests: verifier/client unit tests, contracts, manifests,
+  onboarding (Validate without GitHub/Vercel, domain mismatch) and DB guard
+  tests.
+
+### WordPress REST enrollment prepared (ADR-0066)
+
+- New accepted ADR-0066 activates reserved profile `wordpress_rest` / stack
+  `wordpress-rest` for classic self-hosted WordPress over the REST API:
+  project-scoped `wordpress-api` Application Password (Editor or Administrator
+  with dashboard warning), OpenAI, Telegram client, `productionDomain`; **no
+  GitHub or Vercel**. Read-only verify + read probe; empty catalog at ACTIVE.
+- Amends INTEGRATIONS (“Future WordPress” replaced; Signed Preview plugin no
+  longer an activation gate; ADR-0006 unchanged), SECURITY (WordPress
+  credential + site-origin rows; HTTPS + no cross-host redirects + 30 s
+  timeout; private-IP blocking not applied in v1 as accepted risk), SCOPE /
+  ROADMAP / PRODUCT (enrollment only; no WordPress tools yet).
+- CONTRACTS: `wordpress_rest` selectable, `wordpress-api` kind, profile-
+  dependent `repository` / `deployment`, manifest `wordpress` block.
+- Also updated ONBOARDING, ENROLLMENT, DASHBOARD, ARCHITECTURE, DATA-MODEL,
+  TESTING, GLOSSARY, ADR index, DECISIONS; new spec + readiness handoff
+  (`docs/specs/wordpress-rest-*.md`), stack tool contract
+  (`.cursor/skills/create-tool/references/stacks/wordpress-rest.md`) and BSI
+  brief (`docs/guides/BSI/stacks/wordpress-rest.md`).
+- Documentation only; implementation is a separate session. No DB migration
+  expected (text columns).
+
 ### BSI docs consolidated under `docs/guides/BSI/`
 
 - All Binflow Surface Inventory manuals and guides now live in one folder:

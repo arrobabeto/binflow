@@ -392,6 +392,212 @@ describeDatabase('client enrollment lifecycle', () => {
     ).rejects.toThrow();
   });
 
+  const seedWordpressCredentials = async (enrollment: {
+    projectId: string;
+    tenantId: string;
+  }) =>
+    withPlatformOwnerScope(
+      database.db,
+      {
+        actorId: 'owner-1',
+        correlationId: 'wordpress-credential-fixture',
+        reason: 'WordPress credential fixture',
+      },
+      async (scoped) => {
+        const credentials = [
+          { id: 'wp-openai', kind: 'openai', ownerScope: 'tenant' as const, projectId: null, tenantId: enrollment.tenantId },
+          { id: 'wp-telegram-admin', kind: 'telegram-admin', ownerScope: 'platform' as const, projectId: null, tenantId: null },
+          { id: 'wp-telegram-client', kind: 'telegram-client', ownerScope: 'tenant' as const, projectId: null, tenantId: enrollment.tenantId },
+          { id: 'wp-api', kind: 'wordpress-api', ownerScope: 'project' as const, projectId: enrollment.projectId, tenantId: enrollment.tenantId },
+        ];
+        for (const credential of credentials) {
+          const secretId = `${credential.id}-secret`;
+          await scoped.insert(schema.secretReferences).values({
+            algorithm: 'aes-256-gcm',
+            authTag: 'tag',
+            ciphertext: 'ciphertext',
+            credentialVersion: 1,
+            id: secretId,
+            keyVersion: 1,
+            nonce: 'nonce',
+            projectId: credential.projectId,
+            provider: credential.kind,
+            tenantId: credential.tenantId,
+            wrapAuthTag: 'tag',
+            wrappedDek: 'dek',
+            wrapNonce: 'nonce',
+          });
+          await scoped.insert(schema.providerCredentials).values({
+            alias: credential.kind,
+            id: credential.id,
+            kind: credential.kind,
+            maskedSuffix: '0000',
+            ownerScope: credential.ownerScope,
+            projectId: credential.projectId,
+            secretReferenceId: secretId,
+            status: 'active',
+            tenantId: credential.tenantId,
+            verifiedAt: new Date('2026-10-13T00:00:00.000Z'),
+            version: 1,
+          });
+        }
+        await scoped.insert(schema.integrationConnections).values({
+          credentialId: 'wp-api',
+          id: 'wp-connection',
+          kind: 'wordpress-api',
+          projectId: enrollment.projectId,
+          status: 'active',
+          tenantId: enrollment.tenantId,
+          verificationEvidence: {
+            authenticated: true,
+            externalResourceId: 'blog.example.com',
+            readProbe: {
+              categoryCount: 4,
+              latestPostTitles: ['Hola mundo'],
+              postCount: 12,
+            },
+            restBase: 'https://blog.example.com/wp-json/',
+            riskWarning: 'administrator_role',
+            role: 'administrator',
+            siteOrigin: 'https://blog.example.com',
+            userId: 1,
+            username: 'binflow',
+          },
+        });
+      },
+    );
+
+  const wordpressConfiguration = {
+    ...completeConfiguration,
+    clientConversationLocale: 'es' as const,
+    contentLocales: ['es'] as const,
+    defaultContentLocale: 'es' as const,
+    enabledCapabilities: [],
+    productionDomain: 'https://blog.example.com',
+    requiredLocales: ['es'] as const,
+    slugLocale: 'es' as const,
+    translationPolicy: 'none' as const,
+  };
+
+  it('validates wordpress_rest without GitHub or Vercel and exposes the read probe', async () => {
+    const created = await service.create(
+      {
+        projectDisplayName: 'Blog',
+        projectKey: 'blog',
+        projectProfile: 'wordpress_rest',
+        tenantDisplayName: 'Blog',
+        tenantKey: 'blog',
+      },
+      context('create-wordpress-enrollment'),
+    );
+    await seedWordpressCredentials(created);
+    const configured = await service.update(
+      created.id,
+      { configuration: wordpressConfiguration, currentStep: 8 },
+      created.version,
+      context('configure-wordpress-enrollment'),
+    );
+    const result = await service.validate(
+      configured.id,
+      configured.version,
+      context('validate-wordpress-enrollment'),
+    );
+
+    expect(result.enrollment.state).toBe('ready_for_pairing');
+    const names = result.attempts.map((attempt) => attempt.checkName);
+    expect(names).not.toContain('github_app_binding');
+    expect(names).not.toContain('vercel_binding');
+    expect(result.attempts).toContainEqual(
+      expect.objectContaining({
+        checkName: 'wordpress_read_probe',
+        evidence: {
+          categoryCount: 4,
+          latestPostTitles: ['Hola mundo'],
+          postCount: 12,
+        },
+        result: 'success',
+      }),
+    );
+    expect(result.attempts).toContainEqual(
+      expect.objectContaining({
+        checkName: 'wordpress_api_credential',
+        evidence: expect.objectContaining({
+          riskWarning: 'administrator_role',
+        }) as unknown,
+        result: 'success',
+      }),
+    );
+    for (const checkName of [
+      'production_domain_matches_site_url',
+      'project_manifest',
+      'capability_catalog',
+    ])
+      expect(result.attempts).toContainEqual(
+        expect.objectContaining({ checkName, result: 'success' }),
+      );
+
+    const manifest = await service.getManifest(
+      created.id,
+      'owner-1',
+      'read-wordpress-manifest',
+    );
+    expect(manifest.globalProfile.version).toBe('wordpress_rest@1');
+    expect(manifest.manifest).toMatchObject({
+      content: { source: 'wordpress' },
+      enabledCapabilities: [],
+      profile: 'wordpress_rest',
+      wordpress: {
+        productionOrigin: 'https://blog.example.com',
+        role: 'administrator',
+        siteOrigin: 'https://blog.example.com',
+      },
+    });
+    expect(manifest.manifest).not.toHaveProperty('repository');
+  });
+
+  it('fails wordpress_rest validation when productionDomain is another host', async () => {
+    const created = await service.create(
+      {
+        projectDisplayName: 'Blog',
+        projectKey: 'blog',
+        projectProfile: 'wordpress_rest',
+        tenantDisplayName: 'Blog',
+        tenantKey: 'blog',
+      },
+      context('create-wordpress-mismatch'),
+    );
+    await seedWordpressCredentials(created);
+    const configured = await service.update(
+      created.id,
+      {
+        configuration: {
+          ...wordpressConfiguration,
+          productionDomain: 'https://shop.example.net',
+        },
+        currentStep: 8,
+      },
+      created.version,
+      context('configure-wordpress-mismatch'),
+    );
+    const result = await service.validate(
+      configured.id,
+      configured.version,
+      context('validate-wordpress-mismatch'),
+    );
+
+    expect(result.enrollment.state).toBe('validation_failed');
+    expect(result.attempts).toContainEqual(
+      expect.objectContaining({
+        checkName: 'production_domain_matches_site_url',
+        errorCode: 'production_domain_mismatch',
+        result: 'failed',
+      }),
+    );
+    expect(
+      await database.db.select().from(schema.projectManifestVersions),
+    ).toHaveLength(0);
+  });
+
   it('materializes, reuses and supersedes immutable manifest snapshots', async () => {
     const created = await service.create(
       {

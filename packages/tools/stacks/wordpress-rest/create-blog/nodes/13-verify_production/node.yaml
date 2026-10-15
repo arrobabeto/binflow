@@ -1,0 +1,6 @@
+kind: effect
+label: Verify public post
+nodeKind: wordpress.verify_production@1
+acceptsClientCustomization: false
+permissions:
+  - wordpress:posts:read

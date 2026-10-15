@@ -306,10 +306,20 @@ export const storeCredentialVersion = async (
           'Orbitype credentials are only allowed for astro_orbitype projects.',
         );
       }
+      if (
+        (input.kind === 'wordpress-api') !==
+        (boundProject.profile === 'wordpress_rest')
+      ) {
+        throw new DomainError(
+          'policy_denied',
+          'WordPress credentials are only allowed for wordpress_rest projects, which accept no other project connection.',
+        );
+      }
     } else if (
       input.kind === 'github-app' ||
       input.kind === 'vercel' ||
-      input.kind === 'orbitype-api'
+      input.kind === 'orbitype-api' ||
+      input.kind === 'wordpress-api'
     ) {
       throw new DomainError(
         'validation_error',
@@ -482,7 +492,8 @@ export const getCredentialForVerification = async (
   if (
     row.kind === 'github-app' ||
     row.kind === 'vercel' ||
-    row.kind === 'orbitype-api'
+    row.kind === 'orbitype-api' ||
+    row.kind === 'wordpress-api'
   ) {
     if (
       row.connectionProjectId === null ||
@@ -547,6 +558,15 @@ export const getCredentialForVerification = async (
       throw new DomainError(
         'policy_denied',
         'Orbitype credentials are only allowed for astro_orbitype projects.',
+      );
+    }
+    if (
+      (row.kind === 'wordpress-api') !==
+      (boundProject.profile === 'wordpress_rest')
+    ) {
+      throw new DomainError(
+        'policy_denied',
+        'WordPress credentials are only allowed for wordpress_rest projects, which accept no other project connection.',
       );
     }
     if (

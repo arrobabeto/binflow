@@ -40,6 +40,11 @@ import {
 } from '@binflow/integrations';
 import { createTelegramCredentialVerifier } from '@binflow/messaging';
 import { createOrbitypeCredentialVerifier } from '@binflow/orbitype';
+import {
+  allowInsecureWordpressLocalhost,
+  createWordpressCredentialVerifier,
+  normalizeWordpressSiteOrigin,
+} from '@binflow/wordpress';
 import { encryptSecret } from '@binflow/secrets';
 import { createVercelCredentialVerifier } from '@binflow/vercel';
 
@@ -115,6 +120,17 @@ const safeCandidateRequest = (
       ...(input.expectedRepository === undefined
         ? {}
         : { expectedRepository: input.expectedRepository }),
+    };
+  }
+  if (input.kind === 'wordpress-api') {
+    return {
+      alias: input.alias,
+      kind: input.kind,
+      projectKey: input.projectKey,
+      secretMac,
+      siteOrigin: input.siteOrigin,
+      tenantKey: input.tenantKey,
+      username: input.username,
     };
   }
   return {
@@ -393,12 +409,44 @@ const candidateMaterial = async (
   if (
     !isWebbinPilot &&
     boundProject.profile !== 'astro_orbitype' &&
-    boundProject.profile !== 'shopify_liquid'
+    boundProject.profile !== 'shopify_liquid' &&
+    boundProject.profile !== 'wordpress_rest'
   ) {
     throw new DomainError(
       'policy_denied',
       'Phase 0 external integrations are limited to the Webbin pilot.',
     );
+  }
+  if (
+    boundProject.profile === 'wordpress_rest' &&
+    input.kind !== 'wordpress-api'
+  ) {
+    throw new DomainError(
+      'policy_denied',
+      'wordpress_rest projects only accept wordpress-api project credentials.',
+    );
+  }
+  if (input.kind === 'wordpress-api') {
+    if (boundProject.profile !== 'wordpress_rest') {
+      throw new DomainError(
+        'policy_denied',
+        'WordPress credentials are only allowed for wordpress_rest projects.',
+      );
+    }
+    const siteOrigin = normalizeWordpressSiteOrigin(input.siteOrigin, {
+      allowInsecureLocalhost: allowInsecureWordpressLocalhost(),
+    });
+    const configuration = { siteOrigin, username: input.username };
+    return {
+      configuration,
+      connection: { configuration, kind: input.kind, scope: binding },
+      ownerScope: 'project',
+      plaintext: Buffer.from(
+        JSON.stringify({ applicationPassword: input.applicationPassword }),
+      ),
+      scope: binding,
+      secretSuffix: input.applicationPassword.replaceAll(' ', '').slice(-4),
+    };
   }
   if (input.kind === 'vercel' && boundProject.profile === 'shopify_liquid') {
     throw new DomainError(
@@ -504,6 +552,7 @@ export class IntegrationAdminService {
       createGitHubCredentialVerifier(),
       createVercelCredentialVerifier(),
       createOrbitypeCredentialVerifier(),
+      createWordpressCredentialVerifier(),
     ],
   ) {}
 

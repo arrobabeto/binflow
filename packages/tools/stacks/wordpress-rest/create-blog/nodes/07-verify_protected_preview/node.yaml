@@ -1,0 +1,6 @@
+kind: effect
+label: Verify protected preview
+nodeKind: wordpress.verify_protected_preview@1
+acceptsClientCustomization: false
+permissions:
+  - wordpress:posts:read

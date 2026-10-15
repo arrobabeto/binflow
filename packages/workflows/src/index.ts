@@ -10,6 +10,7 @@ import {
   adminTelegramTargetSchema,
   clientMessageTargetSchema,
   createBlogDraftInputSchema,
+  createBlogWordpressInputSchema,
   createProjectAstroInputSchema,
   deleteBlogDraftInputSchema,
   deleteProjectAstroInputSchema,
@@ -197,6 +198,14 @@ import {
 } from './hey-binn.js';
 import { TicketService } from './tickets.js';
 import { enqueuePiloterOwnerSuccessNotice } from './piloter-owner-notice.js';
+import {
+  consumeWordpressBlogAction,
+  continueWordpressBlogCollection,
+  createWordpressBlogRequest,
+  isWordpressBlogCollectionAction,
+  WORDPRESS_BLOG_CAPABILITY_ID,
+  type WordpressBlogCatalogLoader,
+} from './wordpress-blog-collection.js';
 
 export * from './blog-runtime.js';
 export * from './client-tool-catalog.js';
@@ -220,6 +229,9 @@ export * from './menu-runtime.js';
 export * from './project-runtime.js';
 export * from './text-runtime.js';
 export * from './text-style-runtime.js';
+export * from './wordpress-blog-collection.js';
+export * from './wordpress-blog-content.js';
+export * from './wordpress-blog-runtime.js';
 export { TicketService } from './tickets.js';
 export {
   UsageService,
@@ -276,6 +288,19 @@ const SHARED_CLIENT_ACTIVATION_CHECKS = [
 const clientActivationChecksForProfile = (
   profile: string,
 ): readonly string[] => {
+  if (profile === 'wordpress_rest')
+    return [
+      'configuration',
+      'openai_credential',
+      'telegram_admin_credential',
+      'telegram_client_credential',
+      'wordpress_api_credential',
+      'wordpress_read_probe',
+      'production_domain_matches_site_url',
+      'project_manifest',
+      'capability_catalog',
+      'client_pairing',
+    ];
   if (profile === 'shopify_liquid')
     return [
       'configuration',
@@ -635,6 +660,7 @@ export class WorkflowService {
       );
     },
     private readonly heyBinnSiteContext?: HeyBinnSiteContextLoader,
+    private readonly wordpressBlogCatalogLoader?: WordpressBlogCatalogLoader,
   ) {}
 
   public async handleTelegramUpdate(
@@ -2103,6 +2129,21 @@ export class WorkflowService {
     ) {
       if (text.trim().length > PROJECT_BRIEF_MAX)
         return this.reply(identity.locale, localeCopy.messageTooLong, null);
+      if (latestCollecting.capabilityId === WORDPRESS_BLOG_CAPABILITY_ID)
+        return continueWordpressBlogCollection({
+          createAction: (db, request, requestVersionId, userId, action) =>
+            this.createAction(db, request, requestVersionId, userId, action),
+          database,
+          identity,
+          ...(imageArtifactKey === undefined ? {} : { imageArtifactKey }),
+          ...(this.wordpressBlogCatalogLoader === undefined
+            ? {}
+            : { loadCatalog: this.wordpressBlogCatalogLoader }),
+          reply: this.reply.bind(this),
+          request: latestCollecting,
+          text: text.trim(),
+          version: await this.currentRequestVersion(database, latestCollecting),
+        });
       if (latestCollecting.capabilityId === 'update_menu')
         return continueUpdateMenuCollection({
           createAction: (db, request, requestVersionId, userId, action) =>
@@ -2871,6 +2912,25 @@ export class WorkflowService {
       (naturalBlog && !naturalDeleteBlog && !naturalDeleteProject)
     ) {
       const raw = (blogCommand?.[1] ?? (naturalBlog ? text : '')).trim();
+      if (
+        await this.hasCapability(
+          database,
+          identity.projectId,
+          WORDPRESS_BLOG_CAPABILITY_ID,
+          identity,
+        )
+      ) {
+        if (raw.length > PROJECT_BRIEF_MAX)
+          return this.reply(identity.locale, localeCopy.messageTooLong, null);
+        return createWordpressBlogRequest({
+          createAction: (db, request, requestVersionId, userId, action) =>
+            this.createAction(db, request, requestVersionId, userId, action),
+          database,
+          identity,
+          reply: this.reply.bind(this),
+          ...(blogCommand?.[1] === undefined ? {} : { seedText: raw }),
+        });
+      }
       const brief = mapBlogBriefInput(raw, identity.locale);
       if (brief.kind === 'empty')
         return this.reply(identity.locale, localeCopy.guidance, null);
@@ -4837,6 +4897,10 @@ export class WorkflowService {
           request.capabilityId === 'edit_text_style') &&
         (request.state === 'AWAITING_CLIENT_APPROVAL' ||
           request.state === 'AWAITING_ADMIN_APPROVAL');
+      const shouldTrashWordpressPost =
+        request.capabilityId === WORDPRESS_BLOG_CAPABILITY_ID &&
+        request.state !== 'NEEDS_INPUT' &&
+        request.state !== 'AWAITING_PLAN_CONFIRMATION';
       await database
         .update(schema.requests)
         .set({
@@ -4853,6 +4917,14 @@ export class WorkflowService {
           'restore_orbitype_preview',
           request.version + 1,
         );
+      if (shouldTrashWordpressPost)
+        await this.enqueueResume(
+          database,
+          request,
+          currentVersion.id,
+          'discard_wordpress_post',
+          request.version + 1,
+        );
       await this.recordRequestEvent(
         database,
         request,
@@ -4861,6 +4933,29 @@ export class WorkflowService {
         'request.cancelled',
       );
       return this.reply(identity.locale, localeCopy.cancelled, request.id);
+    }
+    if (isWordpressBlogCollectionAction(action.action)) {
+      if (
+        request.capabilityId !== WORDPRESS_BLOG_CAPABILITY_ID ||
+        request.state !== 'NEEDS_INPUT'
+      )
+        throw new DomainError(
+          'conflict_error',
+          'Request is not collecting blog input.',
+        );
+      return consumeWordpressBlogAction({
+        action: action.action,
+        createAction: (db, req, requestVersionId, userId, actionName) =>
+          this.createAction(db, req, requestVersionId, userId, actionName),
+        database,
+        identity,
+        ...(this.wordpressBlogCatalogLoader === undefined
+          ? {}
+          : { loadCatalog: this.wordpressBlogCatalogLoader }),
+        reply: this.reply.bind(this),
+        request,
+        version: currentVersion,
+      });
     }
     if (action.action.startsWith('pick_text_locale:')) {
       if (request.capabilityId !== 'edit_text' || request.state !== 'NEEDS_INPUT')
@@ -5936,6 +6031,15 @@ export class WorkflowService {
         evidence.categoryKind as { categoryKind?: unknown } | null
       )?.categoryKind;
       if (
+        request.capabilityId === WORDPRESS_BLOG_CAPABILITY_ID &&
+        categoryKind !== 'existing' &&
+        categoryKind !== 'new'
+      )
+        throw new DomainError(
+          'internal_error',
+          'Category policy evidence is missing.',
+        );
+      if (
         request.capabilityId === 'create_blog_draft' ||
         request.capabilityId === 'create_blog_orbitype'
       ) {
@@ -5971,7 +6075,8 @@ export class WorkflowService {
         request.capabilityId === 'edit_image' ||
         request.capabilityId === 'edit_image_shopify' ||
         ((request.capabilityId === 'create_blog_draft' ||
-          request.capabilityId === 'create_blog_orbitype') &&
+          request.capabilityId === 'create_blog_orbitype' ||
+          request.capabilityId === WORDPRESS_BLOG_CAPABILITY_ID) &&
           categoryKind === 'new');
       await database
         .update(schema.requests)
@@ -6055,8 +6160,15 @@ export class WorkflowService {
             `Capability: ${request.capabilityId}`,
             `Request: ${request.id}`,
             '',
-            'Approve → merge and publish path.',
-            'Reject → request cancelled; client notified.',
+            ...(request.capabilityId === WORDPRESS_BLOG_CAPABILITY_ID
+              ? [
+                  'Approve → create the category and publish the post.',
+                  'Reject → request cancelled; preview post moved to trash; client notified.',
+                ]
+              : [
+                  'Approve → merge and publish path.',
+                  'Reject → request cancelled; client notified.',
+                ]),
           ].join('\n'),
           ...((request.capabilityId === 'edit_image' ||
             request.capabilityId === 'edit_image_shopify') &&
@@ -6173,6 +6285,15 @@ export class WorkflowService {
       sql`select pg_advisory_xact_lock(hashtext(${`request:${request.id}`}))`,
     );
     const current = await this.currentRequestVersion(database, request);
+    if (request.capabilityId === WORDPRESS_BLOG_CAPABILITY_ID)
+      return this.reviseWordpressBlog(
+        database,
+        identity,
+        request,
+        current,
+        feedback,
+        actorId,
+      );
     if (
       request.capabilityId !== 'create_blog_draft' &&
       request.capabilityId !== 'create_blog_orbitype'
@@ -6249,6 +6370,101 @@ export class WorkflowService {
       nextVersionId,
       'interpret_revision',
       current.version + 1,
+    );
+    await this.recordRequestEvent(
+      database,
+      request,
+      actorId,
+      `request:${request.id}`,
+      'request.revision_queued',
+    );
+    return this.reply(
+      identity.locale,
+      copy[identity.locale].revisionQueued,
+      request.id,
+    );
+  }
+
+  private async reviseWordpressBlog(
+    database: ScopedDatabase,
+    identity: ResolvedIdentity,
+    request: typeof schema.requests.$inferSelect,
+    current: typeof schema.requestVersions.$inferSelect,
+    feedback: string,
+    actorId: string,
+  ): Promise<TelegramReply> {
+    const parsed = createBlogWordpressInputSchema.parse(current.interpretedInput);
+    if (parsed.mode !== 'execute')
+      throw new DomainError(
+        'internal_error',
+        'WordPress blog execute input is missing.',
+      );
+    const revisedInput = createBlogWordpressInputSchema.parse({
+      ...parsed,
+      revisionNotes: [...parsed.revisionNotes, feedback],
+    });
+    const nextVersionId = uuidv7();
+    const nextVersion = current.version + 1;
+    const now = this.clock.now();
+    await database.insert(schema.requestVersions).values({
+      capabilityVersion: current.capabilityVersion,
+      confirmedAt: now,
+      id: nextVersionId,
+      interpretedInput: revisedInput,
+      manifestVersionId: current.manifestVersionId,
+      plan: {
+        ...(current.plan as Record<string, unknown>),
+        revisionFeedback: feedback,
+      },
+      projectId: request.projectId,
+      requestId: request.id,
+      tenantId: request.tenantId,
+      version: nextVersion,
+    });
+    await database
+      .update(schema.requestVersions)
+      .set({ supersededById: nextVersionId })
+      .where(eq(schema.requestVersions.id, current.id));
+    await database
+      .update(schema.requests)
+      .set({
+        currentVersion: nextVersion,
+        state: 'QUEUED',
+        terminalResult: {
+          ...(request.terminalResult as Record<string, unknown>),
+          approvalStatus: 'revision_applying',
+        },
+        updatedAt: now,
+        version: request.version + 1,
+      })
+      .where(eq(schema.requests.id, request.id));
+    const graphRunId = uuidv7();
+    await database.insert(schema.graphRuns).values({
+      checkpointSequence: 1,
+      currentNode: 'apply_revision',
+      graphVersion: await graphVersionForCapability(request.capabilityId),
+      id: graphRunId,
+      projectId: request.projectId,
+      requestId: request.id,
+      requestVersionId: nextVersionId,
+      status: 'queued',
+      tenantId: request.tenantId,
+    });
+    await database.insert(schema.workflowCheckpoints).values({
+      graphRunId,
+      id: uuidv7(),
+      node: 'apply_revision',
+      projectId: request.projectId,
+      sequence: 1,
+      state: { requestState: 'QUEUED' },
+      tenantId: request.tenantId,
+    });
+    await this.enqueueResume(
+      database,
+      request,
+      nextVersionId,
+      'apply_revision',
+      nextVersion,
     );
     await this.recordRequestEvent(
       database,
@@ -6446,6 +6662,14 @@ export class WorkflowService {
           'restore_orbitype_preview',
           expectedVersion + 1,
         );
+      if (context.request.capabilityId === WORDPRESS_BLOG_CAPABILITY_ID)
+        await this.enqueueResume(
+          database,
+          context.request,
+          context.requestVersionId,
+          'discard_wordpress_post',
+          expectedVersion + 1,
+        );
       const locale = await this.clientConversationLocale(
         database,
         context.request,
@@ -6487,7 +6711,8 @@ export class WorkflowService {
       | 'apply_revision'
       | 'publish'
       | 'reconcile'
-      | 'restore_orbitype_preview',
+      | 'restore_orbitype_preview'
+      | 'discard_wordpress_post',
     eventVersion: number,
   ): Promise<void> {
     await database.insert(schema.outboxEvents).values({
